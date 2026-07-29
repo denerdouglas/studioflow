@@ -1,0 +1,1148 @@
+import 'package:flutter/material.dart';
+
+import '../repositories/servicos_repository.dart';
+
+class ServicosPage extends StatefulWidget {
+  const ServicosPage({super.key});
+
+  @override
+  State<ServicosPage> createState() => _ServicosPageState();
+}
+
+class _ServicosPageState extends State<ServicosPage> {
+  static const Color _corPrincipal = Color(0xFF70569A);
+
+  static const Color _corFundo = Color(0xFFF9F6FC);
+
+  static const Color _textoEscuro = Color(0xFF2D2140);
+
+  static const Color _textoClaro = Color(0xFF766A85);
+
+  static const Color _vermelho = Color(0xFFD64D64);
+
+  final ServicosRepository _repository = ServicosRepository();
+
+  final TextEditingController _pesquisaController = TextEditingController();
+
+  List<ServicoRegistro> _servicos = [];
+
+  bool _carregando = true;
+  bool _mostrarInativos = true;
+
+  String _pesquisa = '';
+  String? _erro;
+
+  @override
+  void initState() {
+    super.initState();
+    _carregarServicos();
+  }
+
+  @override
+  void dispose() {
+    _pesquisaController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _carregarServicos() async {
+    try {
+      final servicos = await _repository.listar(
+        incluirInativos: _mostrarInativos,
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _servicos = servicos;
+        _carregando = false;
+        _erro = null;
+      });
+    } catch (erro) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _carregando = false;
+        _erro = 'Não foi possível carregar os serviços.';
+      });
+    }
+  }
+
+  List<ServicoRegistro> get _servicosFiltrados {
+    final texto = _pesquisa.trim().toLowerCase();
+
+    if (texto.isEmpty) {
+      return _servicos;
+    }
+
+    return _servicos.where((servico) {
+      return servico.nome.toLowerCase().contains(texto) ||
+          servico.categoria.toLowerCase().contains(texto) ||
+          servico.descricao.toLowerCase().contains(texto);
+    }).toList();
+  }
+
+  Future<void> _novoServico() async {
+    final novo = await showModalBottomSheet<ServicoRegistro>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) {
+        return const ServicoFormSheet();
+      },
+    );
+
+    if (novo == null) {
+      return;
+    }
+
+    try {
+      await _repository.salvar(novo);
+
+      setState(() {
+        _carregando = true;
+      });
+
+      await _carregarServicos();
+
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Serviço cadastrado com sucesso.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (erro) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            erro is StateError
+                ? erro.message
+                : 'Não foi possível salvar o serviço.',
+          ),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  Future<void> _editarServico(ServicoRegistro servico) async {
+    final atualizado = await showModalBottomSheet<ServicoRegistro>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) {
+        return ServicoFormSheet(servicoInicial: servico);
+      },
+    );
+
+    if (atualizado == null) {
+      return;
+    }
+
+    try {
+      await _repository.salvar(atualizado);
+
+      setState(() {
+        _carregando = true;
+      });
+
+      await _carregarServicos();
+
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Serviço atualizado com sucesso.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (erro) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            erro is StateError
+                ? erro.message
+                : 'Não foi possível atualizar o serviço.',
+          ),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  Future<void> _alterarStatus(ServicoRegistro servico) async {
+    try {
+      await _repository.alterarStatus(id: servico.id, ativo: !servico.ativo);
+
+      setState(() {
+        _carregando = true;
+      });
+
+      await _carregarServicos();
+
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            servico.ativo ? 'Serviço desativado.' : 'Serviço reativado.',
+          ),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (erro) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Não foi possível alterar o serviço.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  Future<void> _excluirServico(ServicoRegistro servico) async {
+    final confirmou = await showDialog<bool>(
+      context: context,
+      builder: (_) {
+        return AlertDialog(
+          title: const Text('Desativar serviço?'),
+          content: Text(
+            'O serviço “${servico.nome}” '
+            'não aparecerá mais nos novos agendamentos.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context, false);
+              },
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: () {
+                Navigator.pop(context, true);
+              },
+              style: FilledButton.styleFrom(backgroundColor: _vermelho),
+              child: const Text('Desativar'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmou != true) {
+      return;
+    }
+
+    try {
+      await _repository.excluir(servico.id);
+
+      setState(() {
+        _carregando = true;
+      });
+
+      await _carregarServicos();
+
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Serviço desativado.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (erro) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Não foi possível desativar o serviço.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  Future<void> _abrirOpcoes(ServicoRegistro servico) async {
+    final acao = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) {
+        return OpcoesServicoSheet(servico: servico);
+      },
+    );
+
+    if (acao == 'editar') {
+      await _editarServico(servico);
+    }
+
+    if (acao == 'status') {
+      await _alterarStatus(servico);
+    }
+
+    if (acao == 'excluir') {
+      await _excluirServico(servico);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: _corFundo,
+      body: SafeArea(
+        child: Column(
+          children: [
+            _cabecalho(),
+            _barraPesquisa(),
+            const SizedBox(height: 12),
+            Expanded(child: _conteudo()),
+          ],
+        ),
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _novoServico,
+        backgroundColor: _corPrincipal,
+        foregroundColor: Colors.white,
+        icon: const Icon(Icons.add),
+        label: const Text(
+          'Novo serviço',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+      ),
+    );
+  }
+
+  Widget _cabecalho() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
+      child: Row(
+        children: [
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Serviços',
+                  style: TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    color: _textoEscuro,
+                  ),
+                ),
+                SizedBox(height: 3),
+                Text(
+                  'Preços, duração e categorias',
+                  style: TextStyle(fontSize: 13, color: _textoClaro),
+                ),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: _corPrincipal.withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Text(
+              '${_servicos.length}',
+              style: const TextStyle(
+                color: _corPrincipal,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _barraPesquisa() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Column(
+        children: [
+          TextField(
+            controller: _pesquisaController,
+            onChanged: (valor) {
+              setState(() {
+                _pesquisa = valor;
+              });
+            },
+            decoration: InputDecoration(
+              hintText: 'Buscar serviço...',
+              prefixIcon: const Icon(Icons.search),
+              suffixIcon: _pesquisa.isEmpty
+                  ? null
+                  : IconButton(
+                      onPressed: () {
+                        _pesquisaController.clear();
+
+                        setState(() {
+                          _pesquisa = '';
+                        });
+                      },
+                      icon: const Icon(Icons.close),
+                    ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            value: _mostrarInativos,
+            title: const Text(
+              'Mostrar serviços inativos',
+              style: TextStyle(fontSize: 13, color: _textoClaro),
+            ),
+            activeThumbColor: _corPrincipal,
+            onChanged: (valor) {
+              setState(() {
+                _mostrarInativos = valor;
+                _carregando = true;
+              });
+
+              _carregarServicos();
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _conteudo() {
+    if (_carregando) {
+      return const Center(
+        child: CircularProgressIndicator(color: _corPrincipal),
+      );
+    }
+
+    if (_erro != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(30),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.error_outline, size: 64, color: _vermelho),
+              const SizedBox(height: 14),
+              Text(
+                _erro!,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: _textoEscuro, fontSize: 16),
+              ),
+              const SizedBox(height: 16),
+              FilledButton.icon(
+                onPressed: () {
+                  setState(() {
+                    _carregando = true;
+                    _erro = null;
+                  });
+
+                  _carregarServicos();
+                },
+                icon: const Icon(Icons.refresh),
+                label: const Text('Tentar novamente'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (_servicosFiltrados.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(30),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(
+                Icons.content_cut_outlined,
+                size: 70,
+                color: Color(0xFFB6A9C3),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                _pesquisa.isEmpty
+                    ? 'Nenhum serviço cadastrado'
+                    : 'Nenhum serviço encontrado',
+                style: const TextStyle(
+                  fontSize: 19,
+                  fontWeight: FontWeight.bold,
+                  color: _textoEscuro,
+                ),
+              ),
+              const SizedBox(height: 7),
+              Text(
+                _pesquisa.isEmpty
+                    ? 'Toque em “Novo serviço” para cadastrar o primeiro.'
+                    : 'Altere a pesquisa e tente novamente.',
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: _textoClaro),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return RefreshIndicator(
+      color: _corPrincipal,
+      onRefresh: _carregarServicos,
+      child: ListView.separated(
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 110),
+        itemCount: _servicosFiltrados.length,
+        separatorBuilder: (_, _) {
+          return const SizedBox(height: 10);
+        },
+        itemBuilder: (context, index) {
+          final servico = _servicosFiltrados[index];
+
+          return _ServicoCard(
+            servico: servico,
+            onTap: () {
+              _abrirOpcoes(servico);
+            },
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _ServicoCard extends StatelessWidget {
+  final ServicoRegistro servico;
+  final VoidCallback onTap;
+
+  const _ServicoCard({required this.servico, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final cor = servico.ativo
+        ? const Color(0xFF70569A)
+        : const Color(0xFF968AA5);
+
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Container(
+          padding: const EdgeInsets.all(15),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: const Color(0xFFE8E1EE)),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: cor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(Icons.content_cut, color: cor),
+              ),
+              const SizedBox(width: 13),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            servico.nome,
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF2D2140),
+                            ),
+                          ),
+                        ),
+                        if (!servico.ativo)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(
+                                0xFFD64D64,
+                              ).withValues(alpha: 0.10),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: const Text(
+                              'Inativo',
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFFD64D64),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      servico.categoria,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Color(0xFF766A85),
+                      ),
+                    ),
+                    const SizedBox(height: 7),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 6,
+                      children: [
+                        _ServicoInformacao(
+                          icone: Icons.attach_money,
+                          texto: 'R\$ ${servico.preco.toStringAsFixed(2)}',
+                        ),
+                        _ServicoInformacao(
+                          icone: Icons.schedule_outlined,
+                          texto: '${servico.duracaoMinutos} min',
+                        ),
+                        if (servico.custoEstimado > 0)
+                          _ServicoInformacao(
+                            icone: Icons.inventory_2_outlined,
+                            texto:
+                                'Custo R\$ ${servico.custoEstimado.toStringAsFixed(2)}',
+                          ),
+                      ],
+                    ),
+                    if (servico.descricao.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        servico.descricao,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF968AA5),
+                          height: 1.3,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Icon(Icons.more_vert, color: Color(0xFF968AA5)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ServicoInformacao extends StatelessWidget {
+  final IconData icone;
+  final String texto;
+
+  const _ServicoInformacao({required this.icone, required this.texto});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF3EDF8),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icone, size: 14, color: const Color(0xFF70569A)),
+          const SizedBox(width: 4),
+          Text(
+            texto,
+            style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF70569A),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class OpcoesServicoSheet extends StatelessWidget {
+  final ServicoRegistro servico;
+
+  const OpcoesServicoSheet({super.key, required this.servico});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(22, 18, 22, 28),
+      decoration: const BoxDecoration(
+        color: Color(0xFFF9F6FC),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Center(
+            child: Container(
+              width: 48,
+              height: 5,
+              decoration: BoxDecoration(
+                color: const Color(0xFFD6CDDD),
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+          Text(
+            servico.nome,
+            style: const TextStyle(
+              fontSize: 23,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF2D2140),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '${servico.categoria} • '
+            'R\$ ${servico.preco.toStringAsFixed(2)}',
+            style: const TextStyle(color: Color(0xFF766A85)),
+          ),
+          const SizedBox(height: 22),
+          _OpcaoServico(
+            titulo: 'Editar serviço',
+            icone: Icons.edit_outlined,
+            cor: const Color(0xFF70569A),
+            onTap: () {
+              Navigator.pop(context, 'editar');
+            },
+          ),
+          _OpcaoServico(
+            titulo: servico.ativo ? 'Desativar serviço' : 'Reativar serviço',
+            icone: servico.ativo
+                ? Icons.visibility_off_outlined
+                : Icons.visibility_outlined,
+            cor: servico.ativo
+                ? const Color(0xFFE58A25)
+                : const Color(0xFF15996B),
+            onTap: () {
+              Navigator.pop(context, 'status');
+            },
+          ),
+          if (servico.ativo)
+            _OpcaoServico(
+              titulo: 'Desativar e remover da agenda',
+              icone: Icons.delete_outline,
+              cor: const Color(0xFFD64D64),
+              onTap: () {
+                Navigator.pop(context, 'excluir');
+              },
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _OpcaoServico extends StatelessWidget {
+  final String titulo;
+  final IconData icone;
+  final Color cor;
+  final VoidCallback onTap;
+
+  const _OpcaoServico({
+    required this.titulo,
+    required this.icone,
+    required this.cor,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: Container(
+        width: 44,
+        height: 44,
+        decoration: BoxDecoration(
+          color: cor.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(13),
+        ),
+        child: Icon(icone, color: cor),
+      ),
+      title: Text(
+        titulo,
+        style: const TextStyle(
+          fontWeight: FontWeight.w600,
+          color: Color(0xFF2D2140),
+        ),
+      ),
+      trailing: const Icon(Icons.chevron_right),
+      onTap: onTap,
+    );
+  }
+}
+
+class ServicoFormSheet extends StatefulWidget {
+  final ServicoRegistro? servicoInicial;
+
+  const ServicoFormSheet({super.key, this.servicoInicial});
+
+  @override
+  State<ServicoFormSheet> createState() => _ServicoFormSheetState();
+}
+
+class _ServicoFormSheetState extends State<ServicoFormSheet> {
+  static const Color _corPrincipal = Color(0xFF70569A);
+
+  static const Color _corFundo = Color(0xFFF9F6FC);
+
+  final TextEditingController _nomeController = TextEditingController();
+
+  final TextEditingController _precoController = TextEditingController();
+
+  final TextEditingController _duracaoController = TextEditingController();
+
+  final TextEditingController _custoController = TextEditingController();
+
+  final TextEditingController _descricaoController = TextEditingController();
+
+  String _categoria = 'Manicure';
+  bool _ativo = true;
+
+  final List<String> _categorias = const [
+    'Manicure',
+    'Pedicure',
+    'Combo',
+    'Alongamento',
+    'Blindagem',
+    'Gel',
+    'Fibra',
+    'Spa dos pés',
+    'Cílios',
+    'Sobrancelhas',
+    'Cabelo',
+    'Estética',
+    'Outros',
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+
+    final servico = widget.servicoInicial;
+
+    if (servico != null) {
+      _nomeController.text = servico.nome;
+
+      _precoController.text = servico.preco.toStringAsFixed(2);
+
+      _duracaoController.text = servico.duracaoMinutos.toString();
+
+      _custoController.text = servico.custoEstimado.toStringAsFixed(2);
+
+      _descricaoController.text = servico.descricao;
+
+      _categoria = servico.categoria;
+      _ativo = servico.ativo;
+
+      if (!_categorias.contains(_categoria)) {
+        _categoria = 'Outros';
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _nomeController.dispose();
+    _precoController.dispose();
+    _duracaoController.dispose();
+    _custoController.dispose();
+    _descricaoController.dispose();
+    super.dispose();
+  }
+
+  void _salvar() {
+    final nome = _nomeController.text.trim();
+
+    final preco = double.tryParse(
+      _precoController.text.trim().replaceAll(',', '.'),
+    );
+
+    final duracao = int.tryParse(_duracaoController.text.trim());
+
+    final custo =
+        double.tryParse(_custoController.text.trim().replaceAll(',', '.')) ?? 0;
+
+    if (nome.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Informe o nome do serviço.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+
+      return;
+    }
+
+    if (preco == null || preco < 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Informe um preço válido.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+
+      return;
+    }
+
+    if (duracao == null || duracao <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Informe uma duração válida.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+
+      return;
+    }
+
+    if (custo < 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Informe um custo válido.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+
+      return;
+    }
+
+    final agora = DateTime.now();
+    final existente = widget.servicoInicial;
+
+    final servico = ServicoRegistro(
+      id: existente?.id ?? agora.microsecondsSinceEpoch.toString(),
+      nome: nome,
+      categoria: _categoria,
+      descricao: _descricaoController.text.trim(),
+      preco: preco,
+      duracaoMinutos: duracao,
+      ativo: _ativo,
+      custoEstimado: custo,
+      dataCadastro: existente?.dataCadastro ?? agora,
+    );
+
+    Navigator.pop(context, servico);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final teclado = MediaQuery.viewInsetsOf(context).bottom;
+
+    final editando = widget.servicoInicial != null;
+
+    return Container(
+      padding: EdgeInsets.fromLTRB(22, 22, 22, teclado + 25),
+      decoration: const BoxDecoration(
+        color: _corFundo,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      child: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Center(
+              child: Container(
+                width: 48,
+                height: 5,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFD6CDDD),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              editando ? 'Editar serviço' : 'Novo serviço',
+              style: const TextStyle(
+                fontSize: 25,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF2D2140),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              editando
+                  ? 'Atualize os dados do serviço.'
+                  : 'Cadastre um novo serviço para usar na agenda.',
+              style: const TextStyle(fontSize: 13, color: Color(0xFF766A85)),
+            ),
+            const SizedBox(height: 22),
+            TextField(
+              controller: _nomeController,
+              textCapitalization: TextCapitalization.words,
+              decoration: const InputDecoration(
+                labelText: 'Nome do serviço',
+                prefixIcon: Icon(Icons.content_cut),
+              ),
+            ),
+            const SizedBox(height: 14),
+            DropdownButtonFormField<String>(
+              initialValue: _categoria,
+              isExpanded: true,
+              decoration: const InputDecoration(
+                labelText: 'Categoria',
+                prefixIcon: Icon(Icons.category_outlined),
+              ),
+              items: _categorias.map((categoria) {
+                return DropdownMenuItem(
+                  value: categoria,
+                  child: Text(categoria),
+                );
+              }).toList(),
+              onChanged: (valor) {
+                if (valor == null) {
+                  return;
+                }
+
+                setState(() {
+                  _categoria = valor;
+                });
+              },
+            ),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _precoController,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    decoration: const InputDecoration(
+                      labelText: 'Preço',
+                      prefixText: 'R\$ ',
+                      prefixIcon: Icon(Icons.attach_money),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: TextField(
+                    controller: _duracaoController,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Duração',
+                      suffixText: 'min',
+                      prefixIcon: Icon(Icons.schedule_outlined),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            TextField(
+              controller: _custoController,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              decoration: const InputDecoration(
+                labelText: 'Custo estimado',
+                prefixText: 'R\$ ',
+                prefixIcon: Icon(Icons.inventory_2_outlined),
+              ),
+            ),
+            const SizedBox(height: 14),
+            TextField(
+              controller: _descricaoController,
+              maxLines: 3,
+              textCapitalization: TextCapitalization.sentences,
+              decoration: const InputDecoration(
+                labelText: 'Descrição',
+                alignLabelWithHint: true,
+                prefixIcon: Icon(Icons.notes_outlined),
+              ),
+            ),
+            const SizedBox(height: 8),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              value: _ativo,
+              title: const Text(
+                'Serviço ativo',
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF2D2140),
+                ),
+              ),
+              subtitle: const Text(
+                'Serviços inativos não aparecem em novos agendamentos.',
+                style: TextStyle(fontSize: 12, color: Color(0xFF766A85)),
+              ),
+              activeThumbColor: _corPrincipal,
+              onChanged: (valor) {
+                setState(() {
+                  _ativo = valor;
+                });
+              },
+            ),
+            const SizedBox(height: 18),
+            FilledButton.icon(
+              onPressed: _salvar,
+              icon: const Icon(Icons.save_outlined),
+              label: Text(
+                editando ? 'Salvar alterações' : 'Salvar serviço',
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              style: FilledButton.styleFrom(
+                backgroundColor: _corPrincipal,
+                foregroundColor: Colors.white,
+                minimumSize: const Size.fromHeight(57),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(17),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

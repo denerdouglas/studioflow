@@ -1,0 +1,11 @@
+export 'domain/acesso.dart';
+export 'domain/infraestrutura.dart';
+export 'domain/agendamento.dart';
+export 'domain/cliente.dart';
+export 'domain/estoque.dart';
+export 'domain/fidelidade.dart';
+export 'domain/financeiro.dart';
+export 'domain/notificacao.dart';
+export 'domain/perfil_usuario.dart';
+export 'domain/profissional.dart';
+export 'domain/servico.dart';

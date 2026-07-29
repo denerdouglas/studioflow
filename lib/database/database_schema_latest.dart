@@ -1,0 +1,79 @@
+import 'package:sqflite/sqflite.dart';
+
+import 'database_schema.dart';
+import 'migrations/migration_v2_impl.dart';
+import 'migrations/migration_v2_triggers.dart';
+import 'migrations/migration_v3.dart';
+import 'migrations/migration_v4.dart';
+import 'migrations/migration_v5.dart';
+import 'migrations/migration_v6.dart';
+import 'migrations/migration_v7.dart';
+import 'migrations/migration_v8.dart';
+import 'migrations/migration_v9.dart';
+import 'migrations/migration_v10.dart';
+import 'migrations/migration_v11.dart';
+import 'migrations/migration_v12.dart';
+import 'migrations/migration_v13.dart';
+
+abstract final class DatabaseSchemaLatest {
+  static Future<void> criar(Database db, int version) async {
+    await DatabaseSchema.criar(db, 1);
+    await MigrationV2.executar(db, criarBackup: false);
+    await MigrationV2Triggers.executar(db);
+    await MigrationV3.executar(db, criarBackup: false);
+    await MigrationV4.executar(db, criarBackup: false);
+    await MigrationV5.executar(db, criarBackup: false);
+    await MigrationV6.executar(db, criarBackup: false);
+    await MigrationV7.executar(db, criarBackup: false);
+    await MigrationV8.executar(db, criarBackup: false);
+    await MigrationV9.executar(db, criarBackup: false);
+    await MigrationV10.executar(db, criarBackup: false);
+    await MigrationV11.executar(db, criarBackup: false);
+    await MigrationV12.executar(db, criarBackup: false);
+    await MigrationV13.executar(db, criarBackup: false);
+  }
+
+  static Future<void> migrar(
+    Database db,
+    int versaoAnterior,
+    int novaVersao,
+  ) async {
+    if (versaoAnterior < 2 && novaVersao >= 2) {
+      await MigrationV2.executar(db, criarBackup: true);
+      await MigrationV2Triggers.executar(db);
+    }
+    if (versaoAnterior < 3 && novaVersao >= 3) {
+      await MigrationV3.executar(db, criarBackup: true);
+    }
+    if (versaoAnterior < 4 && novaVersao >= 4) {
+      await MigrationV4.executar(db, criarBackup: true);
+    }
+    if (versaoAnterior < 5 && novaVersao >= 5) {
+      await MigrationV5.executar(db, criarBackup: true);
+    }
+    if (versaoAnterior < 6 && novaVersao >= 6) {
+      await MigrationV6.executar(db, criarBackup: true);
+    }
+    if (versaoAnterior < 7 && novaVersao >= 7) {
+      await MigrationV7.executar(db, criarBackup: true);
+    }
+    if (versaoAnterior < 8 && novaVersao >= 8) {
+      await MigrationV8.executar(db, criarBackup: true);
+    }
+    if (versaoAnterior < 9 && novaVersao >= 9) {
+      await MigrationV9.executar(db, criarBackup: true);
+    }
+    if (versaoAnterior < 10 && novaVersao >= 10) {
+      await MigrationV10.executar(db, criarBackup: true);
+    }
+    if (versaoAnterior < 11 && novaVersao >= 11) {
+      await MigrationV11.executar(db, criarBackup: true);
+    }
+    if (versaoAnterior < 12 && novaVersao >= 12) {
+      await MigrationV12.executar(db, criarBackup: true);
+    }
+    if (versaoAnterior < 13 && novaVersao >= 13) {
+      await MigrationV13.executar(db, criarBackup: true);
+    }
+  }
+}

@@ -1,0 +1,11 @@
+export 'agenda_repository.dart';
+export 'cadastros_basicos_repository.dart';
+export 'caixa_repository.dart';
+export 'cliente_repository.dart';
+export 'comissoes_repository.dart';
+export 'estoque_repository.dart';
+export 'financeiro_repository.dart';
+export 'funcionarios_repository.dart';
+export 'relatorios_repository.dart';
+export 'servicos_repository.dart';
+export 'infraestrutura_repository.dart';

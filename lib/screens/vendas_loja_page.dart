@@ -1,0 +1,481 @@
+import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
+
+import '../models/domain/acesso.dart';
+import '../models/domain/loja.dart';
+import '../repositories/cliente_repository.dart';
+import '../repositories/loja_repository.dart';
+import '../services/session_controller.dart';
+import 'barcode_scanner_page.dart';
+
+class VendasLojaPage extends StatefulWidget {
+  const VendasLojaPage({super.key});
+  @override
+  State<VendasLojaPage> createState() => _VendasLojaPageState();
+}
+
+class _VendasLojaPageState extends State<VendasLojaPage> {
+  final repo = LojaRepository();
+  final List<ItemCarrinho> itens = [];
+  final desconto = TextEditingController(text: '0');
+  String pagamento = 'Pix';
+  bool finalizando = false;
+  ClienteRegistro? cliente;
+
+  double get subtotal => itens.fold(0, (v, i) => v + i.total);
+  double get descontoValor =>
+      double.tryParse(desconto.text.replaceAll(',', '.')) ?? 0;
+  double get total => subtotal - descontoValor;
+
+  void adicionar(ProdutoLoja p) {
+    final i = itens.indexWhere((x) => x.produto.id == p.id);
+    setState(() {
+      if (i < 0) {
+        itens.add(ItemCarrinho(p, 1));
+      } else {
+        itens[i] = ItemCarrinho(p, itens[i].quantidade + 1);
+      }
+    });
+  }
+
+  Future<void> selecionarProduto() async {
+    final produtos = await repo.listarProdutos();
+    if (!mounted) return;
+    final p = await showModalBottomSheet<ProdutoLoja>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => SafeArea(
+        child: ListView(
+          children: [
+            const ListTile(
+              title: Text(
+                'Adicionar produto',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+            ...produtos.map(
+              (p) => ListTile(
+                title: Text(p.nome),
+                subtitle: Text(
+                  '${p.quantidadeAtual} ${p.unidade} • R\$ ${p.precoVenda.toStringAsFixed(2)}',
+                ),
+                enabled: p.quantidadeAtual > 0,
+                onTap: () => Navigator.pop(context, p),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (p != null) adicionar(p);
+  }
+
+  Future<void> selecionarCliente() async {
+    final clientes = await ClienteRepository().listar();
+    if (!mounted) return;
+    final escolhido = await showModalBottomSheet<ClienteRegistro?>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: ListView(
+          children: [
+            ListTile(
+              leading: const Icon(Icons.person_off_outlined),
+              title: const Text('Venda sem cliente'),
+              onTap: () => Navigator.pop(context),
+            ),
+            ...clientes.map(
+              (c) => ListTile(
+                leading: const Icon(Icons.person_outline),
+                title: Text(c.nome),
+                subtitle: Text(c.whatsapp),
+                onTap: () => Navigator.pop(context, c),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (mounted) setState(() => cliente = escolhido);
+  }
+
+  Future<Map<String, double>?> obterPagamentos() async {
+    if (pagamento != 'Misto') return {pagamento.toLowerCase(): total};
+    final pix = TextEditingController();
+    final dinheiro = TextEditingController();
+    final cartao = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Pagamento misto'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('Total: R\$ ${total.toStringAsFixed(2)}'),
+            TextField(
+              controller: pix,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(labelText: 'Pix'),
+            ),
+            TextField(
+              controller: dinheiro,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(labelText: 'Dinheiro'),
+            ),
+            TextField(
+              controller: cartao,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(labelText: 'Cartão'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Confirmar'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return null;
+    return {
+      if (_valorPagamento(pix.text) > 0) 'pix': _valorPagamento(pix.text),
+      if (_valorPagamento(dinheiro.text) > 0)
+        'dinheiro': _valorPagamento(dinheiro.text),
+      if (_valorPagamento(cartao.text) > 0)
+        'cartao': _valorPagamento(cartao.text),
+    };
+  }
+
+  double _valorPagamento(String valor) =>
+      double.tryParse(valor.replaceAll(',', '.')) ?? 0;
+  Future<void> ler() async {
+    final codigo = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(builder: (_) => const BarcodeScannerPage()),
+    );
+    if (codigo == null) return;
+    try {
+      final p = await repo.buscarCodigo(codigo);
+      if (p == null) throw StateError('Produto não encontrado para venda.');
+      adicionar(p);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('$e')));
+      }
+    }
+  }
+
+  Future<void> finalizar() async {
+    final pagamentos = await obterPagamentos();
+    if (pagamentos == null) return;
+    setState(() => finalizando = true);
+    try {
+      final id = await repo.finalizarVenda(
+        itens: itens,
+        desconto: descontoValor,
+        pagamentos: pagamentos,
+        clienteId: cliente?.id,
+      );
+      if (!mounted) return;
+      final resumo =
+          'StudioFlow - Venda $id\n${itens.map((i) => '${i.quantidade}x ${i.produto.nome} - R\$ ${i.total.toStringAsFixed(2)}').join('\n')}\nTotal: R\$ ${total.toStringAsFixed(2)}\nPagamento: $pagamento';
+      await showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Venda concluída'),
+          content: SelectableText(resumo),
+          actions: [
+            TextButton(
+              onPressed: () => launchUrl(
+                Uri.https('wa.me', '/', {'text': resumo}),
+                mode: LaunchMode.externalApplication,
+              ),
+              child: const Text('Enviar pelo WhatsApp'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Concluir'),
+            ),
+          ],
+        ),
+      );
+      setState(() {
+        itens.clear();
+        desconto.text = '0';
+        cliente = null;
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('$e')));
+      }
+    } finally {
+      if (mounted) setState(() => finalizando = false);
+    }
+  }
+
+  @override
+  void dispose() {
+    desconto.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(
+      title: const Text('Nova venda'),
+      actions: [
+        IconButton(onPressed: ler, icon: const Icon(Icons.barcode_reader)),
+      ],
+    ),
+    body: Column(
+      children: [
+        Expanded(
+          child: itens.isEmpty
+              ? const Center(
+                  child: Text(
+                    'Carrinho vazio. Adicione por nome ou código de barras.',
+                  ),
+                )
+              : ListView.builder(
+                  itemCount: itens.length,
+                  itemBuilder: (context, index) {
+                    final item = itens[index];
+                    return ListTile(
+                      title: Text(item.produto.nome),
+                      subtitle: Text(
+                        '${item.quantidade} × R\$ ${item.produto.precoVenda.toStringAsFixed(2)} = R\$ ${item.total.toStringAsFixed(2)}',
+                      ),
+                      leading: IconButton(
+                        onPressed: () => setState(() {
+                          if (item.quantidade <= 1) {
+                            itens.removeAt(index);
+                          } else {
+                            itens[index] = ItemCarrinho(
+                              item.produto,
+                              item.quantidade - 1,
+                            );
+                          }
+                        }),
+                        icon: const Icon(Icons.remove_circle_outline),
+                      ),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            onPressed: () => setState(
+                              () => itens[index] = ItemCarrinho(
+                                item.produto,
+                                item.quantidade + 1,
+                              ),
+                            ),
+                            icon: const Icon(Icons.add_circle_outline),
+                          ),
+                          IconButton(
+                            onPressed: () =>
+                                setState(() => itens.removeAt(index)),
+                            icon: const Icon(Icons.delete_outline),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+        ),
+        SafeArea(
+          top: false,
+          child: Card(
+            margin: const EdgeInsets.all(12),
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                children: [
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.person_outline),
+                    title: Text(
+                      cliente?.nome ?? 'Selecionar cliente (opcional)',
+                    ),
+                    subtitle: Text(
+                      cliente?.whatsapp ?? 'Toque para vincular a venda',
+                    ),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: selecionarCliente,
+                  ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: desconto,
+                          enabled: SessionController.instance.usuario!.podeAcao(
+                            AcaoPermissao.aplicarDesconto,
+                          ),
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                          onChanged: (_) => setState(() {}),
+                          decoration: const InputDecoration(
+                            labelText: 'Desconto R\$',
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: DropdownButtonFormField<String>(
+                          initialValue: pagamento,
+                          decoration: const InputDecoration(
+                            labelText: 'Pagamento',
+                          ),
+                          items: ['Pix', 'Dinheiro', 'Cartão', 'Misto']
+                              .map(
+                                (v) =>
+                                    DropdownMenuItem(value: v, child: Text(v)),
+                              )
+                              .toList(),
+                          onChanged: (v) => setState(() => pagamento = v!),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Total',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      Text(
+                        'R\$ ${total.toStringAsFixed(2)}',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: selecionarProduto,
+                          icon: const Icon(Icons.search),
+                          label: const Text('Adicionar'),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: FilledButton.icon(
+                          onPressed: itens.isEmpty || finalizando
+                              ? null
+                              : finalizar,
+                          icon: const Icon(Icons.check),
+                          label: const Text('Finalizar'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class HistoricoVendasPage extends StatefulWidget {
+  const HistoricoVendasPage({super.key});
+  @override
+  State<HistoricoVendasPage> createState() => _HistoricoVendasPageState();
+}
+
+class _HistoricoVendasPageState extends State<HistoricoVendasPage> {
+  final repo = LojaRepository();
+  late Future<List<Map<String, Object?>>> future;
+  @override
+  void initState() {
+    super.initState();
+    future = repo.listarVendas();
+  }
+
+  void carregar() => setState(() => future = repo.listarVendas());
+  Future<void> cancelar(Map<String, Object?> venda) async {
+    final motivo = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Cancelar venda?'),
+        content: TextField(
+          controller: motivo,
+          decoration: const InputDecoration(labelText: 'Motivo obrigatório'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Voltar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Cancelar venda'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await repo.cancelarVenda(venda['id'] as String, motivo.text);
+      carregar();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('$e')));
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('Histórico de vendas')),
+    body: FutureBuilder<List<Map<String, Object?>>>(
+      future: future,
+      builder: (context, snap) {
+        if (!snap.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snap.data!.isEmpty) {
+          return const Center(child: Text('Nenhuma venda registrada.'));
+        }
+        return ListView(
+          children: snap.data!
+              .map(
+                (v) => ListTile(
+                  title: Text(
+                    '${v['numero']} • R\$ ${(v['total'] as num).toStringAsFixed(2)}',
+                  ),
+                  subtitle: Text('${v['status']} • ${v['criada_em']}'),
+                  trailing:
+                      v['status'] == 'concluida' &&
+                          SessionController.instance.usuario!.podeAcao(
+                            AcaoPermissao.cancelarVenda,
+                          )
+                      ? IconButton(
+                          onPressed: () => cancelar(v),
+                          icon: const Icon(Icons.cancel_outlined),
+                        )
+                      : null,
+                ),
+              )
+              .toList(),
+        );
+      },
+    ),
+  );
+}
