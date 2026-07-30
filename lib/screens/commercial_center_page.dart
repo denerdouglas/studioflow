@@ -5,6 +5,8 @@ import '../core/helpers/app_formatters.dart';
 import '../repositories/commercial_repository.dart';
 import 'barcode_scanner_page.dart';
 import 'catalog_registration_page.dart';
+import 'estoque_page.dart';
+import 'produtos_loja_page.dart';
 import '../services/product_lookup_service.dart';
 import '../services/session_controller.dart';
 
@@ -70,10 +72,21 @@ class _CommercialCenterPageState extends State<CommercialCenterPage> {
     );
     if (!mounted || code == null) return;
     _code.text = code;
-    await _search();
+    final result = await _search();
+    if (!mounted || result == null) return;
+    final product = result.product;
+    if (product?.localProductId != null) {
+      await _openExistingProduct(product!);
+    } else {
+      await _openRegistration(
+        product: product,
+        gtin: result.normalizedGtin,
+        productNotFound: product == null,
+      );
+    }
   }
 
-  Future<void> _search() async {
+  Future<ProductLookupResult?> _search() async {
     FocusScope.of(context).unfocus();
     setState(() {
       _searching = true;
@@ -84,8 +97,9 @@ class _CommercialCenterPageState extends State<CommercialCenterPage> {
         _code.text,
         commerceId: SessionController.instance.usuario!.comercioId,
       );
-      if (!mounted) return;
+      if (!mounted) return null;
       setState(() => _lookupResult = result);
+      return result;
     } on FormatException catch (error) {
       _message(error.message);
     } on CatalogProviderUnavailable catch (error) {
@@ -95,6 +109,7 @@ class _CommercialCenterPageState extends State<CommercialCenterPage> {
     } finally {
       if (mounted) setState(() => _searching = false);
     }
+    return null;
   }
 
   Future<void> _simulatePayment() async {
@@ -126,11 +141,16 @@ class _CommercialCenterPageState extends State<CommercialCenterPage> {
   Future<void> _openRegistration({
     CatalogProduct? product,
     String? gtin,
+    bool productNotFound = false,
   }) async {
     final saved = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
-        builder: (_) => CatalogRegistrationPage(product: product, gtin: gtin),
+        builder: (_) => CatalogRegistrationPage(
+          product: product,
+          gtin: gtin,
+          productNotFound: productNotFound,
+        ),
       ),
     );
     if (saved == true) {
@@ -139,6 +159,23 @@ class _CommercialCenterPageState extends State<CommercialCenterPage> {
         await _search();
       }
     }
+  }
+
+  Future<void> _openExistingProduct(CatalogProduct product) async {
+    final id = product.localProductId;
+    if (id == null) return;
+    if (product.localDestination == 'loja') {
+      await Navigator.push<void>(
+        context,
+        MaterialPageRoute(builder: (_) => ProdutoDetalhePage(produtoId: id)),
+      );
+      return;
+    }
+    _message('Produto já cadastrado no estoque do salão.');
+    await Navigator.push<void>(
+      context,
+      MaterialPageRoute(builder: (_) => const EstoquePage()),
+    );
   }
 
   Future<void> _showSubscriptionHistory() async {
@@ -429,8 +466,14 @@ class _CommercialCenterPageState extends State<CommercialCenterPage> {
                 spacing: 8,
                 children: [
                   FilledButton(
-                    onPressed: () => _openRegistration(product: product),
-                    child: const Text('Usar estes dados'),
+                    onPressed: () => product.localProductId != null
+                        ? _openExistingProduct(product)
+                        : _openRegistration(product: product),
+                    child: Text(
+                      product.localProductId != null
+                          ? 'Abrir produto existente'
+                          : 'Usar estes dados',
+                    ),
                   ),
                   TextButton(
                     onPressed: () => _message(

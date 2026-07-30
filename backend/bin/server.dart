@@ -12,13 +12,11 @@ Future<void> main() async {
     config.databaseUrl,
   );
   final catalogStore = PostgresCatalogStore.fromUrl(config.databaseUrl);
-  final catalog = config.catalogUserAgent == null
-      ? null
-      : CatalogLookupService(
-          store: catalogStore,
-          baseUrl: config.catalogBaseUrl,
-          userAgent: config.catalogUserAgent!,
-        );
+  final catalog = CatalogLookupService(
+    store: catalogStore,
+    baseUrl: config.catalogBaseUrl,
+    userAgent: config.catalogUserAgent,
+  );
   final AutomationMessageSender sender;
   if (config.whatsappPhoneNumberId != null &&
       config.whatsappAccessToken != null) {

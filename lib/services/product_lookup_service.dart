@@ -13,6 +13,9 @@ class CatalogProduct {
   final String? description;
   final String? imageUrl;
   final String? quantity;
+  final String? unit;
+  final String? localProductId;
+  final String? localDestination;
   final String source;
   final double confidence;
 
@@ -24,6 +27,9 @@ class CatalogProduct {
     this.description,
     this.imageUrl,
     this.quantity,
+    this.unit,
+    this.localProductId,
+    this.localDestination,
     required this.source,
     required this.confidence,
   });
@@ -36,18 +42,24 @@ class CatalogProduct {
     'description': description,
     'imageUrl': imageUrl,
     'quantity': quantity,
+    'unit': unit,
+    'localProductId': localProductId,
+    'localDestination': localDestination,
     'source': source,
     'confidence': confidence,
   };
 
   factory CatalogProduct.fromJson(Map<String, Object?> json) => CatalogProduct(
-    gtin: json['gtin'] as String,
+    gtin: (json['barcode'] ?? json['gtin']) as String,
     name: json['name'] as String,
     brand: json['brand'] as String?,
     category: json['category'] as String?,
     description: json['description'] as String?,
     imageUrl: json['imageUrl'] as String?,
     quantity: json['quantity'] as String?,
+    unit: json['unit'] as String?,
+    localProductId: json['localProductId'] as String?,
+    localDestination: json['localDestination'] as String?,
     source: json['source'] as String? ?? 'cache',
     confidence: (json['confidence'] as num? ?? 0).toDouble(),
   );
@@ -72,7 +84,7 @@ class LocalProductCatalogProvider implements ProductCatalogProvider {
     final db = await _database();
     final rows = await db.query(
       'estoque',
-      where: 'comercio_id = ? AND codigo_barras = ? AND ativo = 1',
+      where: 'comercio_id = ? AND codigo_barras = ?',
       whereArgs: [commerceId, gtin],
       limit: 1,
     );
@@ -85,7 +97,10 @@ class LocalProductCatalogProvider implements ProductCatalogProvider {
       category: row['categoria'] as String?,
       description: row['descricao'] as String?,
       imageUrl: row['imagem'] as String?,
-      source: id,
+      unit: row['unidade'] as String?,
+      localProductId: row['id'] as String,
+      localDestination: row['estoque_destino'] as String?,
+      source: 'business',
       confidence: 1,
     );
   }
@@ -117,7 +132,8 @@ class StudioFlowCatalogProvider implements ProductCatalogProvider {
       category: row['categoria'] as String?,
       description: row['descricao'] as String?,
       imageUrl: row['imagem_url'] as String?,
-      source: id,
+      unit: row['unidade'] as String?,
+      source: 'studioflow',
       confidence: (row['confianca'] as num? ?? 0).toDouble(),
     );
   }
@@ -149,14 +165,15 @@ class OfficialProductCatalogProvider implements ProductCatalogProvider {
       if (response['found'] != true || response['product'] is! Map) return null;
       final product = Map<String, Object?>.from(response['product'] as Map);
       return CatalogProduct(
-        gtin: gtin,
+        gtin: (product['barcode'] ?? product['gtin'] ?? gtin) as String,
         name: product['name'] as String,
         brand: product['brand'] as String?,
         category: product['category'] as String?,
         description: product['description'] as String?,
         imageUrl: product['imageUrl'] as String?,
         quantity: product['quantity'] as String?,
-        source: 'Open Beauty Facts / Open Products Facts (ODbL 1.0)',
+        unit: product['unit'] as String?,
+        source: response['source'] as String? ?? 'external',
         confidence: 0.85,
       );
     } catch (error) {
@@ -217,9 +234,6 @@ class ProductLookupService {
              LocalProductCatalogProvider(databaseProvider: databaseProvider),
              StudioFlowCatalogProvider(databaseProvider: databaseProvider),
              OfficialProductCatalogProvider(),
-             CommunityProductCatalogProvider(
-               databaseProvider: databaseProvider,
-             ),
            ];
 
   static String normalizeGtin(String input) =>
@@ -261,8 +275,26 @@ class ProductLookupService {
         );
       }
     }
+    final shared = providers
+        .where((provider) => provider.id == 'studioflow_catalog')
+        .firstOrNull;
+    if (shared != null) {
+      consulted.add(shared.id);
+      final product = await shared.findByGtin(gtin, commerceId: commerceId);
+      if (product != null) {
+        await _writeCache(product);
+        return ProductLookupResult(
+          product: product,
+          normalizedGtin: gtin,
+          consultedProviders: consulted,
+          fromCache: false,
+        );
+      }
+    }
     final cached = await _readCache(gtin);
-    if (cached != null && cached.source != 'local_salon') {
+    if (cached != null &&
+        cached.source != 'business' &&
+        cached.source != 'studioflow') {
       return ProductLookupResult(
         product: cached,
         normalizedGtin: gtin,
@@ -271,7 +303,9 @@ class ProductLookupService {
       );
     }
     for (final provider in providers.where(
-      (provider) => provider.id != 'local_salon',
+      (provider) =>
+          provider.id != 'local_salon' &&
+          provider.id != 'studioflow_catalog',
     )) {
       consulted.add(provider.id);
       final product = await provider.findByGtin(gtin, commerceId: commerceId);

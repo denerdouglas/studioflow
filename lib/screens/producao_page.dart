@@ -50,88 +50,21 @@ class _ProducaoPageState extends State<ProducaoPage> {
     UsuarioAcesso usuario,
     EstadoInfraestrutura estado,
   ) async {
-    final endpoint = TextEditingController(text: estado.endpointPublico ?? '');
-    final login = TextEditingController(text: usuario.emailLogin);
-    final senha = TextEditingController();
-    var criarAmbiente = false;
     final input = await showDialog<_BackendInput>(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Conectar ao StudioFlow Cloud'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text(
-                  'Use somente o endereço HTTPS fornecido pela ROLG Systems. '
-                  'A senha é enviada por conexão segura e não fica salva.',
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: endpoint,
-                  keyboardType: TextInputType.url,
-                  decoration: const InputDecoration(
-                    labelText: 'Endpoint HTTPS',
-                    hintText: 'https://api.studioflow.com.br',
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: login,
-                  keyboardType: TextInputType.emailAddress,
-                  decoration: const InputDecoration(labelText: 'Login online'),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: senha,
-                  obscureText: true,
-                  decoration: const InputDecoration(labelText: 'Senha online'),
-                ),
-                CheckboxListTile(
-                  contentPadding: EdgeInsets.zero,
-                  value: criarAmbiente,
-                  onChanged: (value) =>
-                      setDialogState(() => criarAmbiente = value ?? false),
-                  title: const Text(
-                    'Criar ambiente remoto se ainda não existir',
-                  ),
-                  subtitle: const Text(
-                    'Disponível somente para o dono no primeiro vínculo.',
-                  ),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancelar'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(
-                context,
-                _BackendInput(
-                  endpoint: endpoint.text,
-                  login: login.text,
-                  senha: senha.text,
-                  criarAmbiente: criarAmbiente,
-                ),
-              ),
-              child: const Text('Conectar'),
-            ),
-          ],
-        ),
+      builder: (context) => _BackendConnectionDialog(
+        endpointInicial: estado.endpointPublico ?? '',
+        loginInicial: usuario.emailLogin,
       ),
     );
-    endpoint.dispose();
-    login.dispose();
-    senha.dispose();
-    if (input == null) return;
+
+    if (!mounted || input == null) return;
+
     if (input.criarAmbiente && usuario.funcao != FuncaoUsuario.dono) {
       _mensagem('Somente o dono pode criar o ambiente remoto.');
       return;
     }
+
     await _executar(() async {
       await _syncService.conectar(
         usuario: usuario,
@@ -142,7 +75,9 @@ class _ProducaoPageState extends State<ProducaoPage> {
         ),
         criarAmbienteSeAusente: input.criarAmbiente,
       );
+
       final resultado = await _syncService.sincronizar(usuario.comercioId);
+
       _mensagem(
         'Conectado: ${resultado.enviadas} enviados e '
         '${resultado.recebidas} recebidos.',
@@ -352,6 +287,129 @@ class _StatusCard extends StatelessWidget {
         subtitle: Text(detail),
         trailing: Icon(ok ? Icons.check_circle : Icons.info, color: color),
       ),
+    );
+  }
+}
+
+
+class _BackendConnectionDialog extends StatefulWidget {
+  final String endpointInicial;
+  final String loginInicial;
+
+  const _BackendConnectionDialog({
+    required this.endpointInicial,
+    required this.loginInicial,
+  });
+
+  @override
+  State<_BackendConnectionDialog> createState() =>
+      _BackendConnectionDialogState();
+}
+
+class _BackendConnectionDialogState extends State<_BackendConnectionDialog> {
+  late final TextEditingController _endpointController;
+  late final TextEditingController _loginController;
+  late final TextEditingController _senhaController;
+  bool _criarAmbiente = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _endpointController = TextEditingController(text: widget.endpointInicial);
+    _loginController = TextEditingController(text: widget.loginInicial);
+    _senhaController = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _endpointController.dispose();
+    _loginController.dispose();
+    _senhaController.dispose();
+    super.dispose();
+  }
+
+  void _confirmar() {
+    FocusScope.of(context).unfocus();
+
+    Navigator.of(context).pop(
+      _BackendInput(
+        endpoint: _endpointController.text.trim(),
+        login: _loginController.text.trim(),
+        senha: _senhaController.text,
+        criarAmbiente: _criarAmbiente,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Conectar ao StudioFlow Cloud'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Use somente o endereço HTTPS fornecido pela ROLG Systems. '
+              'A senha é enviada por conexão segura e não fica salva.',
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _endpointController,
+              keyboardType: TextInputType.url,
+              textInputAction: TextInputAction.next,
+              autocorrect: false,
+              decoration: const InputDecoration(
+                labelText: 'Endpoint HTTPS',
+                hintText: 'https://api.studioflowapp.com.br',
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _loginController,
+              keyboardType: TextInputType.emailAddress,
+              textInputAction: TextInputAction.next,
+              autocorrect: false,
+              decoration: const InputDecoration(
+                labelText: 'Login online',
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _senhaController,
+              obscureText: true,
+              textInputAction: TextInputAction.done,
+              onSubmitted: (_) => _confirmar(),
+              decoration: const InputDecoration(
+                labelText: 'Senha online',
+              ),
+            ),
+            CheckboxListTile(
+              contentPadding: EdgeInsets.zero,
+              value: _criarAmbiente,
+              onChanged: (value) {
+                setState(() => _criarAmbiente = value ?? false);
+              },
+              title: const Text(
+                'Criar ambiente remoto se ainda não existir',
+              ),
+              subtitle: const Text(
+                'Disponível somente para o dono no primeiro vínculo.',
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancelar'),
+        ),
+        FilledButton(
+          onPressed: _confirmar,
+          child: const Text('Conectar'),
+        ),
+      ],
     );
   }
 }

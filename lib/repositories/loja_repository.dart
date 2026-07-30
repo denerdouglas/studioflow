@@ -4,6 +4,7 @@ import '../core/utils/id_generator.dart';
 import '../database/database_service.dart';
 import '../models/domain/acesso.dart';
 import '../models/domain/loja.dart';
+import '../services/product_catalog_contribution_service.dart';
 import '../services/session_controller.dart';
 
 class LojaRepository {
@@ -149,6 +150,21 @@ class LojaRepository {
         final quantidadeInicial = produto.quantidadeAtual;
         mapa['quantidade_atual'] = 0.0;
         await txn.insert('estoque', mapa);
+        final barcode = produto.codigoBarras?.trim() ?? '';
+        if (barcode.isNotEmpty) {
+          await ProductCatalogContributionService.enqueue(
+            txn,
+            user: u,
+            barcode: barcode,
+            name: produto.nome,
+            brand: produto.marca,
+            description: produto.descricao,
+            category: produto.categoria,
+            imageUrl: produto.imagem,
+            unit: produto.unidade,
+            source: produto.origemCatalogo,
+          );
+        }
         if (quantidadeInicial > 0) {
           await _movimentarTxn(
             txn,

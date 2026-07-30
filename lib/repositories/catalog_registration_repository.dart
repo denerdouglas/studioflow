@@ -28,6 +28,7 @@ class LocalProductInput {
   final String notes;
   final InventoryDestination destination;
   final CatalogContributionDecision contribution;
+  final String source;
 
   const LocalProductInput({
     this.gtin,
@@ -46,6 +47,7 @@ class LocalProductInput {
     required this.notes,
     required this.destination,
     required this.contribution,
+    this.source = 'manual',
   });
 }
 
@@ -89,9 +91,8 @@ class CatalogRegistrationRepository {
         final duplicate = await txn.query(
           'estoque',
           columns: ['id'],
-          where:
-              'comercio_id = ? AND estoque_destino = ? AND codigo_barras = ?',
-          whereArgs: [user.comercioId, destination, normalized],
+          where: 'comercio_id = ? AND codigo_barras = ?',
+          whereArgs: [user.comercioId, normalized],
           limit: 1,
         );
         if (duplicate.isNotEmpty) {
@@ -124,6 +125,7 @@ class CatalogRegistrationRepository {
         'lote': input.batch?.trim(),
         'data_validade': input.expiresAt?.toIso8601String(),
         'observacoes': input.notes.trim(),
+        'origem_catalogo': input.source,
         'ativo': 1,
         'descontar_automaticamente': destination == 'loja' ? 1 : 0,
         'data_cadastro': now.toIso8601String(),
@@ -153,7 +155,9 @@ class CatalogRegistrationRepository {
           brand: input.brand?.trim(),
           category: input.category.trim(),
           description: input.description.trim(),
-          source: 'communitySubmitted',
+          imageUrl: input.imageUrl,
+          unit: input.unit.trim(),
+          source: 'manual',
           confidence: 0.25,
         );
         await txn.insert('catalogo_sugestoes', {

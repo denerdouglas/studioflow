@@ -6,8 +6,14 @@ import '../services/product_lookup_service.dart';
 class CatalogRegistrationPage extends StatefulWidget {
   final CatalogProduct? product;
   final String? gtin;
+  final bool productNotFound;
 
-  const CatalogRegistrationPage({super.key, this.product, this.gtin});
+  const CatalogRegistrationPage({
+    super.key,
+    this.product,
+    this.gtin,
+    this.productNotFound = false,
+  });
 
   @override
   State<CatalogRegistrationPage> createState() =>
@@ -22,6 +28,7 @@ class _CatalogRegistrationPageState extends State<CatalogRegistrationPage> {
   late final TextEditingController _brand;
   late final TextEditingController _description;
   late final TextEditingController _category;
+  late final TextEditingController _image;
   final _unit = TextEditingController(text: 'un');
   final _cost = TextEditingController(text: '0');
   final _sale = TextEditingController(text: '0');
@@ -31,7 +38,7 @@ class _CatalogRegistrationPageState extends State<CatalogRegistrationPage> {
   final _notes = TextEditingController();
   InventoryDestination _destination = InventoryDestination.salon;
   CatalogContributionDecision _contribution =
-      CatalogContributionDecision.askLater;
+      CatalogContributionDecision.sendForReview;
   bool _saving = false;
 
   @override
@@ -46,7 +53,8 @@ class _CatalogRegistrationPageState extends State<CatalogRegistrationPage> {
       text: widget.product?.description ?? '',
     );
     _category = TextEditingController(text: widget.product?.category ?? '');
-    _unit.text = _unitFromQuantity(widget.product?.quantity);
+    _image = TextEditingController(text: widget.product?.imageUrl ?? '');
+    _unit.text = widget.product?.unit ?? _unitFromQuantity(widget.product?.quantity);
   }
 
   @override
@@ -57,6 +65,7 @@ class _CatalogRegistrationPageState extends State<CatalogRegistrationPage> {
       _brand,
       _description,
       _category,
+      _image,
       _unit,
       _cost,
       _sale,
@@ -92,7 +101,7 @@ class _CatalogRegistrationPageState extends State<CatalogRegistrationPage> {
           gtin: _gtin.text,
           name: _name.text,
           brand: _brand.text,
-          imageUrl: widget.product?.imageUrl,
+          imageUrl: _image.text.trim().isEmpty ? null : _image.text.trim(),
           description: _description.text,
           category: _category.text,
           unit: _unit.text,
@@ -104,6 +113,7 @@ class _CatalogRegistrationPageState extends State<CatalogRegistrationPage> {
           notes: _notes.text,
           destination: _destination,
           contribution: _contribution,
+          source: widget.product?.source ?? 'manual',
         ),
       );
       if (!mounted) return;
@@ -141,11 +151,38 @@ class _CatalogRegistrationPageState extends State<CatalogRegistrationPage> {
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
+            if (widget.productNotFound)
+              const Card(
+                color: Color(0xFFFFF3CD),
+                child: Padding(
+                  padding: EdgeInsets.all(12),
+                  child: Text(
+                    'Produto não encontrado. Complete os dados para cadastrá-lo.',
+                  ),
+                ),
+              ),
             _field(_gtin, 'GTIN (opcional)', keyboard: TextInputType.number),
             _field(_name, 'Nome *', required: true),
             _field(_brand, 'Marca'),
             _field(_description, 'Descrição', lines: 2),
             _field(_category, 'Categoria *', required: true),
+            _field(_image, 'URL da imagem'),
+            if (_image.text.trim().isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.network(
+                    _image.text.trim(),
+                    height: 150,
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, _, _) => const SizedBox(
+                      height: 80,
+                      child: Center(child: Text('Imagem indisponível')),
+                    ),
+                  ),
+                ),
+              ),
             if ((widget.product?.quantity ?? '').isNotEmpty)
               ListTile(
                 contentPadding: EdgeInsets.zero,

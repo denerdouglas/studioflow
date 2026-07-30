@@ -28,12 +28,15 @@ class BackendApiClient {
         uri.fragment.isNotEmpty) {
       throw const FormatException('Endpoint do backend inválido.');
     }
+
     final local = const {'localhost', '127.0.0.1', '::1'}.contains(uri.host);
+
     if (uri.scheme != 'https' && !(uri.scheme == 'http' && local)) {
       throw const FormatException(
         'O backend deve utilizar HTTPS. HTTP é aceito apenas localmente.',
       );
     }
+
     return uri.replace(path: uri.path.replaceAll(RegExp(r'/$'), ''));
   }
 
@@ -48,16 +51,20 @@ class BackendApiClient {
     required String login,
     required String password,
   }) {
-    return _post(endpoint, '/v1/auth/register-business', {
-      'businessId': businessId,
-      'businessName': businessName,
-      'segment': segment,
-      'userId': userId,
-      'ownerName': ownerName,
-      'phone': phone,
-      'login': login,
-      'password': password,
-    });
+    return _post(
+      endpoint,
+      '/v1/auth/register-business',
+      {
+        'businessId': businessId,
+        'businessName': businessName,
+        'segment': segment,
+        'userId': userId,
+        'ownerName': ownerName,
+        'phone': phone,
+        'login': login,
+        'password': password,
+      },
+    );
   }
 
   Future<Map<String, dynamic>> login({
@@ -66,18 +73,26 @@ class BackendApiClient {
     required String password,
     String? businessId,
   }) {
-    return _post(endpoint, '/v1/auth/login', {
-      'login': login,
-      'password': password,
-      'businessId': ?businessId,
-    });
+    return _post(
+      endpoint,
+      '/v1/auth/login',
+      {
+        'login': login,
+        'password': password,
+        'businessId': businessId,
+      },
+    );
   }
 
   Future<Map<String, dynamic>> refresh({
     required Uri endpoint,
     required String refreshToken,
   }) {
-    return _post(endpoint, '/v1/auth/refresh', {'refreshToken': refreshToken});
+    return _post(
+      endpoint,
+      '/v1/auth/refresh',
+      {'refreshToken': refreshToken},
+    );
   }
 
   Future<Map<String, dynamic>> push({
@@ -85,9 +100,12 @@ class BackendApiClient {
     required String accessToken,
     required List<Map<String, Object?>> operations,
   }) {
-    return _post(endpoint, '/v1/sync/push', {
-      'operations': operations,
-    }, accessToken: accessToken);
+    return _post(
+      endpoint,
+      '/v1/sync/push',
+      {'operations': operations},
+      accessToken: accessToken,
+    );
   }
 
   Future<Map<String, dynamic>> pull({
@@ -96,10 +114,15 @@ class BackendApiClient {
     required int cursor,
     int limit = 200,
   }) {
-    return _get(endpoint, '/v1/sync/pull', {
-      'cursor': '$cursor',
-      'limit': '$limit',
-    }, accessToken: accessToken);
+    return _get(
+      endpoint,
+      '/v1/sync/pull',
+      {
+        'cursor': '$cursor',
+        'limit': '$limit',
+      },
+      accessToken: accessToken,
+    );
   }
 
   Future<Map<String, dynamic>> catalogGtin({
@@ -120,9 +143,12 @@ class BackendApiClient {
     required String accessToken,
     int limit = 100,
   }) {
-    return _get(endpoint, '/v1/messages/history', {
-      'limit': '${limit.clamp(1, 500)}',
-    }, accessToken: accessToken);
+    return _get(
+      endpoint,
+      '/v1/messages/history',
+      {'limit': '${limit.clamp(1, 500)}'},
+      accessToken: accessToken,
+    );
   }
 
   Future<Map<String, dynamic>> _post(
@@ -141,6 +167,7 @@ class BackendApiClient {
           body: jsonEncode(body),
         )
         .timeout(const Duration(seconds: 30));
+
     return _decode(response);
   }
 
@@ -156,6 +183,7 @@ class BackendApiClient {
           headers: {'authorization': 'Bearer $accessToken'},
         )
         .timeout(const Duration(seconds: 30));
+
     return _decode(response);
   }
 
@@ -167,10 +195,16 @@ class BackendApiClient {
   Map<String, dynamic> _decode(http.Response response) {
     final decoded = response.body.isEmpty
         ? <String, dynamic>{}
-        : Map<String, dynamic>.from(jsonDecode(response.body) as Map);
+        : Map<String, dynamic>.from(
+            jsonDecode(response.body) as Map,
+          );
+
     if (response.statusCode < 200 || response.statusCode >= 300) {
       final error = decoded['error'];
-      final map = error is Map ? Map<String, dynamic>.from(error) : const {};
+      final map = error is Map
+          ? Map<String, dynamic>.from(error)
+          : const <String, dynamic>{};
+
       throw BackendHttpException(
         response.statusCode,
         map['code'] as String? ?? 'http_error',
@@ -178,6 +212,7 @@ class BackendApiClient {
             'Backend respondeu ${response.statusCode}.',
       );
     }
+
     return decoded;
   }
 }

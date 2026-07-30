@@ -4,8 +4,10 @@ import '../core/utils/id_generator.dart';
 import '../models/domain/acesso.dart';
 import '../models/domain/loja.dart';
 import '../repositories/loja_repository.dart';
+import '../services/product_lookup_service.dart';
 import '../services/session_controller.dart';
 import 'barcode_scanner_page.dart';
+import 'estoque_page.dart';
 
 class ProdutosLojaPage extends StatefulWidget {
   final bool somenteBaixo;
@@ -22,6 +24,7 @@ class ProdutosLojaPage extends StatefulWidget {
 
 class _ProdutosLojaPageState extends State<ProdutosLojaPage> {
   final _repo = LojaRepository();
+  final _lookup = ProductLookupService();
   final _busca = TextEditingController();
   late Future<List<ProdutoLoja>> _future;
 
@@ -38,12 +41,21 @@ class _ProdutosLojaPageState extends State<ProdutosLojaPage> {
     incluirInativos: true,
   );
 
-  Future<void> _abrir([ProdutoLoja? produto, String? codigo]) async {
+  Future<void> _abrir([
+    ProdutoLoja? produto,
+    String? codigo,
+    CatalogProduct? catalogProduct,
+    bool productNotFound = false,
+  ]) async {
     await Navigator.push(
       context,
       MaterialPageRoute<void>(
-        builder: (_) =>
-            ProdutoFormPage(produto: produto, codigoInicial: codigo),
+        builder: (_) => ProdutoFormPage(
+          produto: produto,
+          codigoInicial: codigo,
+          catalogProduct: catalogProduct,
+          productNotFound: productNotFound,
+        ),
       ),
     );
     setState(_carregar);
@@ -59,24 +71,31 @@ class _ProdutosLojaPageState extends State<ProdutosLojaPage> {
       final produto = await _repo.buscarCodigo(codigo);
       if (!mounted) return;
       if (produto == null) {
-        final cadastrar = await showDialog<bool>(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('Produto não encontrado'),
-            content: Text('Cadastrar um novo produto com o código $codigo?'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('Cancelar'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: const Text('Cadastrar'),
-              ),
-            ],
-          ),
+        final result = await _lookup.lookup(
+          codigo,
+          commerceId: SessionController.instance.usuario!.comercioId,
         );
-        if (cadastrar == true) await _abrir(null, codigo);
+        if (!mounted) return;
+        final found = result.product;
+        if (found?.localProductId != null &&
+            found?.localDestination == 'salao') {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Produto já cadastrado no estoque do salão.'),
+            ),
+          );
+          await Navigator.push<void>(
+            context,
+            MaterialPageRoute(builder: (_) => const EstoquePage()),
+          );
+        } else {
+          await _abrir(
+            null,
+            result.normalizedGtin,
+            found,
+            found == null,
+          );
+        }
       } else {
         await Navigator.push(
           context,
@@ -220,7 +239,15 @@ class _ProdutosLojaPageState extends State<ProdutosLojaPage> {
 class ProdutoFormPage extends StatefulWidget {
   final ProdutoLoja? produto;
   final String? codigoInicial;
-  const ProdutoFormPage({super.key, this.produto, this.codigoInicial});
+  final CatalogProduct? catalogProduct;
+  final bool productNotFound;
+  const ProdutoFormPage({
+    super.key,
+    this.produto,
+    this.codigoInicial,
+    this.catalogProduct,
+    this.productNotFound = false,
+  });
   @override
   State<ProdutoFormPage> createState() => _ProdutoFormPageState();
 }
@@ -231,6 +258,8 @@ class _ProdutoFormPageState extends State<ProdutoFormPage> {
   ModalidadeProduto modalidade = ModalidadeProduto.proprio;
   bool ativo = true;
   bool salvando = false;
+  bool consultandoCodigo = false;
+  late String origemCatalogo;
 
   TextEditingController _c(String key, [String value = '']) =>
       c.putIfAbsent(key, () => TextEditingController(text: value));
@@ -241,12 +270,14 @@ class _ProdutoFormPageState extends State<ProdutoFormPage> {
   void initState() {
     super.initState();
     final p = widget.produto;
+    final catalog = widget.catalogProduct;
+    origemCatalogo = p?.origemCatalogo ?? catalog?.source ?? 'manual';
     modalidade = p?.modalidade ?? ModalidadeProduto.proprio;
     ativo = p?.ativo ?? true;
-    _c('nome', p?.nome ?? '');
-    _c('descricao', p?.descricao ?? '');
-    _c('categoria', p?.categoria ?? 'Cosméticos');
-    _c('marca', p?.marca ?? '');
+    _c('nome', p?.nome ?? catalog?.name ?? '');
+    _c('descricao', p?.descricao ?? catalog?.description ?? '');
+    _c('categoria', p?.categoria ?? catalog?.category ?? 'Cosméticos');
+    _c('marca', p?.marca ?? catalog?.brand ?? '');
     _c('interno', p?.codigoInterno ?? '');
     _c('barras', p?.codigoBarras ?? widget.codigoInicial ?? '');
     _c('tipo', p?.tipo ?? 'produto');
@@ -255,11 +286,11 @@ class _ProdutoFormPageState extends State<ProdutoFormPage> {
     _c('quantidade', p?.quantidadeAtual.toString() ?? '0');
     _c('minimo', p?.estoqueMinimo.toString() ?? '0');
     _c('sugerida', p?.quantidadeSugerida.toString() ?? '0');
-    _c('unidade', p?.unidade ?? 'un');
+    _c('unidade', p?.unidade ?? catalog?.unit ?? 'un');
     _c('embalagem', p?.quantidadeEmbalagem.toString() ?? '1');
     _c('lote', p?.lote ?? '');
     _c('validade', p?.validade?.toIso8601String().split('T').first ?? '');
-    _c('imagem', p?.imagem ?? '');
+    _c('imagem', p?.imagem ?? catalog?.imageUrl ?? '');
     _c('observacoes', p?.observacoes ?? '');
   }
 
@@ -268,7 +299,82 @@ class _ProdutoFormPageState extends State<ProdutoFormPage> {
       context,
       MaterialPageRoute(builder: (_) => const BarcodeScannerPage()),
     );
-    if (codigo != null) setState(() => _c('barras').text = codigo);
+    if (!mounted || codigo == null) return;
+    setState(() => consultandoCodigo = true);
+    try {
+      final existente = await LojaRepository().buscarCodigo(codigo);
+      if (!mounted) return;
+      if (existente != null && existente.id != widget.produto?.id) {
+        await Navigator.push<void>(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ProdutoDetalhePage(produtoId: existente.id),
+          ),
+        );
+        return;
+      }
+      final result = await ProductLookupService().lookup(
+        codigo,
+        commerceId: SessionController.instance.usuario!.comercioId,
+      );
+      if (!mounted) return;
+      final product = result.product;
+      if (product?.localProductId != null &&
+          product?.localDestination == 'salao') {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Produto já cadastrado no estoque do salão.'),
+          ),
+        );
+        return;
+      }
+      setState(() {
+        _c('barras').text = result.normalizedGtin;
+        if (product != null) {
+          if (_c('nome').text.trim().isEmpty) _c('nome').text = product.name;
+          if (_c('marca').text.trim().isEmpty) {
+            _c('marca').text = product.brand ?? '';
+          }
+          if (_c('descricao').text.trim().isEmpty) {
+            _c('descricao').text = product.description ?? '';
+          }
+          if (_c('categoria').text.trim().isEmpty ||
+              _c('categoria').text == 'Cosméticos') {
+            _c('categoria').text = product.category ?? 'Cosméticos';
+          }
+          if (_c('imagem').text.trim().isEmpty) {
+            _c('imagem').text = product.imageUrl ?? '';
+          }
+          if (_c('unidade').text.trim().isEmpty || _c('unidade').text == 'un') {
+            _c('unidade').text = product.unit ?? 'un';
+          }
+          origemCatalogo = product.source;
+        } else {
+          origemCatalogo = 'manual';
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Produto não encontrado. Complete os dados para cadastrá-lo.',
+              ),
+            ),
+          );
+        }
+      });
+    } on CatalogProviderUnavailable catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error.message)),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Falha ao pesquisar o produto: $error')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => consultandoCodigo = false);
+    }
   }
 
   Future<void> _salvar() async {
@@ -303,6 +409,7 @@ class _ProdutoFormPageState extends State<ProdutoFormPage> {
         validade: DateTime.tryParse(_c('validade').text),
         imagem: _c('imagem').text,
         observacoes: _c('observacoes').text,
+        origemCatalogo: origemCatalogo,
         ativo: ativo,
         criadoEm: widget.produto?.criadoEm ?? agora,
         atualizadoEm: agora,
@@ -357,6 +464,17 @@ class _ProdutoFormPageState extends State<ProdutoFormPage> {
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          if (widget.productNotFound)
+            const Card(
+              color: Color(0xFFFFF3CD),
+              child: Padding(
+                padding: EdgeInsets.all(12),
+                child: Text(
+                  'Produto não encontrado. Complete os dados para cadastrá-lo.',
+                ),
+              ),
+            ),
+          if (consultandoCodigo) const LinearProgressIndicator(),
           _campo('nome', 'Nome', obrigatorio: true),
           _campo('descricao', 'Descrição', linhas: 2),
           _campo('categoria', 'Categoria', obrigatorio: true),
@@ -366,7 +484,7 @@ class _ProdutoFormPageState extends State<ProdutoFormPage> {
             'barras',
             'Código de barras',
             suffix: IconButton(
-              onPressed: _scan,
+              onPressed: consultandoCodigo ? null : _scan,
               icon: const Icon(Icons.barcode_reader),
             ),
           ),

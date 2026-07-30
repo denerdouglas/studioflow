@@ -52,6 +52,7 @@ class ProdutoLoja {
   final DateTime? validade;
   final String? imagem;
   final String? observacoes;
+  final String origemCatalogo;
   final bool ativo;
   final DateTime criadoEm;
   final DateTime atualizadoEm;
@@ -81,6 +82,7 @@ class ProdutoLoja {
     this.validade,
     this.imagem,
     this.observacoes,
+    this.origemCatalogo = 'manual',
     required this.ativo,
     required this.criadoEm,
     required this.atualizadoEm,
@@ -118,6 +120,7 @@ class ProdutoLoja {
     validade: DateTime.tryParse(map['data_validade'] as String? ?? ''),
     imagem: map['imagem'] as String?,
     observacoes: map['observacoes'] as String?,
+    origemCatalogo: map['origem_catalogo'] as String? ?? 'manual',
     ativo: map['ativo'] == 1,
     criadoEm: DateTime.parse(map['data_cadastro'] as String),
     atualizadoEm:
@@ -151,6 +154,7 @@ class ProdutoLoja {
     'data_validade': validade?.toIso8601String(),
     'imagem': imagem,
     'observacoes': observacoes?.trim(),
+    'origem_catalogo': origemCatalogo,
     'ativo': ativo ? 1 : 0,
     'descontar_automaticamente': 1,
     'data_cadastro': criadoEm.toIso8601String(),
@@ -175,27 +179,29 @@ class FornecedorLoja {
   final bool entrega;
   final String? regioes;
   final String? observacoes;
+  final String origemCatalogo;
   final bool ativo;
 
   const FornecedorLoja({
-    required this.id,
-    required this.comercioId,
-    required this.nome,
-    this.nomeFantasia,
-    this.documento,
-    this.telefone,
-    this.whatsapp,
-    this.email,
-    this.endereco,
-    this.contato,
-    this.prazoDias = 0,
-    this.formasPagamento,
-    this.minimoPedido = 0,
-    this.entrega = false,
-    this.regioes,
-    this.observacoes,
-    this.ativo = true,
-  });
+  required this.id,
+  required this.comercioId,
+  required this.nome,
+  this.nomeFantasia,
+  this.documento,
+  this.telefone,
+  this.whatsapp,
+  this.email,
+  this.endereco,
+  this.contato,
+  this.prazoDias = 0,
+  this.formasPagamento,
+  this.minimoPedido = 0,
+  this.entrega = false,
+  this.regioes,
+  this.observacoes,
+  this.origemCatalogo = 'manual',
+  this.ativo = true,
+});
 
   factory FornecedorLoja.fromMap(Map<String, Object?> map) => FornecedorLoja(
     id: map['id'] as String,
@@ -214,6 +220,7 @@ class FornecedorLoja {
     entrega: map['entrega_disponivel'] == 1,
     regioes: map['regioes_atendidas'] as String?,
     observacoes: map['observacoes'] as String?,
+    origemCatalogo: map['origem_catalogo'] as String? ?? 'manual',
     ativo: map['ativo'] == 1,
   );
 }

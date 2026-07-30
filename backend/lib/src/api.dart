@@ -71,6 +71,7 @@ final class StudioFlowApi {
       ..get('/v1/admin/affiliate/metrics', _adminMetrics)
       ..get('/v1/messages/history', _messageHistory)
       ..get('/v1/catalog/gtin/<gtin>', _catalogGtin)
+      ..get('/products/barcode/<barcode>', _catalogGtin)
       ..post('/v1/webhooks/messages', _messageWebhook)
       ..get('/v1/webhooks/whatsapp', _whatsappVerify)
       ..post('/v1/webhooks/whatsapp', _whatsappWebhook);
@@ -371,6 +372,28 @@ final class StudioFlowApi {
         }
       }
     }
+    final catalogService = catalog;
+    if (catalogService != null) {
+      for (final result in results.where((item) => item.status == 'applied')) {
+        final mutation = operations.firstWhere(
+          (item) => item.operationId == result.operationId,
+        );
+        if (mutation.entity != 'catalogo_sugestao' ||
+            mutation.operation == 'excluir') {
+          continue;
+        }
+        try {
+          await catalogService.contribute(
+            businessId: actor.businessId,
+            userId: actor.userId,
+            product: CatalogProductData.fromJson(mutation.payload),
+          );
+        } on FormatException {
+          // A sincronização do comércio permanece válida; uma sugestão pública
+          // malformada apenas deixa de alimentar o catálogo compartilhado.
+        }
+      }
+    }
     return _json(200, {
       'results': results.map((result) => result.toJson()).toList(),
     });
@@ -411,10 +434,13 @@ final class StudioFlowApi {
       );
       return _json(200, {
         'found': product != null,
+        'source': product?.source,
+        'barcode': gtin,
         'product': product?.toJson(),
         'cachePolicy': '30 dias para encontrados; 24 horas para ausentes',
-        'attribution':
-            'Dados: Open Beauty Facts / Open Products Facts (ODbL 1.0)',
+        if (product?.source == 'external')
+          'attribution':
+              'Dados: Open Beauty Facts / Open Products Facts (ODbL 1.0)',
       });
     } on FormatException catch (error) {
       return _error(400, 'invalid_gtin', error.message);

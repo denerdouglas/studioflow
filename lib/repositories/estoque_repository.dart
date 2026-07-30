@@ -2,6 +2,7 @@ import 'package:sqflite/sqflite.dart';
 
 import '../database/database_service.dart';
 import '../models/domain/acesso.dart';
+import '../services/product_catalog_contribution_service.dart';
 import '../services/session_controller.dart';
 
 class ItemEstoqueRegistro {
@@ -326,11 +327,23 @@ class EstoqueRepository {
     _exigirAcao(AcaoPermissao.cadastrarProduto);
     final Database db = await _databaseService.database;
 
-    await db.insert('estoque', {
-      ...item.paraMapa(),
-      'comercio_id': _comercioId,
-      'estoque_destino': 'salao',
-    }, conflictAlgorithm: ConflictAlgorithm.abort);
+    final user = SessionController.instance.usuario!;
+    await db.transaction((txn) async {
+      await txn.insert('estoque', {
+        ...item.paraMapa(),
+        'comercio_id': _comercioId,
+        'estoque_destino': 'salao',
+        'origem_catalogo': 'manual',
+      }, conflictAlgorithm: ConflictAlgorithm.abort);
+      await ProductCatalogContributionService.enqueue(
+        txn,
+        user: user,
+        barcode: item.codigoBarras.trim(),
+        name: item.nome,
+        category: item.categoria,
+        unit: item.unidade,
+      );
+    });
   }
 
   Future<void> atualizar(ItemEstoqueRegistro item) async {
