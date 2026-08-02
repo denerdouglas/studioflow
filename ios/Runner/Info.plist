@@ -24,12 +24,14 @@
 	<string>????</string>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>whatsapp</string>
+	</array>
 	<key>NSCameraUsageDescription</key>
 	<string>A câmera será usada para ler códigos de barras de produtos.</string>
 	<key>NSContactsUsageDescription</key>
 	<string>Se você escolher, o StudioFlow poderá importar um contato selecionado para preencher o cadastro.</string>
-	<key>LSRequiresIPhoneOS</key>
-	<true/>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

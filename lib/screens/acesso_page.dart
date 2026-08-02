@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../core/utils/id_generator.dart';
 import '../models/domain/acesso.dart';
 import '../repositories/acesso_repository.dart';
 import '../services/preferencias_service.dart';
@@ -331,18 +332,39 @@ class _AcessoPageState extends State<AcessoPage>
     }
     setState(() => _processando = true);
     try {
-      final usuario = await _repository.cadastrarComercio(
-        CadastroComercioEntrada(
-          nomeComercio: _nomeComercio.text,
-          nomeExibicao: _nomeExibicao.text,
-          responsavel: _responsavel.text,
-          telefone: _telefone.text,
-          email: _email.text,
-          senha: _senha.text,
-          permanecerConectado: _permanecer,
-          tipoEstabelecimento: _tipoEstabelecimento,
-        ),
+      final entrada = CadastroComercioEntrada(
+        nomeComercio: _nomeComercio.text,
+        nomeExibicao: _nomeExibicao.text,
+        responsavel: _responsavel.text,
+        telefone: _telefone.text,
+        email: _email.text,
+        senha: _senha.text,
+        permanecerConectado: _permanecer,
+        tipoEstabelecimento: _tipoEstabelecimento,
       );
+
+      if (!_online.configurado) {
+        throw StateError(
+          'O StudioFlow Cloud não está configurado nesta versão. '
+          'Novos cadastros exigem conexão com a nuvem.',
+        );
+      }
+
+      final comercioId = 'com_${IdGenerator.temporal(DateTime.now().toUtc())}';
+      final usuarioId = 'usr_${IdGenerator.temporal()}';
+
+      final usuario = await _online.cadastrar(
+        entrada: entrada,
+        comercioId: comercioId,
+        usuarioId: usuarioId,
+      );
+
+      try {
+        await BackendSyncService().sincronizar(usuario.comercioId);
+      } catch (e) {
+        // Ignora erro de sincronização inicial na UI, será feito em background
+      }
+
       await PreferenciasService.salvarCadastro(
         nomeResponsavel: usuario.nome,
         nomeNegocio: usuario.nomeComercio,
@@ -355,7 +377,7 @@ class _AcessoPageState extends State<AcessoPage>
         builder: (context) => AlertDialog(
           title: const Text('Estabelecimento criado'),
           content: Text(
-            '${usuario.nomeExibicao} está pronto. Nos próximos acessos, use somente seu e-mail/login e senha.',
+            '${usuario.nomeExibicao} foi cadastrado no StudioFlow Cloud. Nos próximos acessos, use somente seu e-mail/login e senha.',
           ),
           actions: [
             FilledButton(

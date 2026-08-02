@@ -18,6 +18,11 @@ class ClienteRegistro {
   final DateTime dataCadastro;
   final bool consentimentoWhatsapp;
   final bool consentimentoMarketing;
+  final String? instagramUrl;
+  final String? tiktokUrl;
+  final String? facebookUrl;
+  final String? websiteUrl;
+  final String? avatarPathLocal;
 
   const ClienteRegistro({
     required this.id,
@@ -34,6 +39,11 @@ class ClienteRegistro {
     required this.dataCadastro,
     this.consentimentoWhatsapp = false,
     this.consentimentoMarketing = false,
+    this.instagramUrl,
+    this.tiktokUrl,
+    this.facebookUrl,
+    this.websiteUrl,
+    this.avatarPathLocal,
   });
 
   Map<String, Object?> paraMapa() => {
@@ -51,6 +61,11 @@ class ClienteRegistro {
     'total_gasto': totalGasto,
     'consentimento_whatsapp': consentimentoWhatsapp ? 1 : 0,
     'consentimento_marketing': consentimentoMarketing ? 1 : 0,
+    'instagram_url': instagramUrl,
+    'tiktok_url': tiktokUrl,
+    'facebook_url': facebookUrl,
+    'website_url': websiteUrl,
+    'avatar_path_local': avatarPathLocal,
     'atualizado_em': DateTime.now().toUtc().toIso8601String(),
   };
 
@@ -73,6 +88,11 @@ class ClienteRegistro {
         DateTime.now(),
     consentimentoWhatsapp: (mapa['consentimento_whatsapp'] as int? ?? 0) == 1,
     consentimentoMarketing: (mapa['consentimento_marketing'] as int? ?? 0) == 1,
+    instagramUrl: mapa['instagram_url'] as String?,
+    tiktokUrl: mapa['tiktok_url'] as String?,
+    facebookUrl: mapa['facebook_url'] as String?,
+    websiteUrl: mapa['website_url'] as String?,
+    avatarPathLocal: mapa['avatar_path_local'] as String?,
   );
 
   ClienteRegistro copiarCom({
@@ -88,6 +108,11 @@ class ClienteRegistro {
     String? observacoes,
     bool? consentimentoWhatsapp,
     bool? consentimentoMarketing,
+    String? instagramUrl,
+    String? tiktokUrl,
+    String? facebookUrl,
+    String? websiteUrl,
+    String? avatarPathLocal,
   }) => ClienteRegistro(
     id: id,
     nome: nome ?? this.nome,
@@ -104,6 +129,11 @@ class ClienteRegistro {
     consentimentoWhatsapp: consentimentoWhatsapp ?? this.consentimentoWhatsapp,
     consentimentoMarketing:
         consentimentoMarketing ?? this.consentimentoMarketing,
+    instagramUrl: instagramUrl ?? this.instagramUrl,
+    tiktokUrl: tiktokUrl ?? this.tiktokUrl,
+    facebookUrl: facebookUrl ?? this.facebookUrl,
+    websiteUrl: websiteUrl ?? this.websiteUrl,
+    avatarPathLocal: avatarPathLocal ?? this.avatarPathLocal,
   );
 }
 

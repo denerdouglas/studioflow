@@ -34,16 +34,22 @@ final class AccountIdentity {
 
 final class AuthContext {
   final String userId;
-  final String businessId;
+  final String? businessId; // Can be null for platform_admins if they are global
   final String role;
   final String sessionId;
+  final String actorType; // e.g. 'tenant_user', 'platform_admin'
+  final String? platformRole; // e.g. 'platform_super_admin'
 
   const AuthContext({
     required this.userId,
-    required this.businessId,
+    this.businessId,
     required this.role,
     required this.sessionId,
+    this.actorType = 'tenant_user',
+    this.platformRole,
   });
+
+  bool get isPlatformAdmin => actorType == 'platform_admin';
 }
 
 final class SessionRecord {
@@ -130,5 +136,99 @@ final class SyncChange {
     'deleted': deleted,
     'payload': payload,
     'updatedAt': updatedAt.toUtc().toIso8601String(),
+  };
+}
+
+final class SubscriptionRecord {
+  final String id;
+  final String storeProductId;
+  final String basePlanId;
+  final String? offerId;
+  final String purchaseTokenHash;
+  final String purchaseTokenEncrypted;
+  final String? linkedPurchaseTokenHash;
+  final String packageName;
+  final String userId;
+  final String businessId;
+  final String platform;
+  final String state;
+  final DateTime? trialEndAt;
+  final DateTime? currentPeriodEndAt;
+  final bool autoRenewEnabled;
+  final bool founderPriceLocked;
+  final int? acquiredPriceMicros;
+  final String? currencyCode;
+  final DateTime? lastVerifiedAt;
+  final String verificationSource;
+  final DateTime? acknowledgedAt;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  const SubscriptionRecord({
+    required this.id,
+    required this.storeProductId,
+    required this.basePlanId,
+    this.offerId,
+    required this.purchaseTokenHash,
+    required this.purchaseTokenEncrypted,
+    this.linkedPurchaseTokenHash,
+    required this.packageName,
+    required this.userId,
+    required this.businessId,
+    required this.platform,
+    required this.state,
+    this.trialEndAt,
+    this.currentPeriodEndAt,
+    required this.autoRenewEnabled,
+    required this.founderPriceLocked,
+    this.acquiredPriceMicros,
+    this.currencyCode,
+    this.lastVerifiedAt,
+    required this.verificationSource,
+    this.acknowledgedAt,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'storeProductId': storeProductId,
+    'basePlanId': basePlanId,
+    if (offerId != null) 'offerId': offerId,
+    'userId': userId,
+    'businessId': businessId,
+    'platform': platform,
+    'state': state,
+    if (trialEndAt != null) 'trialEndAt': trialEndAt!.toIso8601String(),
+    if (currentPeriodEndAt != null) 'currentPeriodEndAt': currentPeriodEndAt!.toIso8601String(),
+    'autoRenewEnabled': autoRenewEnabled,
+    'founderPriceLocked': founderPriceLocked,
+  };
+}
+
+final class Entitlement {
+  final String businessId;
+  final String state;
+  final bool isFounder;
+  final DateTime issuedAt;
+  final DateTime? currentPeriodEndAt;
+  final int version;
+
+  const Entitlement({
+    required this.businessId,
+    required this.state,
+    required this.isFounder,
+    required this.issuedAt,
+    this.currentPeriodEndAt,
+    required this.version,
+  });
+
+  Map<String, Object?> toJson() => {
+    'businessId': businessId,
+    'state': state,
+    'isFounder': isFounder,
+    'issuedAt': issuedAt.toIso8601String(),
+    if (currentPeriodEndAt != null) 'currentPeriodEndAt': currentPeriodEndAt!.toIso8601String(),
+    'version': version,
   };
 }

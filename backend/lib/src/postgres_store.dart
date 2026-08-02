@@ -2,16 +2,21 @@ import 'dart:convert';
 
 import 'package:postgres/postgres.dart';
 
+import 'package:studioflow_backend/src/database_config.dart';
+
 import 'models.dart';
 import 'store.dart';
+import 'package:studioflow_backend/src/admin.dart';
 
-final class PostgresBackendStore implements BackendStore {
+final class PostgresBackendStore implements BackendStore, AdminBackendStore {
   final Pool _pool;
+
+  Pool get pool => _pool;
 
   PostgresBackendStore._(this._pool);
 
   factory PostgresBackendStore.fromUrl(String databaseUrl) {
-    return PostgresBackendStore._(Pool.withUrl(databaseUrl));
+    return PostgresBackendStore._(DatabaseConfig.createPool(databaseUrl));
   }
 
   @override
@@ -221,7 +226,7 @@ final class PostgresBackendStore implements BackendStore {
     required List<SyncMutation> mutations,
   }) {
     return _pool.runTx((tx) async {
-      await _setTenant(tx, actor.businessId);
+      await _setTenant(tx, actor.businessId!);
       final results = <SyncResult>[];
       for (final mutation in mutations) {
         results.add(await _applyMutation(tx, actor, mutation));
@@ -243,7 +248,7 @@ final class PostgresBackendStore implements BackendStore {
       '''),
       parameters: {
         'operationId': mutation.operationId,
-        'businessId': actor.businessId,
+        'businessId': actor.businessId!,
       },
     );
     if (previous.isNotEmpty) {
@@ -265,7 +270,7 @@ final class PostgresBackendStore implements BackendStore {
         FOR UPDATE
       '''),
       parameters: {
-        'businessId': actor.businessId,
+        'businessId': actor.businessId!,
         'entity': mutation.entity,
         'entityId': mutation.entityId,
       },
@@ -299,7 +304,7 @@ final class PostgresBackendStore implements BackendStore {
     final deleted = mutation.operation == 'excluir';
     final payload = deleted ? <String, Object?>{} : mutation.payload;
     final parameters = {
-      'businessId': actor.businessId,
+      'businessId': actor.businessId!,
       'entity': mutation.entity,
       'entityId': mutation.entityId,
       'version': nextVersion,
@@ -361,7 +366,7 @@ final class PostgresBackendStore implements BackendStore {
       '''),
       parameters: {
         'operationId': mutation.operationId,
-        'businessId': actor.businessId,
+        'businessId': actor.businessId!,
         'userId': actor.userId,
         'entity': mutation.entity,
         'entityId': mutation.entityId,
@@ -533,6 +538,28 @@ final class PostgresBackendStore implements BackendStore {
       return Map<String, Object?>.from(jsonDecode(value) as Map);
     }
     throw StateError('JSON inesperado retornado pelo PostgreSQL.');
+  }
+
+  @override
+  Future<PlatformAdmin?> findPlatformAdminByUserId(String userId) async {
+    final result = await _pool.execute(
+      Sql.named('''
+        SELECT id, user_id, role, active, permissions, created_at
+        FROM platform_admins
+        WHERE user_id = @userId AND active = true
+      '''),
+      parameters: {'userId': userId},
+    );
+    if (result.isEmpty) return null;
+    final row = result.single.toColumnMap();
+    return PlatformAdmin(
+      id: row['id'] as String,
+      userId: row['user_id'] as String,
+      role: row['role'] as String,
+      active: row['active'] as bool,
+      permissions: row['permissions'] as Map<String, dynamic>? ?? {},
+      createdAt: row['created_at'] as DateTime,
+    );
   }
 
   @override

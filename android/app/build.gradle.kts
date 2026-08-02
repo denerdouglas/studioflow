@@ -1,4 +1,4 @@
-import java.util.Properties
+﻿import java.util.Properties
 
 plugins {
     id("com.android.application")
@@ -19,6 +19,7 @@ val releaseKeyAlias = releaseProperties.getProperty("keyAlias")
     ?: System.getenv("STUDIOFLOW_KEY_ALIAS")
 val releaseKeyPassword = releaseProperties.getProperty("keyPassword")
     ?: System.getenv("STUDIOFLOW_KEY_PASSWORD")
+
 val releaseSigningAvailable = listOf(
     releaseStoreFile,
     releaseStorePassword,
@@ -37,7 +38,7 @@ android {
     }
 
     defaultConfig {
-        // Mantido para preservar atualizações das instalações existentes.
+        // Identificador comercial definitivo do StudioFlow.
         applicationId = "com.example.studioflow"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
@@ -57,18 +58,16 @@ android {
     }
 
     lint {
-        // O flutter analyze é a validação estática oficial deste projeto.
+        // O flutter analyze Ã© a validaÃ§Ã£o estÃ¡tica oficial deste projeto.
         // Evita consulta remota do Android Lint durante um release offline.
         checkReleaseBuilds = false
     }
 
     buildTypes {
         release {
-            // Release AOT sem R8: evita falhas de disco/memória no ambiente de build.
             isMinifyEnabled = false
             isShrinkResources = false
-            // Credenciais vêm de key.properties local ou variáveis de ambiente.
-            // O fallback debug mantém builds de validação instaláveis sem gravar segredos.
+
             signingConfig = if (releaseSigningAvailable) {
                 signingConfigs.getByName("studioflowRelease")
             } else {

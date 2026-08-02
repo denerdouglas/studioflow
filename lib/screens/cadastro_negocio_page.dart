@@ -4,7 +4,7 @@ import '../core/routes/app_routes.dart';
 
 import '../services/preferencias_service.dart';
 import '../core/theme/studioflow_theme.dart';
-import 'dashboard_page.dart';
+import 'dashboard_premium_page.dart';
 
 class CadastroNegocioPage extends StatefulWidget {
   const CadastroNegocioPage({super.key});
@@ -145,7 +145,7 @@ class _CadastroNegocioPageState extends State<CadastroNegocioPage> {
       Navigator.pushAndRemoveUntil(
         context,
         AppRoutes.material(
-          builder: (_) => DashboardPage(
+          builder: (_) => DashboardPremiumPage(
             nomeResponsavel: nomeResponsavel,
             nomeNegocio: nomeNegocio,
             tipoNegocio: _categoriaSelecionada,

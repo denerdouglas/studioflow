@@ -11,9 +11,12 @@ import 'config.dart';
 import 'catalog.dart';
 import 'integrations.dart';
 import 'marketplace.dart';
+import 'marketplace_admin_service.dart';
 import 'models.dart';
+import 'admin.dart';
 import 'security.dart';
 import 'store.dart';
+import 'academy.dart';
 
 final class StudioFlowApi {
   final BackendStore store;
@@ -21,9 +24,12 @@ final class StudioFlowApi {
   final PasswordSecurity passwords;
   final TokenSecurity tokens;
   final PasswordResetNotifier resetNotifier;
-  final MarketplaceBackendStore marketplace;
+  final MarketplaceService marketplace;
+  final MarketplaceAdminService adminService;
   final MessageAutomationStore? automations;
   final CatalogLookupService? catalog;
+  final AcademyService academy;
+  final SecureRedirectService secureRedirect;
   final Uuid _uuid;
 
   StudioFlowApi({
@@ -32,9 +38,12 @@ final class StudioFlowApi {
     PasswordSecurity? passwords,
     TokenSecurity? tokens,
     PasswordResetNotifier? resetNotifier,
-    MarketplaceBackendStore? marketplace,
+    MarketplaceService? marketplace,
+      MarketplaceAdminService? adminService,
     this.automations,
     this.catalog,
+    AcademyService? academy,
+    SecureRedirectService? secureRedirect,
     Uuid? uuid,
   }) : passwords = passwords ?? const PasswordSecurity(),
        tokens =
@@ -48,7 +57,12 @@ final class StudioFlowApi {
            (config.emailProviderUrl != null || config.smsProviderUrl != null
                ? HttpPasswordResetNotifier(config)
                : const DisabledPasswordResetNotifier()),
-       marketplace = marketplace ?? store as MarketplaceBackendStore,
+         
+         marketplace = marketplace ?? MarketplaceService(store as MarketplaceBackendStore),
+         adminService = adminService ?? MarketplaceAdminService(store as MarketplaceBackendStore),
+         academy = academy ?? AcademyService(store as AcademyBackendStore),
+         secureRedirect = secureRedirect ?? SecureRedirectService(store as AcademyBackendStore),
+       
        _uuid = uuid ?? const Uuid();
 
   Handler get handler {
@@ -62,19 +76,20 @@ final class StudioFlowApi {
       ..post('/v1/auth/password/reset', _resetPassword)
       ..post('/v1/sync/push', _push)
       ..get('/v1/sync/pull', _pull)
-      ..get('/v1/marketplace/offers', _searchOffers)
-      ..post('/v1/marketplace/offers/<id>/click', _clickOffer)
-      ..get('/v1/admin/affiliate/programs', _adminPrograms)
-      ..put('/v1/admin/affiliate/programs/<id>', _adminSaveProgram)
-      ..put('/v1/admin/marketplace/offers/<id>', _adminSaveOffer)
-      ..post('/v1/admin/affiliate/conversions', _adminConversion)
-      ..get('/v1/admin/affiliate/metrics', _adminMetrics)
+      ..get('/v1/marketplace/search', _marketplaceSearch)
+      ..get('/r/<clickId>', _marketplaceRedirect)
+      ..get('/v1/platform-admin/partners', _adminListPartners)
+      ..post('/v1/platform-admin/partners', _adminCreatePartner)
       ..get('/v1/messages/history', _messageHistory)
       ..get('/v1/catalog/gtin/<gtin>', _catalogGtin)
       ..get('/products/barcode/<barcode>', _catalogGtin)
       ..post('/v1/webhooks/messages', _messageWebhook)
       ..get('/v1/webhooks/whatsapp', _whatsappVerify)
-      ..post('/v1/webhooks/whatsapp', _whatsappWebhook);
+      ..post('/v1/webhooks/whatsapp', _whatsappWebhook)
+      ..get('/v1/academy/search', _academySearch)
+      ..get('/v1/academy/categories', _academyCategories)
+      ..get('/v1/academy/courses', _academySearch)
+      ..get('/academy/r/<clickId>', _academyRedirect);
     return const Pipeline()
         .addMiddleware(_securityHeaders())
         .addMiddleware(_errorBoundary())
@@ -243,7 +258,7 @@ final class StudioFlowApi {
     await store.revokeSession(actor.sessionId);
     await store.audit(
       event: 'auth.logout',
-      businessId: actor.businessId,
+      businessId: actor.businessId!,
       userId: actor.userId,
       sessionId: actor.sessionId,
       success: true,
@@ -362,7 +377,7 @@ final class StudioFlowApi {
                 mutation.payload['excluido'] == 1);
         if (cancelled) {
           await automation.cancelAppointment(
-            businessId: actor.businessId,
+            businessId: actor.businessId!,
             appointmentId: mutation.entityId,
             reason:
                 mutation.payload['cancelamento_motivo']?.toString() ??
@@ -384,7 +399,7 @@ final class StudioFlowApi {
         }
         try {
           await catalogService.contribute(
-            businessId: actor.businessId,
+            businessId: actor.businessId!,
             userId: actor.userId,
             product: CatalogProductData.fromJson(mutation.payload),
           );
@@ -406,7 +421,7 @@ final class StudioFlowApi {
     final limit =
         int.tryParse(request.url.queryParameters['limit'] ?? '') ?? 200;
     final changes = await store.pullChanges(
-      businessId: actor.businessId,
+      businessId: actor.businessId!,
       afterCursor: cursor,
       limit: limit,
     );
@@ -428,7 +443,7 @@ final class StudioFlowApi {
     }
     try {
       final product = await service.lookup(
-        businessId: actor.businessId,
+        businessId: actor.businessId!,
         userId: actor.userId,
         gtin: gtin,
       );
@@ -453,193 +468,60 @@ final class StudioFlowApi {
     }
   }
 
-  Future<Response> _searchOffers(Request request) async {
-    _authenticate(request);
+  Future<Response> _marketplaceSearch(Request request) async {
+    final actor = _authenticate(request);
     final query = (request.url.queryParameters['q'] ?? '').trim();
     if (query.length < 2 || query.length > 120) {
-      throw const FormatException(
-        'Informe uma busca entre 2 e 120 caracteres.',
-      );
+      throw const FormatException('Informe uma busca entre 2 e 120 caracteres.');
     }
-    final offers = await marketplace.searchMarketplaceOffers(query);
-    return _json(200, {
-      'offers': offers.map((offer) => offer.toJson()).toList(),
-      'sorting': 'menor custo total; prazo como desempate',
-      'disclosure':
-          'Alguns links podem gerar comissão ao StudioFlow, sem alterar o preço.',
-      'message': offers.isEmpty
-          ? 'Nenhuma oferta real disponível. Cadastre um fornecedor ou configure um provedor autorizado.'
-          : null,
-    });
-  }
-
-  Future<Response> _clickOffer(Request request, String id) async {
-    final actor = _authenticate(request);
-    final offer = await marketplace.findMarketplaceOffer(id);
-    if (offer == null) {
-      throw const ApiException(404, 'offer_not_found', 'Oferta indisponível.');
-    }
-    final programs = await marketplace.listAffiliatePrograms();
-    final program = programs
-        .where((item) => item.id == offer.programId)
-        .firstOrNull;
-    if (program == null || !program.enabled) {
-      throw const ApiException(
-        409,
-        'program_disabled',
-        'Programa de afiliados indisponível.',
-      );
-    }
-    final uri = Uri.tryParse(offer.url);
-    if (uri == null ||
-        uri.scheme != 'https' ||
-        !program.allowedDomains.any(
-          (domain) => uri.host == domain || uri.host.endsWith('.$domain'),
-        )) {
-      throw const ApiException(
-        409,
-        'unsafe_destination',
-        'Destino da oferta não autorizado.',
-      );
-    }
-    final clickId = _uuid.v4();
-    await marketplace.recordAffiliateClick(
-      id: clickId,
-      businessId: actor.businessId,
+    await marketplace.logSearch(
+      businessId: actor.businessId!,
       userId: actor.userId,
-      offer: offer,
-      destinationUrl: offer.url,
+      query: query,
+      source: 'app',
+      cacheHit: false,
+      resultsCount: 0,
+      responseTimeMs: 50,
     );
     return _json(200, {
-      'clickId': clickId,
-      'url': offer.url,
-      'affiliate': program.partnerId?.isNotEmpty == true,
-      'disclosure': program.disclosure,
+      'results': [],
+      'message': 'Pesquisa de marketplace ainda em homologação na etapa 3B.3'
     });
   }
 
-  Future<Response> _adminPrograms(Request request) async {
-    _requireRolgAdmin(request);
-    final programs = await marketplace.listAffiliatePrograms();
-    return _json(200, {
-      'programs': programs.map((item) => item.toJson()).toList(),
-    });
+  Future<Response> _marketplaceRedirect(Request request, String clickId) async {
+    try {
+      final finalUrl = await marketplace.resolveRedirect(clickId);
+      return Response.found(finalUrl);
+    } catch (e) {
+      return _error(400, 'redirect_failed', e.toString());
+    }
   }
 
-  Future<Response> _adminSaveProgram(Request request, String id) async {
-    _requireRolgAdmin(request);
+  Future<Response> _adminListPartners(Request request) async {
+    await _authenticatePlatformAdmin(request);
+    final partners = await marketplace.listAllPartners();
+    return _json(200, {'partners': partners.map((p) => p.toJson()).toList()});
+  }
+
+  Future<Response> _adminCreatePartner(Request request) async {
+    final actor = await _authenticatePlatformAdmin(request, requiredRole: 'platform_super_admin');
     final body = await _body(request);
-    final domains = body['allowedDomains'];
-    if (domains is! List || domains.any((item) => item is! String)) {
-      throw const FormatException(
-        'allowedDomains deve ser uma lista de domínios.',
-      );
-    }
-    final cleanDomains = domains
-        .cast<String>()
-        .map((item) => item.trim().toLowerCase())
-        .where((item) => RegExp(r'^[a-z0-9.-]+$').hasMatch(item))
-        .toList();
-    if (cleanDomains.length != domains.length) {
-      throw const FormatException('Domínio autorizado inválido.');
-    }
-    final program = AffiliateProgram(
-      id: id,
+    final p = MarketplacePartner(
+      id: _uuid.v4(),
+      slug: _requiredText(body, 'slug', max: 50),
       name: _requiredText(body, 'name', max: 100),
-      enabled: body['enabled'] == true,
-      partnerId: (body['partnerId'] as String?)?.trim(),
-      secretReference: (body['secretReference'] as String?)?.trim(),
-      allowedDomains: cleanDomains,
-      disclosure: _requiredText(body, 'disclosure', max: 300),
+      partnerType: body['partnerType'] as String? ?? 'retailer',
+      status: 'draft',
+      priority: 0,
+      supportsSearch: false,
+      supportsDeepLink: false,
+      supportsConversion: false,
+      publicConfig: {},
+      createdAt: DateTime.now().toUtc(),
     );
-    await marketplace.saveAffiliateProgram(program);
-    return _json(200, program.toJson());
-  }
-
-  Future<Response> _adminSaveOffer(Request request, String id) async {
-    _requireRolgAdmin(request);
-    final body = await _body(request);
-    final url = Uri.tryParse(_requiredText(body, 'url', max: 2000));
-    if (url == null || url.scheme != 'https') {
-      throw const FormatException('A oferta exige URL HTTPS válida.');
-    }
-    final price = (body['priceCents'] as num?)?.toInt() ?? -1;
-    final shipping = (body['shippingCents'] as num?)?.toInt() ?? 0;
-    if (price < 0 || shipping < 0) {
-      throw const FormatException('Preço e frete não podem ser negativos.');
-    }
-    final offer = MarketplaceOffer(
-      id: id,
-      programId: _requiredText(body, 'programId', max: 80),
-      title: _requiredText(body, 'title', max: 240),
-      seller: _requiredText(body, 'seller', max: 160),
-      url: url.toString(),
-      priceCents: price,
-      shippingCents: shipping,
-      deliveryDays: (body['deliveryDays'] as num?)?.toInt(),
-      currency: (body['currency'] as String? ?? 'BRL').trim().toUpperCase(),
-      active: body['active'] != false,
-      verifiedAt: DateTime.now().toUtc(),
-    );
-    await marketplace.saveMarketplaceOffer(offer);
-    return _json(200, offer.toJson());
-  }
-
-  Future<Response> _adminConversion(Request request) async {
-    _requireRolgAdmin(request);
-    final body = await _body(request);
-    final status = _requiredText(body, 'status', max: 12);
-    if (!const {'estimada', 'confirmada', 'cancelada'}.contains(status)) {
-      throw const FormatException('Status de comissão inválido.');
-    }
-    final sale = (body['saleCents'] as num?)?.toInt() ?? -1;
-    final commission = (body['commissionCents'] as num?)?.toInt() ?? -1;
-    if (sale < 0 || commission < 0) {
-      throw const FormatException('Valores da conversão são inválidos.');
-    }
-    await marketplace.recordAffiliateConversion(
-      id: (body['id'] as String?)?.trim() ?? _uuid.v4(),
-      programId: _requiredText(body, 'programId', max: 80),
-      externalId: _requiredText(body, 'externalId', max: 160),
-      clickId: (body['clickId'] as String?)?.trim(),
-      saleCents: sale,
-      commissionCents: commission,
-      status: status,
-    );
-    return _json(200, {'status': status});
-  }
-
-  Future<Response> _adminMetrics(Request request) async {
-    _requireRolgAdmin(request);
-    return _json(200, await marketplace.affiliateMetrics());
-  }
-
-  void _requireRolgAdmin(Request request) {
-    final expected = config.rolgAdminKey;
-    if (expected == null) {
-      throw const ApiException(
-        503,
-        'admin_not_configured',
-        'Painel ROLG não configurado no servidor.',
-      );
-    }
-    final received = request.headers['x-rolg-admin-key'];
-    if (received == null || !_constantTimeEquals(received, expected)) {
-      throw const ApiException(
-        403,
-        'admin_forbidden',
-        'Acesso administrativo negado.',
-      );
-    }
-  }
-
-  static bool _constantTimeEquals(String left, String right) {
-    if (left.length != right.length) return false;
-    var difference = 0;
-    for (var index = 0; index < left.length; index++) {
-      difference |= left.codeUnitAt(index) ^ right.codeUnitAt(index);
-    }
-    return difference == 0;
+    await adminService.createPartner(actor.userId, p, ipAddressHash: 'dummy_hash');
+    return _json(201, p.toJson());
   }
 
   Future<Response> _messageHistory(Request request) async {
@@ -654,7 +536,7 @@ final class StudioFlowApi {
     }
     final limit =
         int.tryParse(request.url.queryParameters['limit'] ?? '') ?? 100;
-    final messages = await automation.history(actor.businessId, limit: limit);
+    final messages = await automation.history(actor.businessId!, limit: limit);
     return _json(200, {'messages': messages.map((m) => m.toJson()).toList()});
   }
 
@@ -767,11 +649,17 @@ final class StudioFlowApi {
       throw const ApiException(
         401,
         'missing_token',
-        'Token de acesso obrigatório.',
+        'Token de acesso obrigatário.',
       );
     }
     try {
-      return tokens.verifyAccessToken(header.substring(7).trim());
+      final context = tokens.verifyAccessToken(header.substring(7).trim());
+      if (context.isPlatformAdmin) {
+         // Fallback if a platform admin accesses regular endpoints:
+         // Depending on business rules, we might allow it or block it. 
+         // For now, let it pass, but typically platform admins don't use the standard app.
+      }
+      return context;
     } on Object {
       throw const ApiException(
         401,
@@ -779,6 +667,26 @@ final class StudioFlowApi {
         'Token inválido ou expirado.',
       );
     }
+  }
+
+  Future<AuthContext> _authenticatePlatformAdmin(Request request, {String? requiredRole}) async {
+    final context = _authenticate(request);
+    
+    if (!context.isPlatformAdmin) {
+      throw const ApiException(403, 'forbidden', 'Acesso negado: Requer elevação administrativa.');
+    }
+    
+    // Validate against database for active status and existence
+    final admin = await (store as AdminBackendStore).findPlatformAdminByUserId(context.userId);
+    if (admin == null || !admin.active) {
+      throw const ApiException(403, 'forbidden', 'Conta administrativa inativa ou inexistente.');
+    }
+    
+    if (requiredRole != null && admin.role != requiredRole && admin.role != 'platform_super_admin') {
+      throw const ApiException(403, 'forbidden', 'Acesso negado: Papel insuficiente.');
+    }
+    
+    return context;
   }
 
   static Future<Map<String, dynamic>> _body(Request request) async {
@@ -812,6 +720,48 @@ final class StudioFlowApi {
   }
 
   static String _normalizeLogin(String value) => value.trim().toLowerCase();
+
+  Future<Response> _academySearch(Request request) async {
+    try {
+      final auth = _authenticate(request);
+      final query = request.url.queryParameters['q'];
+      final category = request.url.queryParameters['category'];
+      final pageStr = request.url.queryParameters['page'] ?? '1';
+      final pageSizeStr = request.url.queryParameters['pageSize'] ?? '20';
+      
+      int page = int.tryParse(pageStr) ?? 1;
+      int pageSize = int.tryParse(pageSizeStr) ?? 20;
+      if (page < 1) page = 1;
+
+      final results = await academy.search(auth, query, category, page, pageSize);
+      return _json(200, results);
+    } catch (e) {
+      return _error(500, 'internal_error', 'Erro ao buscar cursos: $e');
+    }
+  }
+
+  Future<Response> _academyCategories(Request request) async {
+    try {
+      _authenticate(request);
+      final categories = await academy.store.getCategories();
+      return _json(200, {
+        'categories': categories.map((c) => c.toJson()).toList(),
+      });
+    } catch (e) {
+      return _error(500, 'internal_error', 'Erro ao buscar categorias: $e');
+    }
+  }
+
+  Future<Response> _academyRedirect(Request request, String clickId) async {
+    try {
+      final destination = await secureRedirect.processRedirect(clickId);
+      return Response.found(destination);
+    } on RedirectException catch (e) {
+      return _error(400, 'invalid_link', e.message);
+    } catch (e) {
+      return _error(500, 'internal_error', 'Erro ao processar redirecionamento.');
+    }
+  }
 }
 
 final class ApiException implements Exception {

@@ -392,7 +392,8 @@ class _EstoquePageState extends State<EstoquePage> {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: _novoItem,
+      heroTag: null,
+      onPressed: _novoItem,
         backgroundColor: _roxo,
         foregroundColor: Colors.white,
         icon: const Icon(Icons.add),
@@ -1055,6 +1056,7 @@ class _ItemEstoqueFormSheetState extends State<ItemEstoqueFormSheet> {
   final TextEditingController _nomeController = TextEditingController();
 
   final TextEditingController _quantidadeController = TextEditingController();
+  final TextEditingController _conteudoController = TextEditingController();
 
   final TextEditingController _estoqueMinimoController =
       TextEditingController();
@@ -1070,6 +1072,9 @@ class _ItemEstoqueFormSheetState extends State<ItemEstoqueFormSheet> {
   String _categoria = 'Materiais';
   String _tipo = 'consumivel';
   String _unidade = 'unidade';
+  String _unidadeConteudo = 'g';
+
+  bool _revisaoModelagemEstoque = false;
 
   bool _ativo = true;
   bool _descontarAutomaticamente = true;
@@ -1102,6 +1107,17 @@ class _ItemEstoqueFormSheetState extends State<ItemEstoqueFormSheet> {
     'par',
   ];
 
+  final List<String> _unidadesConteudo = const [
+    'g',
+    'kg',
+    'ml',
+    'litro',
+    'cápsulas',
+    'cm',
+    'm',
+    'unidade',
+  ];
+
   @override
   void initState() {
     super.initState();
@@ -1129,6 +1145,9 @@ class _ItemEstoqueFormSheetState extends State<ItemEstoqueFormSheet> {
     _categoria = item.categoria;
     _tipo = item.tipo;
     _unidade = item.unidade;
+    _conteudoController.text = item.conteudoPorUnidade.toStringAsFixed(2);
+    _unidadeConteudo = item.unidadeConteudo;
+    _revisaoModelagemEstoque = item.revisaoModelagemEstoque;
     _ativo = item.ativo;
 
     _descontarAutomaticamente = item.descontarAutomaticamente;
@@ -1146,12 +1165,17 @@ class _ItemEstoqueFormSheetState extends State<ItemEstoqueFormSheet> {
     if (!_unidades.contains(_unidade)) {
       _unidade = 'unidade';
     }
+
+    if (!_unidadesConteudo.contains(_unidadeConteudo)) {
+      _unidadeConteudo = 'g';
+    }
   }
 
   @override
   void dispose() {
     _nomeController.dispose();
     _quantidadeController.dispose();
+    _conteudoController.dispose();
     _estoqueMinimoController.dispose();
     _custoController.dispose();
     _fornecedorController.dispose();
@@ -1205,6 +1229,12 @@ class _ItemEstoqueFormSheetState extends State<ItemEstoqueFormSheet> {
         ) ??
         0;
 
+    final conteudo =
+        double.tryParse(
+          _conteudoController.text.trim().replaceAll(',', '.'),
+        ) ??
+        1;
+
     final estoqueMinimo =
         double.tryParse(
           _estoqueMinimoController.text.trim().replaceAll(',', '.'),
@@ -1249,6 +1279,9 @@ class _ItemEstoqueFormSheetState extends State<ItemEstoqueFormSheet> {
       quantidadeAtual: quantidade,
       estoqueMinimo: estoqueMinimo,
       unidade: _unidade,
+      conteudoPorUnidade: conteudo,
+      unidadeConteudo: _unidadeConteudo,
+      revisaoModelagemEstoque: false,
       custoUnitario: custo,
       fornecedor: _fornecedorController.text.trim(),
       codigoBarras: _codigoBarrasController.text.trim(),
@@ -1298,6 +1331,29 @@ class _ItemEstoqueFormSheetState extends State<ItemEstoqueFormSheet> {
                 color: Color(0xFF2D2140),
               ),
             ),
+            if (_revisaoModelagemEstoque) ...[
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF3CD),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFFFEeba)),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.warning_amber_rounded, color: Color(0xFF856404)),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'Revisão necessária: Separe a quantidade física (potes, frascos) do conteúdo (g, ml). O cálculo financeiro usará apenas a quantidade física.',
+                        style: TextStyle(color: Color(0xFF856404), fontSize: 13),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
             const SizedBox(height: 20),
             TextField(
               controller: _nomeController,
@@ -1372,7 +1428,7 @@ class _ItemEstoqueFormSheetState extends State<ItemEstoqueFormSheet> {
                   child: DropdownButtonFormField<String>(
                     initialValue: _unidade,
                     isExpanded: true,
-                    decoration: const InputDecoration(labelText: 'Unidade'),
+                    decoration: const InputDecoration(labelText: 'Unidade física (pote, caixa)'),
                     items: _unidades.map((unidade) {
                       return DropdownMenuItem(
                         value: unidade,
@@ -1386,6 +1442,43 @@ class _ItemEstoqueFormSheetState extends State<ItemEstoqueFormSheet> {
 
                       setState(() {
                         _unidade = valor;
+                      });
+                    },
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _conteudoController,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    decoration: const InputDecoration(
+                      labelText: 'Conteúdo',
+                      prefixIcon: Icon(Icons.scale_outlined),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    initialValue: _unidadeConteudo,
+                    isExpanded: true,
+                    decoration: const InputDecoration(labelText: 'Unidade (g, ml)'),
+                    items: _unidadesConteudo.map((unidade) {
+                      return DropdownMenuItem(
+                        value: unidade,
+                        child: Text(unidade, overflow: TextOverflow.ellipsis),
+                      );
+                    }).toList(),
+                    onChanged: (valor) {
+                      if (valor == null) return;
+                      setState(() {
+                        _unidadeConteudo = valor;
                       });
                     },
                   ),

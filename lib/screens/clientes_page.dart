@@ -20,6 +20,7 @@ import '../repositories/cliente_repository.dart';
 import 'agenda_page.dart';
 import 'anamnese_page.dart';
 import 'clientes_360_page.dart';
+import 'cliente_detalhes_premium_page.dart';
 
 class ClientesPage extends StatefulWidget {
   const ClientesPage({super.key});
@@ -161,7 +162,7 @@ class _ClientesPageState extends State<ClientesPage> {
       context,
       AppRoutes.material(
         builder: (_) =>
-            DetalhesClientePage(cliente: cliente, repository: _repository),
+            ClienteDetalhesPremiumPage(cliente: cliente, repository: _repository),
       ),
     );
 
@@ -185,7 +186,8 @@ class _ClientesPageState extends State<ClientesPage> {
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: _abrirCadastroCliente,
+      heroTag: null,
+      onPressed: _abrirCadastroCliente,
         backgroundColor: _corPrincipal,
         foregroundColor: Colors.white,
         icon: const Icon(Icons.person_add_alt_1),

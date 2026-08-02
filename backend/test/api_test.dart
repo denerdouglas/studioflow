@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import 'package:shelf/shelf.dart';
 import 'package:studioflow_backend/studioflow_backend.dart';
+import 'package:studioflow_backend/src/academy_memory_store.dart';
+import 'package:studioflow_backend/src/academy.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -23,6 +25,8 @@ void main() {
       store: store,
       automations: automations,
       config: config,
+      academy: AcademyService(AcademyMemoryStore()),
+      secureRedirect: SecureRedirectService(AcademyMemoryStore()),
     ).handler;
   });
 

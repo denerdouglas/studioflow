@@ -1,229 +1,280 @@
-import 'dart:convert';
-
 import 'package:postgres/postgres.dart';
-
 import 'marketplace.dart';
 
 final class MarketplacePostgresStore implements MarketplaceBackendStore {
   final Pool _pool;
 
-  MarketplacePostgresStore.fromUrl(String databaseUrl)
-    : _pool = Pool.withUrl(databaseUrl);
-
-  AffiliateProgram _program(Map<String, dynamic> row) {
-    final raw = row['allowed_domains'];
-    final domains = raw is String ? jsonDecode(raw) as List : raw as List;
-    return AffiliateProgram(
-      id: row['id'] as String,
-      name: row['name'] as String,
-      enabled: row['enabled'] as bool,
-      partnerId: row['partner_id'] as String?,
-      secretReference: row['secret_reference'] as String?,
-      allowedDomains: domains.cast<String>(),
-      disclosure: row['disclosure'] as String,
-    );
-  }
-
-  MarketplaceOffer _offer(Map<String, dynamic> row) => MarketplaceOffer(
-    id: row['id'] as String,
-    programId: row['program_id'] as String,
-    title: row['title'] as String,
-    seller: row['seller'] as String,
-    url: row['destination_url'] as String,
-    priceCents: row['price_cents'] as int,
-    shippingCents: row['shipping_cents'] as int,
-    deliveryDays: row['delivery_days'] as int?,
-    currency: row['currency'] as String,
-    active: row['active'] as bool,
-    verifiedAt: row['verified_at'] as DateTime,
-  );
+  MarketplacePostgresStore(this._pool);
 
   @override
-  Future<List<AffiliateProgram>> listAffiliatePrograms() async {
+  Future<List<MarketplacePartner>> listActivePartners() async {
     final result = await _pool.execute(
-      'SELECT id, name, enabled, partner_id, secret_reference, '
-      'allowed_domains, disclosure FROM affiliate_programs ORDER BY name',
+      Sql.named('SELECT * FROM marketplace_partners WHERE status = @status'),
+      parameters: {'status': 'active'},
     );
-    return result.map((row) => _program(row.toColumnMap())).toList();
+    return result.map(_mapPartner).toList();
   }
 
   @override
-  Future<void> saveAffiliateProgram(AffiliateProgram program) async {
-    await _pool.execute(
-      Sql.named('''
-        INSERT INTO affiliate_programs
-          (id, name, enabled, partner_id, secret_reference,
-           allowed_domains, disclosure)
-        VALUES (@id, @name, @enabled, @partnerId, @secretReference,
-                CAST(@domains AS jsonb), @disclosure)
-        ON CONFLICT (id) DO UPDATE SET name=EXCLUDED.name,
-          enabled=EXCLUDED.enabled, partner_id=EXCLUDED.partner_id,
-          secret_reference=EXCLUDED.secret_reference,
-          allowed_domains=EXCLUDED.allowed_domains,
-          disclosure=EXCLUDED.disclosure, updated_at=now()
-      '''),
-      parameters: {
-        'id': program.id,
-        'name': program.name,
-        'enabled': program.enabled,
-        'partnerId': program.partnerId,
-        'secretReference': program.secretReference,
-        'domains': jsonEncode(program.allowedDomains),
-        'disclosure': program.disclosure,
-      },
-    );
+  Future<List<MarketplacePartner>> listAllPartners() async {
+    final result = await _pool.execute('SELECT * FROM marketplace_partners');
+    return result.map(_mapPartner).toList();
   }
 
   @override
-  Future<void> saveMarketplaceOffer(MarketplaceOffer offer) async {
-    await _pool.execute(
-      Sql.named('''
-        INSERT INTO marketplace_offers
-          (id, program_id, title, seller, destination_url, price_cents,
-           shipping_cents, delivery_days, currency, active, verified_at)
-        VALUES (@id, @programId, @title, @seller, @url, @price, @shipping,
-                @days, @currency, @active, @verifiedAt)
-        ON CONFLICT (id) DO UPDATE SET title=EXCLUDED.title,
-          seller=EXCLUDED.seller, destination_url=EXCLUDED.destination_url,
-          price_cents=EXCLUDED.price_cents,
-          shipping_cents=EXCLUDED.shipping_cents,
-          delivery_days=EXCLUDED.delivery_days, active=EXCLUDED.active,
-          verified_at=EXCLUDED.verified_at, updated_at=now()
-      '''),
-      parameters: {
-        'id': offer.id,
-        'programId': offer.programId,
-        'title': offer.title,
-        'seller': offer.seller,
-        'url': offer.url,
-        'price': offer.priceCents,
-        'shipping': offer.shippingCents,
-        'days': offer.deliveryDays,
-        'currency': offer.currency,
-        'active': offer.active,
-        'verifiedAt': offer.verifiedAt,
-      },
-    );
-  }
-
-  @override
-  Future<List<MarketplaceOffer>> searchMarketplaceOffers(String query) async {
+  Future<MarketplacePartner?> findPartnerById(String id) async {
     final result = await _pool.execute(
-      Sql.named('''
-        SELECT o.* FROM marketplace_offers o
-        JOIN affiliate_programs p ON p.id=o.program_id
-        WHERE o.active=true AND p.enabled=true
-          AND (lower(o.title) LIKE @query OR lower(o.seller) LIKE @query)
-        ORDER BY (o.price_cents + o.shipping_cents),
-                 o.delivery_days NULLS LAST
-        LIMIT 100
-      '''),
-      parameters: {'query': '%${query.trim().toLowerCase()}%'},
-    );
-    return result.map((row) => _offer(row.toColumnMap())).toList();
-  }
-
-  @override
-  Future<MarketplaceOffer?> findMarketplaceOffer(String id) async {
-    final result = await _pool.execute(
-      Sql.named('''
-        SELECT o.* FROM marketplace_offers o
-        JOIN affiliate_programs p ON p.id=o.program_id
-        WHERE o.id=@id AND o.active=true AND p.enabled=true
-      '''),
+      Sql.named('SELECT * FROM marketplace_partners WHERE id = @id'),
       parameters: {'id': id},
     );
-    return result.isEmpty ? null : _offer(result.single.toColumnMap());
+    if (result.isEmpty) return null;
+    return _mapPartner(result.single);
   }
 
   @override
-  Future<String> recordAffiliateClick({
-    required String id,
-    required String businessId,
+  Future<void> savePartner(MarketplacePartner partner) async {
+    await _pool.execute(
+      Sql.named('''
+        INSERT INTO marketplace_partners (
+          id, slug, name, logo, partner_type, status, priority, affiliate_identifier, 
+          url_template, supports_search, supports_deep_link, supports_conversion, 
+          secret_encrypted, secret_key_version, public_config, notes, created_at
+        ) VALUES (
+          @id, @slug, @name, @logo, @type, @status, @priority, @affiliateId, 
+          @template, @search, @deepLink, @conversion, @secret, @version, 
+          @config, @notes, @createdAt
+        )
+        ON CONFLICT (id) DO UPDATE SET
+          slug = EXCLUDED.slug,
+          name = EXCLUDED.name,
+          logo = EXCLUDED.logo,
+          partner_type = EXCLUDED.partner_type,
+          status = EXCLUDED.status,
+          priority = EXCLUDED.priority,
+          affiliate_identifier = EXCLUDED.affiliate_identifier,
+          url_template = EXCLUDED.url_template,
+          supports_search = EXCLUDED.supports_search,
+          supports_deep_link = EXCLUDED.supports_deep_link,
+          supports_conversion = EXCLUDED.supports_conversion,
+          secret_encrypted = EXCLUDED.secret_encrypted,
+          secret_key_version = EXCLUDED.secret_key_version,
+          public_config = EXCLUDED.public_config,
+          notes = EXCLUDED.notes
+      '''),
+      parameters: {
+        'id': partner.id,
+        'slug': partner.slug,
+        'name': partner.name,
+        'logo': partner.logo,
+        'type': partner.partnerType,
+        'status': partner.status,
+        'priority': partner.priority,
+        'affiliateId': partner.affiliateIdentifier,
+        'template': partner.urlTemplate,
+        'search': partner.supportsSearch,
+        'deepLink': partner.supportsDeepLink,
+        'conversion': partner.supportsConversion,
+        'secret': partner.secretEncrypted,
+        'version': partner.secretKeyVersion,
+        'config': partner.publicConfig,
+        'notes': partner.notes,
+        'createdAt': partner.createdAt,
+      },
+    );
+  }
+
+  @override
+  Future<List<MarketplacePartnerDomain>> listDomainsForPartner(String partnerId) async {
+    final result = await _pool.execute(
+      Sql.named('SELECT * FROM marketplace_partner_domains WHERE partner_id = @id'),
+      parameters: {'id': partnerId},
+    );
+    return result.map((row) {
+      final m = row.toColumnMap();
+      return MarketplacePartnerDomain(
+        id: m['id'] as String,
+        partnerId: m['partner_id'] as String,
+        hostname: m['hostname'] as String,
+        allowSubdomains: m['allow_subdomains'] as bool,
+        active: m['active'] as bool,
+        createdAt: m['created_at'] as DateTime,
+      );
+    }).toList();
+  }
+
+  @override
+  Future<void> saveDomain(MarketplacePartnerDomain domain) async {
+    await _pool.execute(
+      Sql.named('''
+        INSERT INTO marketplace_partner_domains (id, partner_id, hostname, allow_subdomains, active, created_at)
+        VALUES (@id, @partnerId, @hostname, @allow, @active, @createdAt)
+        ON CONFLICT (id) DO UPDATE SET
+          hostname = EXCLUDED.hostname,
+          allow_subdomains = EXCLUDED.allow_subdomains,
+          active = EXCLUDED.active
+      '''),
+      parameters: {
+        'id': domain.id,
+        'partnerId': domain.partnerId,
+        'hostname': domain.hostname,
+        'allow': domain.allowSubdomains,
+        'active': domain.active,
+        'createdAt': domain.createdAt,
+      },
+    );
+  }
+
+  @override
+  Future<void> logSearch({
+    required String? businessId,
     required String userId,
-    required MarketplaceOffer offer,
-    required String destinationUrl,
-  }) async {
-    await _pool.runTx((tx) async {
-      await tx.execute(
-        Sql.named("SELECT set_config('app.business_id', @id, true)"),
-        parameters: {'id': businessId},
-      );
-      await tx.execute(
-        Sql.named('''
-          INSERT INTO affiliate_clicks
-            (id, business_id, user_id, offer_id, program_id, destination_url)
-          VALUES (@id, @businessId, @userId, @offerId, @programId, @url)
-        '''),
-        parameters: {
-          'id': id,
-          'businessId': businessId,
-          'userId': userId,
-          'offerId': offer.id,
-          'programId': offer.programId,
-          'url': destinationUrl,
-        },
-      );
-    });
-    return id;
-  }
-
-  @override
-  Future<void> recordAffiliateConversion({
-    required String id,
-    required String programId,
-    required String externalId,
-    String? clickId,
-    required int saleCents,
-    required int commissionCents,
-    required String status,
+    required String query,
+    required String source,
+    required bool cacheHit,
+    required int resultsCount,
+    required int responseTimeMs,
   }) async {
     await _pool.execute(
       Sql.named('''
-        INSERT INTO affiliate_conversions
-          (id, program_id, external_id, click_id, sale_cents,
-           commission_cents, status)
-        VALUES (@id, @programId, @externalId, @clickId, @sale,
-                @commission, @status)
-        ON CONFLICT (program_id, external_id) DO UPDATE SET
-          click_id=EXCLUDED.click_id, sale_cents=EXCLUDED.sale_cents,
-          commission_cents=EXCLUDED.commission_cents,
-          status=EXCLUDED.status, updated_at=now()
+        INSERT INTO marketplace_search_logs (business_id, user_id, query, source, cache_hit, results_count, response_time_ms)
+        VALUES (@business, @user, @query, @source, @cache, @results, @time)
+      '''),
+      parameters: {
+        'business': businessId,
+        'user': userId,
+        'query': query,
+        'source': source,
+        'cache': cacheHit,
+        'results': resultsCount,
+        'time': responseTimeMs,
+      },
+    );
+  }
+
+  @override
+  Future<void> recordClick(MarketplaceClick click) async {
+    await _pool.execute(
+      Sql.named('''
+        INSERT INTO marketplace_clicks (
+          id, business_id, user_id, partner_id, destination_url, click_status, source, 
+          campaign_id, user_agent_hash, ip_hash, ranking_position, ranking_reason, clicked_at, expires_at
+        ) VALUES (
+          @id, @business, @user, @partner, @url, @status, @source, 
+          @campaign, @ua, @ip, @rankPos, @rankReas, @clicked, @expires
+        )
+      '''),
+      parameters: {
+        'id': click.id,
+        'business': click.businessId,
+        'user': click.userId,
+        'partner': click.partnerId,
+        'url': click.destinationUrl,
+        'status': click.clickStatus,
+        'source': click.source,
+        'campaign': click.campaignId,
+        'ua': click.userAgentHash,
+        'ip': click.ipHash,
+        'rankPos': click.rankingPosition,
+        'rankReas': click.rankingReason,
+        'clicked': click.clickedAt,
+        'expires': click.expiresAt,
+      },
+    );
+  }
+
+  @override
+  Future<MarketplaceClick?> findClick(String id) async {
+    final result = await _pool.execute(
+      Sql.named('SELECT * FROM marketplace_clicks WHERE id = @id'),
+      parameters: {'id': id},
+    );
+    if (result.isEmpty) return null;
+    final m = result.single.toColumnMap();
+    return MarketplaceClick(
+      id: m['id'] as String,
+      businessId: m['business_id'] as String?,
+      userId: m['user_id'] as String,
+      partnerId: m['partner_id'] as String,
+      destinationUrl: m['destination_url'] as String,
+      clickStatus: m['click_status'] as String,
+      source: m['source'] as String?,
+      campaignId: m['campaign_id'] as String?,
+      userAgentHash: m['user_agent_hash'] as String?,
+      ipHash: m['ip_hash'] as String?,
+      rankingPosition: m['ranking_position'] as int?,
+      rankingReason: m['ranking_reason'] as String?,
+      clickedAt: m['clicked_at'] as DateTime,
+      redirectedAt: m['redirected_at'] as DateTime?,
+      expiresAt: m['expires_at'] as DateTime?,
+    );
+  }
+
+  @override
+  Future<void> updateClickStatus(String id, String status, {DateTime? redirectedAt}) async {
+    await _pool.execute(
+      Sql.named('''
+        UPDATE marketplace_clicks 
+        SET click_status = @status, 
+            redirected_at = COALESCE(@redirected, redirected_at) 
+        WHERE id = @id
       '''),
       parameters: {
         'id': id,
-        'programId': programId,
-        'externalId': externalId,
-        'clickId': clickId,
-        'sale': saleCents,
-        'commission': commissionCents,
         'status': status,
+        'redirected': redirectedAt,
       },
     );
   }
 
   @override
-  Future<Map<String, Object?>> affiliateMetrics() async {
-    final result = await _pool.execute('''
-      SELECT (SELECT count(*) FROM affiliate_clicks) AS clicks,
-        count(*) AS conversions,
-        coalesce(sum(commission_cents)
-          FILTER (WHERE status='estimada'),0) AS estimated,
-        coalesce(sum(commission_cents)
-          FILTER (WHERE status='confirmada'),0) AS confirmed,
-        coalesce(sum(commission_cents)
-          FILTER (WHERE status='cancelada'),0) AS cancelled
-      FROM affiliate_conversions
-    ''');
-    final row = result.single.toColumnMap();
-    return {
-      'clicks': row['clicks'],
-      'conversions': row['conversions'],
-      'commissionEstimatedCents': row['estimated'],
-      'commissionConfirmedCents': row['confirmed'],
-      'commissionCancelledCents': row['cancelled'],
-    };
+  Future<void> auditAdminAction({
+    required String platformAdminId,
+    required String action,
+    required String entity,
+    required String entityId,
+    Map<String, dynamic>? beforeState,
+    Map<String, dynamic>? afterState,
+    String? reason,
+    String? ipAddressHash,
+  }) async {
+    await _pool.execute(
+      Sql.named('''
+        INSERT INTO marketplace_admin_audit (platform_admin_id, action, entity, entity_id, before_state, after_state, reason, ip_address_hash)
+        VALUES (@admin, @action, @entity, @entityId, @before, @after, @reason, @ip)
+      '''),
+      parameters: {
+        'admin': platformAdminId,
+        'action': action,
+        'entity': entity,
+        'entityId': entityId,
+        'before': beforeState,
+        'after': afterState,
+        'reason': reason,
+        'ip': ipAddressHash,
+      },
+    );
   }
 
-  Future<void> close() => _pool.close();
+  MarketplacePartner _mapPartner(ResultRow row) {
+    final m = row.toColumnMap();
+    return MarketplacePartner(
+      id: m['id'] as String,
+      slug: m['slug'] as String,
+      name: m['name'] as String,
+      logo: m['logo'] as String?,
+      partnerType: m['partner_type'] as String,
+      status: m['status'] as String,
+      priority: m['priority'] as int,
+      affiliateIdentifier: m['affiliate_identifier'] as String?,
+      urlTemplate: m['url_template'] as String?,
+      supportsSearch: m['supports_search'] as bool,
+      supportsDeepLink: m['supports_deep_link'] as bool,
+      supportsConversion: m['supports_conversion'] as bool,
+      secretEncrypted: m['secret_encrypted'] as String?,
+      secretKeyVersion: m['secret_key_version'] as String?,
+      publicConfig: m['public_config'] as Map<String, dynamic>? ?? {},
+      notes: m['notes'] as String?,
+      createdAt: m['created_at'] as DateTime,
+    );
+  }
 }

@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
+
 import 'package:sqflite/sqflite.dart';
 
 import '../database/database_service.dart';
@@ -13,7 +15,9 @@ class CatalogProduct {
   final String? description;
   final String? imageUrl;
   final String? quantity;
-  final String? unit;
+  final String? physicalUnit;
+  final double? contentPerUnit;
+  final String? contentUnit;
   final String? localProductId;
   final String? localDestination;
   final String source;
@@ -27,7 +31,9 @@ class CatalogProduct {
     this.description,
     this.imageUrl,
     this.quantity,
-    this.unit,
+    this.physicalUnit,
+    this.contentPerUnit,
+    this.contentUnit,
     this.localProductId,
     this.localDestination,
     required this.source,
@@ -42,7 +48,9 @@ class CatalogProduct {
     'description': description,
     'imageUrl': imageUrl,
     'quantity': quantity,
-    'unit': unit,
+    'physicalUnit': physicalUnit,
+    'contentPerUnit': contentPerUnit,
+    'contentUnit': contentUnit,
     'localProductId': localProductId,
     'localDestination': localDestination,
     'source': source,
@@ -57,7 +65,9 @@ class CatalogProduct {
     description: json['description'] as String?,
     imageUrl: json['imageUrl'] as String?,
     quantity: json['quantity'] as String?,
-    unit: json['unit'] as String?,
+    physicalUnit: (json['physical_unit'] ?? json['physicalUnit'] ?? json['unit']) as String?,
+    contentPerUnit: ((json['content_per_unit'] ?? json['contentPerUnit'] ?? 1) as num).toDouble(),
+    contentUnit: (json['content_unit'] ?? json['contentUnit']) as String?,
     localProductId: json['localProductId'] as String?,
     localDestination: json['localDestination'] as String?,
     source: json['source'] as String? ?? 'cache',
@@ -97,7 +107,9 @@ class LocalProductCatalogProvider implements ProductCatalogProvider {
       category: row['categoria'] as String?,
       description: row['descricao'] as String?,
       imageUrl: row['imagem'] as String?,
-      unit: row['unidade'] as String?,
+      physicalUnit: row['unidade'] as String?,
+      contentPerUnit: (row['conteudo_por_unidade'] as num? ?? 1).toDouble(),
+      contentUnit: row['unidade_conteudo'] as String?,
       localProductId: row['id'] as String,
       localDestination: row['estoque_destino'] as String?,
       source: 'business',
@@ -132,7 +144,9 @@ class StudioFlowCatalogProvider implements ProductCatalogProvider {
       category: row['categoria'] as String?,
       description: row['descricao'] as String?,
       imageUrl: row['imagem_url'] as String?,
-      unit: row['unidade'] as String?,
+      physicalUnit: row['unidade_fisica'] as String? ?? row['unidade'] as String?,
+      contentPerUnit: (row['conteudo_por_unidade'] as num? ?? 1).toDouble(),
+      contentUnit: row['unidade_conteudo'] as String?,
       source: 'studioflow',
       confidence: (row['confianca'] as num? ?? 0).toDouble(),
     );
@@ -162,7 +176,14 @@ class OfficialProductCatalogProvider implements ProductCatalogProvider {
     if (commerceId == null) return null;
     try {
       final response = await _backend.buscarProdutoGtin(commerceId, gtin);
-      if (response['found'] != true || response['product'] is! Map) return null;
+
+      debugPrint('==================================');
+      debugPrint('RESPOSTA DO CATÁLOGO: $response');
+      debugPrint('==================================');
+
+      if (response['found'] != true || response['product'] is! Map) {
+        return null;
+      }
       final product = Map<String, Object?>.from(response['product'] as Map);
       return CatalogProduct(
         gtin: (product['barcode'] ?? product['gtin'] ?? gtin) as String,
@@ -172,7 +193,9 @@ class OfficialProductCatalogProvider implements ProductCatalogProvider {
         description: product['description'] as String?,
         imageUrl: product['imageUrl'] as String?,
         quantity: product['quantity'] as String?,
-        unit: product['unit'] as String?,
+        physicalUnit: product['physical_unit'] as String? ?? product['unit'] as String?,
+        contentPerUnit: (product['content_per_unit'] as num? ?? 1).toDouble(),
+        contentUnit: product['content_unit'] as String?,
         source: response['source'] as String? ?? 'external',
         confidence: 0.85,
       );
@@ -304,8 +327,7 @@ class ProductLookupService {
     }
     for (final provider in providers.where(
       (provider) =>
-          provider.id != 'local_salon' &&
-          provider.id != 'studioflow_catalog',
+          provider.id != 'local_salon' && provider.id != 'studioflow_catalog',
     )) {
       consulted.add(provider.id);
       final product = await provider.findByGtin(gtin, commerceId: commerceId);

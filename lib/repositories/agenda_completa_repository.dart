@@ -6,6 +6,7 @@ import '../database/database_service.dart';
 import '../models/domain/acesso.dart';
 import '../models/domain/atendimento.dart';
 import '../services/session_controller.dart';
+import '../services/whatsapp_queue_service.dart';
 import 'pacotes_repository.dart';
 
 class DiagnosticoExclusaoAgendamento {
@@ -441,6 +442,27 @@ class AgendaCompletaRepository {
         'mensagens_canceladas': notificacoes + whatsapp,
         'excluido_em': agora,
       });
+
+      final cliente = await txn.query(
+        'clientes',
+        columns: ['whatsapp'],
+        where: 'id = ? AND comercio_id = ?',
+        whereArgs: [rows.first['cliente_id'], _comercioId],
+      );
+      if (cliente.isNotEmpty) {
+        final whatsapp = cliente.first['whatsapp'] as String?;
+        if (whatsapp != null && whatsapp.isNotEmpty) {
+          await WhatsappQueueService().enfileirar(
+            txn: txn,
+            comercioId: _comercioId,
+            destinatario: whatsapp,
+            template: 'agendamento_cancelado',
+            payload: {'motivo': motivo.trim(), ...rows.first},
+            agendamentoId: agendamentoId,
+          );
+        }
+      }
+
       await _historico(
         txn,
         agendamentoId: agendamentoId,

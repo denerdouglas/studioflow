@@ -295,7 +295,8 @@ class _CaixaPageState extends State<CaixaPage> {
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: _abrirNovaMovimentacao,
+      heroTag: null,
+      onPressed: _abrirNovaMovimentacao,
         backgroundColor: _corPrincipal,
         foregroundColor: Colors.white,
         icon: const Icon(Icons.add),

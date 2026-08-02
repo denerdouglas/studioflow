@@ -189,6 +189,9 @@ abstract final class DatabaseSchema {
         quantidade_atual REAL NOT NULL DEFAULT 0,
         estoque_minimo REAL NOT NULL DEFAULT 0,
         unidade TEXT NOT NULL,
+        conteudo_por_unidade REAL NOT NULL DEFAULT 1,
+        unidade_conteudo TEXT NOT NULL DEFAULT '',
+        revisao_modelagem_estoque INTEGER NOT NULL DEFAULT 0,
 
         custo_unitario REAL NOT NULL DEFAULT 0,
         fornecedor TEXT,

@@ -114,7 +114,8 @@ class _UsuariosPageState extends State<UsuariosPage> {
       appBar: AppBar(title: const Text('Funcionários e acessos')),
       floatingActionButton: permitido
           ? FloatingActionButton.extended(
-              onPressed: () => _editar(),
+      heroTag: null,
+      onPressed: () => _editar(),
               icon: const Icon(Icons.person_add),
               label: const Text('Novo usuário'),
             )

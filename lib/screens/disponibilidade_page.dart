@@ -302,6 +302,7 @@ class _DisponibilidadePageState extends State<DisponibilidadePage> {
       ],
     ),
     floatingActionButton: FloatingActionButton.extended(
+      heroTag: null,
       onPressed: _adicionarBloqueio,
       icon: const Icon(Icons.block),
       label: const Text('Bloqueio'),

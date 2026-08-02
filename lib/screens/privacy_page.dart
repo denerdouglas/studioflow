@@ -72,7 +72,19 @@ class _PrivacyPageState extends State<PrivacyPage> {
           child: Padding(
             padding: EdgeInsets.all(16),
             child: Text(
-              'O StudioFlow mantém os dados operacionais separados por comércio. O catálogo compartilhado recebe somente dados gerais de produto quando há consentimento. Preços, estoque, fornecedores, vendas e informações financeiras permanecem privados.',
+              'O StudioFlow mantém os dados operacionais rigorosamente separados por comércio. Suas informações financeiras, fluxo de caixa, vendas, fornecedores, clientes e estoque permanecem estritamente privadas e não são compartilhadas.\n\n'
+              'O catálogo global opcional recebe apenas metadados públicos do produto (GTIN, descrição básica, categoria) para facilitar o cadastro para outros usuários, mas nunca seus custos ou preços.',
+            ),
+          ),
+        ),
+        const Card(
+          child: Padding(
+            padding: EdgeInsets.all(16),
+            child: Text(
+              'Funcionalidades e Integrações:\n'
+              '• Sincronização e Modo Offline: Seus dados são salvos localmente (SQLite) para funcionamento sem internet e, quando online, sincronizados de forma segura (HTTPS) com a nuvem.\n'
+              '• Marketplace e Acadêmico: Estes módulos conectam você a ofertas e cursos de parceiros (ex: Hotmart, Amazon, Shopee). Acessar essas ofertas utiliza redirecionamentos monitorados e links de afiliados, que podem instalar cookies de terceiros em seu navegador/aplicativo externo, sujeitos às políticas dessas plataformas.\n'
+              '• Pagamentos e Assinaturas: O StudioFlow não processa, não armazena e não tem acesso aos dados sensíveis do seu cartão de crédito. As transações são gerenciadas exclusivamente pelas lojas oficiais (Google Play) ou gateways parceiros.',
             ),
           ),
         ),
@@ -101,14 +113,14 @@ class _PrivacyPageState extends State<PrivacyPage> {
             subtitle: Text(
               _pendingDeletion
                   ? 'A solicitação está pendente de confirmação segura.'
-                  : 'Registra a solicitação sem apagar dados acidentalmente.',
+                  : 'Registra a solicitação de remoção definitiva dos dados.',
             ),
             onTap: _pendingDeletion ? null : _requestDeletion,
           ),
         ),
         const SizedBox(height: 12),
         const Text(
-          'Permissões usadas: câmera somente para leitura de códigos. Localização, contatos e arquivos não são solicitados nesta versão.',
+          'Permissões: A câmera é solicitada apenas para a leitura de códigos de barras (GTIN) e QR Codes. Localização, lista de contatos e arquivos do dispositivo não são acessados pelo aplicativo nesta versão.',
           style: TextStyle(color: Colors.black54),
         ),
       ],

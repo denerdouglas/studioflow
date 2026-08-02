@@ -7,6 +7,7 @@ Future<void> mostrarRevisaoMensagem(
   required String titulo,
   required String mensagem,
   String? telefone,
+  Future<void> Function(String mensagem)? onEnqueue,
 }) async {
   final controller = TextEditingController(text: mensagem);
   const externo = ExternalActionService();
@@ -28,7 +29,7 @@ Future<void> mostrarRevisaoMensagem(
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(dialogContext),
-          child: const Text('Não enviar'),
+          child: const Text('Cancelar'),
         ),
         TextButton.icon(
           onPressed: () async {
@@ -42,11 +43,21 @@ Future<void> mostrarRevisaoMensagem(
           icon: const Icon(Icons.copy_outlined),
           label: const Text('Copiar'),
         ),
-        TextButton.icon(
-          onPressed: () => externo.compartilhar(controller.text),
-          icon: const Icon(Icons.share_outlined),
-          label: const Text('Compartilhar'),
-        ),
+        if (onEnqueue != null)
+          FilledButton.icon(
+            onPressed: () async {
+              await onEnqueue(controller.text);
+              if (dialogContext.mounted) {
+                Navigator.pop(dialogContext);
+                ScaffoldMessenger.of(dialogContext).showSnackBar(
+                  const SnackBar(content: Text('Mensagem na fila de disparo automático.')),
+                );
+              }
+            },
+            icon: const Icon(Icons.schedule_send),
+            label: const Text('Enfileirar (Automático)'),
+            style: FilledButton.styleFrom(backgroundColor: const Color(0xFF00C853)),
+          ),
         FilledButton.icon(
           onPressed: () async {
             final resultado = await externo.abrirWhatsApp(
@@ -62,6 +73,8 @@ Future<void> mostrarRevisaoMensagem(
                   ),
                 ),
               );
+            } else if (dialogContext.mounted) {
+              Navigator.pop(dialogContext);
             }
           },
           icon: const Icon(Icons.chat_outlined),

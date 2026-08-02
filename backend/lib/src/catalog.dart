@@ -3,6 +3,7 @@ import 'dart:math';
 
 import 'package:http/http.dart' as http;
 import 'package:postgres/postgres.dart';
+import 'package:studioflow_backend/src/database_config.dart';
 
 final class CatalogProductData {
   final String gtin;
@@ -12,7 +13,9 @@ final class CatalogProductData {
   final String? description;
   final String? imageUrl;
   final String? quantity;
-  final String? unit;
+  final String? physicalUnit;
+  final double? contentPerUnit;
+  final String? contentUnit;
   final String source;
 
   const CatalogProductData({
@@ -23,7 +26,9 @@ final class CatalogProductData {
     this.description,
     this.imageUrl,
     this.quantity,
-    this.unit,
+    this.physicalUnit,
+    this.contentPerUnit,
+    this.contentUnit,
     required this.source,
   });
 
@@ -36,7 +41,9 @@ final class CatalogProductData {
     'description': description,
     'imageUrl': imageUrl,
     'quantity': quantity,
-    'unit': unit,
+    'physical_unit': physicalUnit,
+    'content_per_unit': contentPerUnit,
+    'content_unit': contentUnit,
     'source': source,
     if (source == 'external') ...{
       'sourceAttribution': 'Open Beauty Facts / Open Products Facts',
@@ -54,7 +61,9 @@ final class CatalogProductData {
         description: value['description'] as String?,
         imageUrl: value['imageUrl'] as String?,
         quantity: value['quantity'] as String?,
-        unit: value['unit'] as String?,
+        physicalUnit: value['physical_unit'] as String? ?? value['unit'] as String?,
+        contentPerUnit: (value['content_per_unit'] as num? ?? 1).toDouble(),
+        contentUnit: value['content_unit'] as String?,
         source: value['source'] as String? ?? 'external',
       );
 }
@@ -126,7 +135,9 @@ final class MemoryCatalogStore implements CatalogStore {
       category: product.category,
       description: product.description,
       imageUrl: product.imageUrl,
-      unit: product.unit,
+      physicalUnit: product.physicalUnit,
+      contentPerUnit: product.contentPerUnit,
+      contentUnit: product.contentUnit,
       source: 'studioflow',
     );
   }
@@ -177,8 +188,9 @@ final class MemoryCatalogStore implements CatalogStore {
 final class PostgresCatalogStore implements CatalogStore {
   final Pool _pool;
   PostgresCatalogStore._(this._pool);
-  factory PostgresCatalogStore.fromUrl(String url) =>
-      PostgresCatalogStore._(Pool.withUrl(url));
+  factory PostgresCatalogStore.fromUrl(String url) {
+    return PostgresCatalogStore._(DatabaseConfig.createPool(url));
+  }
 
   @override
   Future<CatalogProductData?> businessProduct(
@@ -209,7 +221,9 @@ final class PostgresCatalogStore implements CatalogStore {
         category: _text(payload['categoria']),
         description: _text(payload['descricao']),
         imageUrl: _https(_text(payload['imagem'])),
-        unit: _text(payload['unidade']),
+        physicalUnit: _text(payload['unidade']),
+        contentPerUnit: (payload['conteudo_por_unidade'] as num? ?? 1).toDouble(),
+        contentUnit: _text(payload['unidade_conteudo']),
         source: 'business',
       );
     });
@@ -232,7 +246,9 @@ final class PostgresCatalogStore implements CatalogStore {
       category: row['category'] as String?,
       description: row['description'] as String?,
       imageUrl: row['image_url'] as String?,
-      unit: row['unit'] as String?,
+      physicalUnit: row['unit'] as String?,
+      contentPerUnit: (row['content_per_unit'] as num? ?? 1).toDouble(),
+      contentUnit: row['content_unit'] as String?,
       source: 'studioflow',
     );
   }
@@ -256,6 +272,8 @@ final class PostgresCatalogStore implements CatalogStore {
           category=COALESCE(catalog_products_shared.category,EXCLUDED.category),
           image_url=COALESCE(catalog_products_shared.image_url,EXCLUDED.image_url),
           unit=COALESCE(catalog_products_shared.unit,EXCLUDED.unit),
+          content_per_unit=COALESCE(catalog_products_shared.content_per_unit,EXCLUDED.content_per_unit),
+          content_unit=COALESCE(catalog_products_shared.content_unit,EXCLUDED.content_unit),
           updated_at=now()'''),
       parameters: {
         'barcode': product.gtin,
@@ -264,7 +282,9 @@ final class PostgresCatalogStore implements CatalogStore {
         'description': product.description,
         'category': product.category,
         'imageUrl': product.imageUrl,
-        'unit': product.unit,
+        'unit': product.physicalUnit,
+        'content_per_unit': product.contentPerUnit,
+        'content_unit': product.contentUnit,
         'businessId': businessId,
         'userId': userId,
       },
@@ -399,7 +419,9 @@ final class CatalogLookupService {
         category: _clean(product.category),
         description: _clean(product.description),
         imageUrl: _safeHttps(product.imageUrl),
-        unit: _clean(product.unit),
+        physicalUnit: _clean(product.physicalUnit),
+        contentPerUnit: product.contentPerUnit ?? 1,
+        contentUnit: _clean(product.contentUnit),
         source: 'studioflow',
       ),
       businessId: businessId,
@@ -525,7 +547,9 @@ final class CatalogLookupService {
         description: _first(product, ['generic_name_pt', 'generic_name']),
         imageUrl: _safeHttps(_first(product, ['image_front_url', 'image_url'])),
         quantity: quantity,
-        unit: _unitFromQuantity(quantity),
+        physicalUnit: 'un',
+        contentPerUnit: _numberFromQuantity(quantity),
+        contentUnit: _unitFromQuantity(quantity),
         source: 'external',
       );
       await store.save(
@@ -546,7 +570,9 @@ await store.contribute(
     description: result.description,
     imageUrl: result.imageUrl,
     quantity: result.quantity,
-    unit: result.unit,
+    physicalUnit: result.physicalUnit,
+    contentPerUnit: result.contentPerUnit,
+    contentUnit: result.contentUnit,
     source: 'studioflow',
   ),
   businessId: businessId,
@@ -593,12 +619,19 @@ return result;
 
   static String? _unitFromQuantity(String? quantity) {
     final match = RegExp(
-      r'\b(ml|l|g|kg|un|und|unidades?)\b',
+      r'\b(ml|l|g|kg)\b',
       caseSensitive: false,
     ).firstMatch(quantity ?? '');
     if (match == null) return null;
-    final value = match.group(1)!.toLowerCase();
-    return value.startsWith('un') ? 'un' : value;
+    return match.group(1)!.toLowerCase();
+  }
+
+  static double _numberFromQuantity(String? quantity) {
+    if (quantity == null) return 1.0;
+    final match = RegExp(r'([\d\.,]+)').firstMatch(quantity);
+    if (match == null) return 1.0;
+    final str = match.group(1)!.replaceAll(',', '.');
+    return double.tryParse(str) ?? 1.0;
   }
 
   static String? _safeHttps(String? value) {

@@ -40,6 +40,15 @@ class BackendApiClient {
     return uri.replace(path: uri.path.replaceAll(RegExp(r'/$'), ''));
   }
 
+  Future<Map<String, dynamic>> healthCheck({required Uri endpoint}) {
+    return _get(
+      endpoint,
+      '/health',
+      const {},
+      accessToken: null,
+    );
+  }
+
   Future<Map<String, dynamic>> registerBusiness({
     required Uri endpoint,
     required String businessId,
@@ -151,7 +160,53 @@ class BackendApiClient {
     );
   }
 
+
+  Future<Map<String, dynamic>> marketplaceSearch({
+    required Uri endpoint,
+    required String accessToken,
+    required String query,
+  }) {
+    return _get(
+      endpoint,
+      '/v1/marketplace/search',
+      {'q': query},
+      accessToken: accessToken,
+    );
+  }
+
+  Future<Map<String, dynamic>> academySearch({
+    required Uri endpoint,
+    required String accessToken,
+    String? query,
+    String? categoryId,
+  }) {
+    return _get(
+      endpoint,
+      '/v1/academy/search',
+      {
+        // ignore: use_null_aware_elements
+        if (query != null) 'q': query,
+        // ignore: use_null_aware_elements
+        if (categoryId != null) 'category': categoryId,
+      },
+      accessToken: accessToken,
+    );
+  }
+
+  Future<Map<String, dynamic>> academyCategories({
+    required Uri endpoint,
+    required String accessToken,
+  }) {
+    return _get(
+      endpoint,
+      '/v1/academy/categories',
+      const {},
+      accessToken: accessToken,
+    );
+  }
+
   Future<Map<String, dynamic>> _post(
+
     Uri endpoint,
     String path,
     Map<String, Object?> body, {
@@ -175,12 +230,14 @@ class BackendApiClient {
     Uri endpoint,
     String path,
     Map<String, String> query, {
-    required String accessToken,
+    String? accessToken,
   }) async {
     final response = await _client
         .get(
           _resolve(endpoint, path).replace(queryParameters: query),
-          headers: {'authorization': 'Bearer $accessToken'},
+          headers: {
+            if (accessToken != null) 'authorization': 'Bearer $accessToken',
+          },
         )
         .timeout(const Duration(seconds: 30));
 

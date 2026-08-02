@@ -49,10 +49,12 @@ final class TokenSecurity {
     return JWT(
       {
         'sub': context.userId,
-        'businessId': context.businessId,
+        if (context.businessId != null) 'businessId': context.businessId,
         'role': context.role,
         'sessionId': context.sessionId,
         'type': 'access',
+        'actorType': context.actorType,
+        if (context.platformRole != null) 'platformRole': context.platformRole,
       },
       issuer: 'studioflow-api',
       audience: Audience.one('studioflow-app'),
@@ -72,13 +74,15 @@ final class TokenSecurity {
     );
     final payload = Map<String, dynamic>.from(jwt.payload as Map);
     if (payload['type'] != 'access') {
-      throw JWTException('Tipo de token inválido.');
+      throw JWTException('Tipo de token invǭlido.');
     }
     return AuthContext(
       userId: payload['sub'] as String,
-      businessId: payload['businessId'] as String,
+      businessId: payload['businessId'] as String?,
       role: payload['role'] as String,
       sessionId: payload['sessionId'] as String,
+      actorType: payload['actorType'] as String? ?? 'tenant_user',
+      platformRole: payload['platformRole'] as String?,
     );
   }
 

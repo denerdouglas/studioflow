@@ -11,6 +11,9 @@ class ItemEstoque {
   final double quantidadeAtual;
   final double estoqueMinimo;
   final String unidade;
+  final double conteudoPorUnidade;
+  final String unidadeConteudo;
+  final bool revisaoModelagemEstoque;
 
   final double custoUnitario;
   final String? fornecedor;
@@ -32,6 +35,9 @@ class ItemEstoque {
     required this.quantidadeAtual,
     required this.estoqueMinimo,
     required this.unidade,
+    this.conteudoPorUnidade = 1,
+    this.unidadeConteudo = '',
+    this.revisaoModelagemEstoque = false,
     required this.custoUnitario,
     this.fornecedor,
     this.codigoBarras,
@@ -94,6 +100,9 @@ class ItemEstoque {
     double? quantidadeAtual,
     double? estoqueMinimo,
     String? unidade,
+    double? conteudoPorUnidade,
+    String? unidadeConteudo,
+    bool? revisaoModelagemEstoque,
     double? custoUnitario,
     String? fornecedor,
     String? codigoBarras,
@@ -110,6 +119,9 @@ class ItemEstoque {
       quantidadeAtual: quantidadeAtual ?? this.quantidadeAtual,
       estoqueMinimo: estoqueMinimo ?? this.estoqueMinimo,
       unidade: unidade ?? this.unidade,
+      conteudoPorUnidade: conteudoPorUnidade ?? this.conteudoPorUnidade,
+      unidadeConteudo: unidadeConteudo ?? this.unidadeConteudo,
+      revisaoModelagemEstoque: revisaoModelagemEstoque ?? this.revisaoModelagemEstoque,
       custoUnitario: custoUnitario ?? this.custoUnitario,
       fornecedor: fornecedor ?? this.fornecedor,
       codigoBarras: codigoBarras ?? this.codigoBarras,

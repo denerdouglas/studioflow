@@ -107,7 +107,9 @@ final class BackendConfig {
       catalogBaseUrl: Uri.parse(
         env['CATALOG_BASE_URL'] ?? 'https://world.openfoodfacts.org',
       ),
-      catalogUserAgent: optional('CATALOG_USER_AGENT'),
+      catalogUserAgent: env['CATALOG_USER_AGENT']?.trim().isNotEmpty == true
+          ? env['CATALOG_USER_AGENT']!.trim()
+          : 'StudioFlow/1.0 (https://studioflowapp.com.br; contato@studioflowapp.com.br)',
       whatsappGraphApiVersion: env['WHATSAPP_GRAPH_API_VERSION'] ?? 'v23.0',
     );
   }

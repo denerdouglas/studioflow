@@ -1,9 +1,11 @@
 import 'models.dart';
 import 'marketplace.dart';
 import 'store.dart';
+import 'admin.dart';
+
 
 final class MemoryBackendStore
-    implements BackendStore, MarketplaceBackendStore {
+    implements BackendStore, MarketplaceBackendStore, AdminBackendStore {
   final Map<String, AccountIdentity> _accounts = {};
   final Map<String, SessionRecord> _sessions = {};
   final Map<String, _ResetRecord> _resets = {};
@@ -12,10 +14,6 @@ final class MemoryBackendStore
   final List<_BusinessChange> _changes = [];
   final List<Map<String, Object?>> audits = [];
   int _cursor = 0;
-  final Map<String, AffiliateProgram> _affiliatePrograms = {};
-  final Map<String, MarketplaceOffer> _marketplaceOffers = {};
-  final List<Map<String, Object?>> _affiliateClicks = [];
-  final Map<String, Map<String, Object?>> _affiliateConversions = {};
 
   String _accountKey(String userId, String businessId) =>
       '$businessId::$userId';
@@ -147,7 +145,7 @@ final class MemoryBackendStore
         continue;
       }
       final key = _recordKey(
-        actor.businessId,
+        actor.businessId!,
         mutation.entity,
         mutation.entityId,
       );
@@ -180,7 +178,7 @@ final class MemoryBackendStore
         payload: payload,
         updatedAt: DateTime.now().toUtc(),
       );
-      _changes.add(_BusinessChange(actor.businessId, change));
+      _changes.add(_BusinessChange(actor.businessId!, change));
       final applied = SyncResult(
         operationId: mutation.operationId,
         status: 'applied',
@@ -264,113 +262,34 @@ final class MemoryBackendStore
   }
 
   @override
-  Future<List<AffiliateProgram>> listAffiliatePrograms() async =>
-      _affiliatePrograms.values.toList();
+  Future<PlatformAdmin?> findPlatformAdminByUserId(String userId) async => null;
 
   @override
-  Future<void> saveAffiliateProgram(AffiliateProgram program) async {
-    _affiliatePrograms[program.id] = program;
-  }
-
+  Future<List<MarketplacePartner>> listActivePartners() async => [];
   @override
-  Future<void> saveMarketplaceOffer(MarketplaceOffer offer) async {
-    _marketplaceOffers[offer.id] = offer;
-  }
-
+  Future<List<MarketplacePartner>> listAllPartners() async => [];
   @override
-  Future<List<MarketplaceOffer>> searchMarketplaceOffers(String query) async {
-    final normalized = query.trim().toLowerCase();
-    return _marketplaceOffers.values
-        .where(
-          (offer) =>
-              offer.active &&
-              _affiliatePrograms[offer.programId]?.enabled == true &&
-              (offer.title.toLowerCase().contains(normalized) ||
-                  offer.seller.toLowerCase().contains(normalized)),
-        )
-        .toList()
-      ..sort((a, b) => a.totalCents.compareTo(b.totalCents));
-  }
-
+  Future<MarketplacePartner?> findPartnerById(String id) async => null;
   @override
-  Future<MarketplaceOffer?> findMarketplaceOffer(String id) async {
-    final offer = _marketplaceOffers[id];
-    if (offer == null ||
-        !offer.active ||
-        _affiliatePrograms[offer.programId]?.enabled != true) {
-      return null;
-    }
-    return offer;
-  }
-
+  Future<void> savePartner(MarketplacePartner partner) async {}
   @override
-  Future<String> recordAffiliateClick({
-    required String id,
-    required String businessId,
-    required String userId,
-    required MarketplaceOffer offer,
-    required String destinationUrl,
-  }) async {
-    _affiliateClicks.add({
-      'id': id,
-      'businessId': businessId,
-      'userId': userId,
-      'offerId': offer.id,
-      'programId': offer.programId,
-      'destinationUrl': destinationUrl,
-    });
-    return id;
-  }
-
+  Future<List<MarketplacePartnerDomain>> listDomainsForPartner(String partnerId) async => [];
   @override
-  Future<void> recordAffiliateConversion({
-    required String id,
-    required String programId,
-    required String externalId,
-    String? clickId,
-    required int saleCents,
-    required int commissionCents,
-    required String status,
-  }) async {
-    _affiliateConversions['$programId::$externalId'] = {
-      'id': id,
-      'programId': programId,
-      'externalId': externalId,
-      'clickId': clickId,
-      'saleCents': saleCents,
-      'commissionCents': commissionCents,
-      'status': status,
-    };
-  }
-
+  Future<void> saveDomain(MarketplacePartnerDomain domain) async {}
   @override
-  Future<Map<String, Object?>> affiliateMetrics() async {
-    var estimated = 0;
-    var confirmed = 0;
-    var cancelled = 0;
-    for (final conversion in _affiliateConversions.values) {
-      final value = conversion['commissionCents'] as int;
-      switch (conversion['status']) {
-        case 'confirmada':
-          confirmed += value;
-        case 'cancelada':
-          cancelled += value;
-        default:
-          estimated += value;
-      }
-    }
-    return {
-      'clicks': _affiliateClicks.length,
-      'conversions': _affiliateConversions.length,
-      'commissionEstimatedCents': estimated,
-      'commissionConfirmedCents': confirmed,
-      'commissionCancelledCents': cancelled,
-    };
-  }
-
+  Future<void> logSearch({required String? businessId, required String userId, required String query, required String source, required bool cacheHit, required int resultsCount, required int responseTimeMs}) async {}
+  @override
+  Future<void> recordClick(MarketplaceClick click) async {}
+  @override
+  Future<MarketplaceClick?> findClick(String id) async => null;
+  @override
+  Future<void> updateClickStatus(String id, String status, {DateTime? redirectedAt}) async {}
+  @override
+  Future<void> auditAdminAction({required String platformAdminId, required String action, required String entity, required String entityId, Map<String, dynamic>? beforeState, Map<String, dynamic>? afterState, String? reason, String? ipAddressHash}) async {}
   @override
   Future<void> close() async {}
 }
+
 
 final class _SyncRecord {
   final int version;

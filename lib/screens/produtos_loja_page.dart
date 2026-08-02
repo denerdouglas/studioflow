@@ -142,7 +142,8 @@ class _ProdutosLojaPageState extends State<ProdutosLojaPage> {
             AcaoPermissao.cadastrarProduto,
           )
           ? FloatingActionButton.extended(
-              onPressed: () => _abrir(),
+      heroTag: null,
+      onPressed: () => _abrir(),
               icon: const Icon(Icons.add),
               label: const Text('Produto'),
             )
@@ -257,6 +258,7 @@ class _ProdutoFormPageState extends State<ProdutoFormPage> {
   final Map<String, TextEditingController> c = {};
   ModalidadeProduto modalidade = ModalidadeProduto.proprio;
   bool ativo = true;
+  bool revisaoModelagemEstoque = false;
   bool salvando = false;
   bool consultandoCodigo = false;
   late String origemCatalogo;
@@ -274,6 +276,7 @@ class _ProdutoFormPageState extends State<ProdutoFormPage> {
     origemCatalogo = p?.origemCatalogo ?? catalog?.source ?? 'manual';
     modalidade = p?.modalidade ?? ModalidadeProduto.proprio;
     ativo = p?.ativo ?? true;
+    revisaoModelagemEstoque = p?.revisaoModelagemEstoque ?? false;
     _c('nome', p?.nome ?? catalog?.name ?? '');
     _c('descricao', p?.descricao ?? catalog?.description ?? '');
     _c('categoria', p?.categoria ?? catalog?.category ?? 'Cosméticos');
@@ -286,7 +289,9 @@ class _ProdutoFormPageState extends State<ProdutoFormPage> {
     _c('quantidade', p?.quantidadeAtual.toString() ?? '0');
     _c('minimo', p?.estoqueMinimo.toString() ?? '0');
     _c('sugerida', p?.quantidadeSugerida.toString() ?? '0');
-    _c('unidade', p?.unidade ?? catalog?.unit ?? 'un');
+    _c('unidade', p?.unidade ?? catalog?.physicalUnit ?? 'un');
+    _c('conteudo', p?.conteudoPorUnidade.toString() ?? catalog?.contentPerUnit?.toString() ?? '1');
+    _c('unidade_conteudo', p?.unidadeConteudo ?? catalog?.contentUnit ?? 'g');
     _c('embalagem', p?.quantidadeEmbalagem.toString() ?? '1');
     _c('lote', p?.lote ?? '');
     _c('validade', p?.validade?.toIso8601String().split('T').first ?? '');
@@ -346,7 +351,13 @@ class _ProdutoFormPageState extends State<ProdutoFormPage> {
             _c('imagem').text = product.imageUrl ?? '';
           }
           if (_c('unidade').text.trim().isEmpty || _c('unidade').text == 'un') {
-            _c('unidade').text = product.unit ?? 'un';
+            _c('unidade').text = product.physicalUnit ?? 'un';
+          }
+          if (product.contentPerUnit != null) {
+            _c('conteudo').text = product.contentPerUnit.toString();
+          }
+          if (product.contentUnit != null) {
+            _c('unidade_conteudo').text = product.contentUnit!;
           }
           origemCatalogo = product.source;
         } else {
@@ -403,6 +414,9 @@ class _ProdutoFormPageState extends State<ProdutoFormPage> {
         estoqueMinimo: _n('minimo'),
         quantidadeSugerida: _n('sugerida'),
         unidade: _c('unidade').text,
+        conteudoPorUnidade: _n('conteudo'),
+        unidadeConteudo: _c('unidade_conteudo').text,
+        revisaoModelagemEstoque: false,
         quantidadeEmbalagem: _n('embalagem'),
         lote: _c('lote').text,
         dataEntrada: widget.produto?.dataEntrada ?? agora,
@@ -474,6 +488,17 @@ class _ProdutoFormPageState extends State<ProdutoFormPage> {
                 ),
               ),
             ),
+          if (revisaoModelagemEstoque)
+            const Card(
+              color: Color(0xFFFFF3CD),
+              child: Padding(
+                padding: EdgeInsets.all(12),
+                child: Text(
+                  'Revisão necessária: Separe a quantidade física (potes, frascos) do conteúdo (g, ml).',
+                  style: TextStyle(color: Color(0xFF856404), fontWeight: FontWeight.bold),
+                ),
+              ),
+            ),
           if (consultandoCodigo) const LinearProgressIndicator(),
           _campo('nome', 'Nome', obrigatorio: true),
           _campo('descricao', 'Descrição', linhas: 2),
@@ -531,10 +556,19 @@ class _ProdutoFormPageState extends State<ProdutoFormPage> {
           ),
           Row(
             children: [
-              Expanded(child: _campo('unidade', 'Unidade', obrigatorio: true)),
+              Expanded(child: _campo('unidade', 'Unidade física (pote)', obrigatorio: true)),
               const SizedBox(width: 12),
               Expanded(
                 child: _campo('embalagem', 'Qtd. por embalagem', numero: true),
+              ),
+            ],
+          ),
+          Row(
+            children: [
+              Expanded(child: _campo('conteudo', 'Conteúdo (peso/vol)', numero: true)),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _campo('unidade_conteudo', 'Unidade do conteúdo (g, ml)'),
               ),
             ],
           ),

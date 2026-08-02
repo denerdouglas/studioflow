@@ -32,7 +32,7 @@ class _CatalogRegistrationPageState extends State<CatalogRegistrationPage> {
   final _unit = TextEditingController(text: 'un');
   final _cost = TextEditingController(text: '0');
   final _sale = TextEditingController(text: '0');
-  final _quantity = TextEditingController(text: '0');
+  late final TextEditingController _quantity;
   final _minimum = TextEditingController(text: '0');
   final _batch = TextEditingController();
   final _notes = TextEditingController();
@@ -54,7 +54,15 @@ class _CatalogRegistrationPageState extends State<CatalogRegistrationPage> {
     );
     _category = TextEditingController(text: widget.product?.category ?? '');
     _image = TextEditingController(text: widget.product?.imageUrl ?? '');
-    _unit.text = widget.product?.unit ?? _unitFromQuantity(widget.product?.quantity);
+    _unit.text =
+        widget.product?.physicalUnit ?? _unitFromQuantity(widget.product?.quantity);
+    final rawQuantity = widget.product?.quantity ?? '';
+    final numericQuantity =
+        RegExp(r'[\d.,]+').stringMatch(rawQuantity)?.replaceAll(',', '.') ??
+        '0';
+    _quantity = TextEditingController(
+      text: numericQuantity == '0' ? '0' : numericQuantity,
+    );
   }
 
   @override

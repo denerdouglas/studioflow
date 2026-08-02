@@ -22,3 +22,9 @@ subprojects {
 tasks.register<Delete>("clean") {
     delete(rootProject.layout.buildDirectory)
 }
+
+subprojects {
+    if (project.name == "file_picker") {
+        project.apply(from = "${rootProject.projectDir}/file_picker_patch.gradle")
+    }
+}

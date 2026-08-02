@@ -9,3 +9,6 @@ export 'src/marketplace_postgres_store.dart';
 export 'src/postgres_store.dart';
 export 'src/security.dart';
 export 'src/store.dart';
+
+export 'src/marketplace_admin_service.dart';
+export 'src/admin.dart';

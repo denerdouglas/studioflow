@@ -78,4 +78,44 @@ class AcessoOnlineService {
     );
     return ResultadoAcessoOnline(usuario: usuario);
   }
+
+  Future<UsuarioAcesso> cadastrar({
+    required CadastroComercioEntrada entrada,
+    required String comercioId,
+    required String usuarioId,
+  }) async {
+    if (!configurado) {
+      throw StateError('Backend principal não configurado neste aplicativo.');
+    }
+    final uri = _api.normalizeEndpoint(endpoint);
+    final response = await _api.registerBusiness(
+      endpoint: uri,
+      businessId: comercioId,
+      businessName: entrada.nomeComercio,
+      segment: entrada.tipoEstabelecimento.name,
+      userId: usuarioId,
+      ownerName: entrada.responsavel,
+      phone: entrada.telefone,
+      login: entrada.email,
+      password: entrada.senha,
+    );
+    final account = Map<String, dynamic>.from(response['account'] as Map);
+    final usuario = await _repository.restaurarContaOnline(
+      account: account,
+      senhaValidada: entrada.senha,
+      endpoint: uri.toString(),
+    );
+    await _vault.write(
+      SessaoBackend(
+        comercioId: account['businessId'] as String,
+        usuarioId: account['userId'] as String,
+        accessToken: response['accessToken'] as String,
+        refreshToken: response['refreshToken'] as String,
+        refreshExpiraEm: DateTime.parse(
+          response['refreshTokenExpiresAt'] as String,
+        ),
+      ),
+    );
+    return usuario;
+  }
 }

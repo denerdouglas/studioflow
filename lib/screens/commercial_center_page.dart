@@ -104,7 +104,12 @@ class _CommercialCenterPageState extends State<CommercialCenterPage> {
       _message(error.message);
     } on CatalogProviderUnavailable catch (error) {
       _message(error.message);
-    } catch (_) {
+    } catch (e, s) {
+      debugPrint('======================================');
+      debugPrint('ERRO NO _search(): $e');
+      debugPrintStack(stackTrace: s);
+      debugPrint('======================================');
+
       _message('A busca falhou. Tente novamente ou cadastre manualmente.');
     } finally {
       if (mounted) setState(() => _searching = false);

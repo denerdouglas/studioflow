@@ -25,10 +25,11 @@ abstract final class MigrationV14 {
           SELECT 1 FROM estoque
           WHERE comercio_id = NEW.comercio_id
             AND codigo_barras = NEW.codigo_barras
+            AND estoque_destino = NEW.estoque_destino
         );
       END''');
     await db.execute('''CREATE TRIGGER trg_estoque_barcode_unique_update
-      BEFORE UPDATE OF comercio_id, codigo_barras ON estoque
+      BEFORE UPDATE OF comercio_id, codigo_barras, estoque_destino ON estoque
       WHEN NEW.codigo_barras IS NOT NULL AND TRIM(NEW.codigo_barras) <> ''
       BEGIN
         SELECT RAISE(ABORT, 'Código de barras já cadastrado neste comércio.')
@@ -36,12 +37,13 @@ abstract final class MigrationV14 {
           SELECT 1 FROM estoque
           WHERE comercio_id = NEW.comercio_id
             AND codigo_barras = NEW.codigo_barras
+            AND estoque_destino = NEW.estoque_destino
             AND id <> NEW.id
         );
       END''');
     await db.execute(
       'CREATE INDEX IF NOT EXISTS idx_estoque_barcode_comercio '
-      'ON estoque(comercio_id, codigo_barras)',
+      'ON estoque(comercio_id, estoque_destino, codigo_barras)',
     );
   }
 

@@ -75,6 +75,7 @@ class _BarcodeScannerPageState extends State<BarcodeScannerPage> {
 
   Future<void> _digitar() async {
     await _controller.stop();
+    if (!mounted) return;
     final controller = TextEditingController();
     final codigo = await showDialog<String>(
       context: context,

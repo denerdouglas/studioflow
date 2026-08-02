@@ -326,7 +326,8 @@ class _ServicosPageState extends State<ServicosPage> {
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: _novoServico,
+      heroTag: null,
+      onPressed: _novoServico,
         backgroundColor: _corPrincipal,
         foregroundColor: Colors.white,
         icon: const Icon(Icons.add),

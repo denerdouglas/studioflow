@@ -184,6 +184,7 @@ class _MenuPageState extends State<MenuPage> {
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text('Cardápio do Salão')),
     floatingActionButton: FloatingActionButton.extended(
+      heroTag: null,
       onPressed: _edit,
       icon: const Icon(Icons.add),
       label: const Text('Novo item'),

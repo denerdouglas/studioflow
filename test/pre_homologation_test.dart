@@ -10,6 +10,7 @@ import 'package:studioflow/repositories/anamnese_repository.dart';
 import 'package:studioflow/services/session_controller.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
   sqfliteFfiInit();
   late Database db;
   late UsuarioAcesso dono;

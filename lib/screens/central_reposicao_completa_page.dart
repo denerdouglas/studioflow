@@ -177,6 +177,7 @@ class _CentralReposicaoCompletaPageState
       ],
     ),
     floatingActionButton: FloatingActionButton.extended(
+      heroTag: null,
       onPressed: adicionar,
       icon: const Icon(Icons.add),
       label: const Text('Adicionar'),

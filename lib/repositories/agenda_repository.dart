@@ -3,6 +3,7 @@ import 'package:sqflite/sqflite.dart';
 import '../database/database_service.dart';
 import '../models/domain/acesso.dart';
 import '../services/session_controller.dart';
+import '../services/whatsapp_queue_service.dart';
 import 'pacotes_repository.dart';
 
 class AgendamentoRegistro {
@@ -241,10 +242,33 @@ class AgendaRepository {
       );
     }
 
-    await db.insert('agendamentos', {
-      ...agendamento.paraMapa(),
-      'comercio_id': _comercioId,
-    }, conflictAlgorithm: ConflictAlgorithm.abort);
+    await db.transaction((txn) async {
+      await txn.insert('agendamentos', {
+        ...agendamento.paraMapa(),
+        'comercio_id': _comercioId,
+      }, conflictAlgorithm: ConflictAlgorithm.abort);
+
+      final cliente = await txn.query(
+        'clientes',
+        columns: ['whatsapp'],
+        where: 'id = ? AND comercio_id = ?',
+        whereArgs: [agendamento.clienteId, _comercioId],
+      );
+
+      if (cliente.isNotEmpty) {
+        final whatsapp = cliente.first['whatsapp'] as String?;
+        if (whatsapp != null && whatsapp.isNotEmpty) {
+          await WhatsappQueueService().enfileirar(
+            txn: txn,
+            comercioId: _comercioId,
+            destinatario: whatsapp,
+            template: 'agendamento_criado',
+            payload: agendamento.paraMapa(),
+            agendamentoId: agendamento.id,
+          );
+        }
+      }
+    });
   }
 
   Future<void> atualizar(AgendamentoRegistro agendamento) async {

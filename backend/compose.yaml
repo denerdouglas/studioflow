@@ -22,12 +22,13 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgresql://studioflow:${STUDIOFLOW_DB_PASSWORD}@postgres:5432/studioflow
+      DATABASE_SSL_MODE: ${DATABASE_SSL_MODE:-disable}
       JWT_SECRET: ${JWT_SECRET:?defina JWT_SECRET}
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:?defina PUBLIC_BASE_URL}
       PORT: 8080
       UPLOAD_DIRECTORY: /app/storage
       CATALOG_BASE_URL: ${CATALOG_BASE_URL:-https://world.openfoodfacts.org}
-      CATALOG_USER_AGENT: ${CATALOG_USER_AGENT:-}
+      CATALOG_USER_AGENT: StudioFlow/1.0 (https://studioflowapp.com.br; contato@studioflowapp.com.br)
       WHATSAPP_GRAPH_API_VERSION: ${WHATSAPP_GRAPH_API_VERSION:-v23.0}
       WHATSAPP_PHONE_NUMBER_ID: ${WHATSAPP_PHONE_NUMBER_ID:-}
       WHATSAPP_ACCESS_TOKEN: ${WHATSAPP_ACCESS_TOKEN:-}

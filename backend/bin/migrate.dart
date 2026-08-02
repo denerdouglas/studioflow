@@ -2,6 +2,8 @@ import 'dart:io';
 
 import 'package:postgres/postgres.dart';
 
+import 'package:studioflow_backend/src/database_config.dart';
+
 Future<void> main() async {
   final databaseUrl = Platform.environment['DATABASE_URL']?.trim();
   if (databaseUrl == null || databaseUrl.isEmpty) {
@@ -10,7 +12,7 @@ Future<void> main() async {
     return;
   }
 
-  final connection = await Connection.openFromUrl(databaseUrl);
+  final connection = await DatabaseConfig.createConnection(databaseUrl);
   try {
     final directory = Directory('migrations');
     final files =

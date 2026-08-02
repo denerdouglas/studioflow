@@ -66,3 +66,17 @@ codex_patch_probe/
 artifacts/
 .codex_patch_probe
 *.iml
+# Kotlin / Android temporary files
+android/.kotlin/
+android/hs_err_pid*.log
+android/replay_pid*.log
+
+# Temporary build logs
+build_log.txt
+build_release_error.txt
+pub_outdated.txt
+
+# Temporary repair scripts
+fix_*.py
+replace_api.py
+rewrite_memory_store.py

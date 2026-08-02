@@ -135,7 +135,8 @@ class _FuncionariosPageState extends State<FuncionariosPage> {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: kCorPrincipal,
+      heroTag: null,
+      backgroundColor: kCorPrincipal,
         foregroundColor: Colors.white,
         onPressed: novoFuncionario,
         icon: const Icon(Icons.person_add),

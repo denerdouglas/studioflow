@@ -4,6 +4,8 @@ import '../models/domain/acesso.dart';
 import '../models/domain/infraestrutura.dart';
 import '../models/domain/sincronizacao_backend.dart';
 import '../repositories/infraestrutura_repository.dart';
+import '../services/acesso_online_service.dart';
+import '../services/backend_api_client.dart';
 import '../services/backend_sync_service.dart';
 import '../services/session_controller.dart';
 
@@ -17,16 +19,37 @@ class ProducaoPage extends StatefulWidget {
 class _ProducaoPageState extends State<ProducaoPage> {
   final _repository = InfraestruturaRepository();
   final _syncService = BackendSyncService();
+  final _apiClient = BackendApiClient();
   late Future<EstadoInfraestrutura> _estado;
   bool _ocupado = false;
+  String? _statusServidor;
 
   @override
   void initState() {
     super.initState();
     _estado = _repository.carregarEstado();
+    _verificarServidor();
   }
 
-  void _recarregar() => setState(() => _estado = _repository.carregarEstado());
+  Future<void> _verificarServidor() async {
+    final endpointStr = AcessoOnlineService.endpointCompilado;
+    if (endpointStr.trim().isEmpty) {
+      if (mounted) setState(() => _statusServidor = 'Endpoint não configurado na compilação (--dart-define)');
+      return;
+    }
+    try {
+      final uri = _apiClient.normalizeEndpoint(endpointStr);
+      await _apiClient.healthCheck(endpoint: uri);
+      if (mounted) setState(() => _statusServidor = 'Online e respondendo');
+    } catch (e) {
+      if (mounted) setState(() => _statusServidor = 'Indisponível ($e)');
+    }
+  }
+
+  void _recarregar() {
+    setState(() => _estado = _repository.carregarEstado());
+    _verificarServidor();
+  }
 
   void _explicarDependencia() {
     showDialog<void>(
@@ -205,27 +228,27 @@ class _ProducaoPageState extends State<ProducaoPage> {
                   ok: estado.operacoesPendentes == 0,
                 ),
                 _StatusCard(
-                  icon: Icons.cloud_off_outlined,
-                  title: 'Backend / Firebase',
+                  icon: Icons.cloud_outlined,
+                  title: 'StudioFlow Cloud',
                   detail: estado.backendConfigurado
-                      ? 'Provedor ${estado.provedorBackend} configurado. '
-                            'Cursor ${estado.ultimoCursor}. '
-                            '${estado.ultimaSincronizacao == null ? 'Aguardando primeira sincronização.' : 'Última sincronização: ${estado.ultimaSincronizacao}.'}'
-                      : 'Não configurado — requer endpoint e credenciais seguras.',
-                  ok: estado.backendConfigurado,
+                      ? 'Provedor StudioFlow configurado. Cursor ${estado.ultimoCursor}.\n'
+                            '${estado.ultimaSincronizacao == null ? 'Aguardando primeira sincronização.' : 'Última sincronização: ${estado.ultimaSincronizacao}.'}\n'
+                            'Status do servidor: ${_statusServidor ?? 'Verificando...'}'
+                      : 'Não conectado. Status do servidor: ${_statusServidor ?? 'Verificando...'}',
+                  ok: estado.backendConfigurado && _statusServidor == 'Online e respondendo',
                 ),
                 const _StatusCard(
                   icon: Icons.workspace_premium_outlined,
                   title: 'Assinaturas e painel administrativo',
                   detail:
-                      'Contratos preparados; serviço externo ainda não conectado.',
-                  ok: false,
+                      'Gerenciadas através do StudioFlow Cloud (painel web).',
+                  ok: true,
                 ),
                 const _StatusCard(
                   icon: Icons.storefront_outlined,
                   title: 'Marketplace StudioFlow',
                   detail:
-                      'Arquitetura separada; nenhuma integração foi simulada como real.',
+                      'Disponível em uma atualização futura.',
                   ok: false,
                 ),
                 const SizedBox(height: 12),
@@ -333,7 +356,7 @@ class _BackendConnectionDialogState extends State<_BackendConnectionDialog> {
 
     Navigator.of(context).pop(
       _BackendInput(
-        endpoint: _endpointController.text.trim(),
+        endpoint: AcessoOnlineService.endpointCompilado,
         login: _loginController.text.trim(),
         senha: _senhaController.text,
         criarAmbiente: _criarAmbiente,
@@ -350,28 +373,17 @@ class _BackendConnectionDialogState extends State<_BackendConnectionDialog> {
           mainAxisSize: MainAxisSize.min,
           children: [
             const Text(
-              'Use somente o endereço HTTPS fornecido pela ROLG Systems. '
-              'A senha é enviada por conexão segura e não fica salva.',
+              'A conexão será feita com o StudioFlow Cloud configurado no momento da compilação do aplicativo. '
+              'A senha é enviada por conexão segura e não fica salva localmente.',
             ),
             const SizedBox(height: 16),
-            TextField(
-              controller: _endpointController,
-              keyboardType: TextInputType.url,
-              textInputAction: TextInputAction.next,
-              autocorrect: false,
-              decoration: const InputDecoration(
-                labelText: 'Endpoint HTTPS',
-                hintText: 'https://api.studioflowapp.com.br',
-              ),
-            ),
-            const SizedBox(height: 12),
             TextField(
               controller: _loginController,
               keyboardType: TextInputType.emailAddress,
               textInputAction: TextInputAction.next,
               autocorrect: false,
               decoration: const InputDecoration(
-                labelText: 'Login online',
+                labelText: 'Login online (E-mail)',
               ),
             ),
             const SizedBox(height: 12),

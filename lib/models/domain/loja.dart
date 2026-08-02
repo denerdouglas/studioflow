@@ -46,6 +46,9 @@ class ProdutoLoja {
   final double estoqueMinimo;
   final double quantidadeSugerida;
   final String unidade;
+  final double conteudoPorUnidade;
+  final String unidadeConteudo;
+  final bool revisaoModelagemEstoque;
   final double quantidadeEmbalagem;
   final String? lote;
   final DateTime? dataEntrada;
@@ -76,6 +79,9 @@ class ProdutoLoja {
     required this.estoqueMinimo,
     required this.quantidadeSugerida,
     required this.unidade,
+    this.conteudoPorUnidade = 1,
+    this.unidadeConteudo = '',
+    this.revisaoModelagemEstoque = false,
     required this.quantidadeEmbalagem,
     this.lote,
     this.dataEntrada,
@@ -114,6 +120,9 @@ class ProdutoLoja {
     estoqueMinimo: (map['estoque_minimo'] as num).toDouble(),
     quantidadeSugerida: (map['quantidade_sugerida'] as num? ?? 0).toDouble(),
     unidade: map['unidade'] as String,
+    conteudoPorUnidade: (map['conteudo_por_unidade'] as num? ?? 1).toDouble(),
+    unidadeConteudo: map['unidade_conteudo'] as String? ?? '',
+    revisaoModelagemEstoque: (map['revisao_modelagem_estoque'] as num? ?? 0) == 1,
     quantidadeEmbalagem: (map['quantidade_embalagem'] as num? ?? 1).toDouble(),
     lote: map['lote'] as String?,
     dataEntrada: DateTime.tryParse(map['data_entrada'] as String? ?? ''),
@@ -148,6 +157,9 @@ class ProdutoLoja {
     'estoque_minimo': estoqueMinimo,
     'quantidade_sugerida': quantidadeSugerida,
     'unidade': unidade,
+    'conteudo_por_unidade': conteudoPorUnidade,
+    'unidade_conteudo': unidadeConteudo,
+    'revisao_modelagem_estoque': revisaoModelagemEstoque ? 1 : 0,
     'quantidade_embalagem': quantidadeEmbalagem,
     'lote': lote,
     'data_entrada': dataEntrada?.toIso8601String(),

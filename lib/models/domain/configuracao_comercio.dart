@@ -12,6 +12,7 @@ class ConfiguracaoComercio {
   final int duracaoPadraoMinutos;
   final bool notificacoesAtivas;
   final bool confirmarExclusoes;
+  final bool permitirGaleriaClientes;
 
   const ConfiguracaoComercio({
     required this.comercioId,
@@ -27,6 +28,7 @@ class ConfiguracaoComercio {
     required this.duracaoPadraoMinutos,
     required this.notificacoesAtivas,
     required this.confirmarExclusoes,
+    this.permitirGaleriaClientes = false,
   });
 
   String get moeda => 'BRL';
@@ -44,6 +46,7 @@ class ConfiguracaoComercio {
     int? duracaoPadraoMinutos,
     bool? notificacoesAtivas,
     bool? confirmarExclusoes,
+    bool? permitirGaleriaClientes,
   }) {
     return ConfiguracaoComercio(
       comercioId: comercioId,
@@ -59,6 +62,7 @@ class ConfiguracaoComercio {
       duracaoPadraoMinutos: duracaoPadraoMinutos ?? this.duracaoPadraoMinutos,
       notificacoesAtivas: notificacoesAtivas ?? this.notificacoesAtivas,
       confirmarExclusoes: confirmarExclusoes ?? this.confirmarExclusoes,
+      permitirGaleriaClientes: permitirGaleriaClientes ?? this.permitirGaleriaClientes,
     );
   }
 }

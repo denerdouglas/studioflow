@@ -4,6 +4,7 @@ import 'dart:math';
 
 import 'package:http/http.dart' as http;
 import 'package:postgres/postgres.dart';
+import 'package:studioflow_backend/src/database_config.dart';
 import 'package:uuid/uuid.dart';
 
 final class AutomationSourceRecord {
@@ -265,8 +266,9 @@ final class PostgresMessageAutomationStore implements MessageAutomationStore {
 
   PostgresMessageAutomationStore._(this._pool);
 
-  factory PostgresMessageAutomationStore.fromUrl(String url) =>
-      PostgresMessageAutomationStore._(Pool.withUrl(url));
+  factory PostgresMessageAutomationStore.fromUrl(String url) {
+    return PostgresMessageAutomationStore._(DatabaseConfig.createPool(url));
+  }
 
   @override
   Future<List<AutomationSourceRecord>> sourceRecords() async {

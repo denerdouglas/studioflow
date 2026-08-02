@@ -41,6 +41,7 @@ class _FornecedoresPageState extends State<FornecedoresPage> {
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text('Fornecedores')),
     floatingActionButton: FloatingActionButton.extended(
+      heroTag: null,
       onPressed: () => abrir(),
       icon: const Icon(Icons.add),
       label: const Text('Fornecedor'),
@@ -782,6 +783,7 @@ class _OrdensCompraPageState extends State<OrdensCompraPage> {
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text('Ordens de compra')),
     floatingActionButton: FloatingActionButton(
+      heroTag: null,
       onPressed: () async {
         await Navigator.push(
           context,
@@ -995,6 +997,7 @@ class _ConsignacoesPageState extends State<ConsignacoesPage> {
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text('Consignações')),
     floatingActionButton: FloatingActionButton.extended(
+      heroTag: null,
       onPressed: nova,
       icon: const Icon(Icons.add),
       label: const Text('Receber'),

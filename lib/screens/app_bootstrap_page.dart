@@ -7,7 +7,7 @@ import '../models/domain/acesso.dart';
 import '../services/auto_sync_controller.dart';
 import '../services/session_controller.dart';
 import 'acesso_page.dart';
-import 'dashboard_page.dart';
+import 'dashboard_premium_page.dart';
 
 class AppBootstrapPage extends StatefulWidget {
   const AppBootstrapPage({super.key});
@@ -49,7 +49,7 @@ class _AppBootstrapPageState extends State<AppBootstrapPage> {
         final usuario = sessao.usuario;
         _atualizarAutoSync(usuario);
         if (usuario == null) return const AcessoPage();
-        return DashboardPage(
+        return DashboardPremiumPage(
           nomeResponsavel: usuario.nome,
           nomeNegocio: usuario.nomeExibicao,
           tipoNegocio: usuario.funcao.nome,

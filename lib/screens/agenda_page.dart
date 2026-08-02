@@ -12,6 +12,7 @@ import '../repositories/configuracoes_repository.dart';
 import '../repositories/modelos_mensagens_repository.dart';
 import '../services/mensagem_service.dart';
 import '../services/session_controller.dart';
+import '../services/whatsapp_queue_service.dart';
 import '../widgets/mensagem_revisao_dialog.dart';
 
 class AgendaPage extends StatefulWidget {
@@ -230,6 +231,7 @@ class _AgendaPageState extends State<AgendaPage> {
   Future<void> _abrirOpcoesAgendamento(AgendamentoRegistro agendamento) async {
     final acao = await showModalBottomSheet<String>(
       context: context,
+      isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) {
         return OpcoesAgendamentoSheet(
@@ -283,6 +285,11 @@ class _AgendaPageState extends State<AgendaPage> {
           status: 'cancelado',
           detalhes: motivo,
         );
+      }
+
+      if (acao == 'lembrete') {
+        await _mostrarOpcoesLembrete(agendamento);
+        return;
       }
 
       if (acao == 'faltou') {
@@ -638,6 +645,95 @@ class _AgendaPageState extends State<AgendaPage> {
     return resultado;
   }
 
+  Future<void> _mostrarOpcoesLembrete(AgendamentoRegistro agendamento) async {
+    final comercioId = SessionController.instance.usuario!.comercioId;
+    final modelos = await ModelosMensagensRepository().listar(comercioId);
+    
+    if (!mounted) return;
+
+    if (modelos.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Nenhum modelo de mensagem cadastrado.')),
+      );
+      return;
+    }
+
+    final modeloSelecionado = await showDialog<ModeloMensagem>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Enviar lembrete'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView(
+            shrinkWrap: true,
+            children: modelos.where((m) => m.ativo).map((modelo) {
+              return ListTile(
+                title: Text(modelo.nome),
+                subtitle: Text(
+                  modelo.texto,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                onTap: () => Navigator.pop(context, modelo),
+              );
+            }).toList(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
+        ],
+      ),
+    );
+
+    if (modeloSelecionado == null) return;
+
+    final configuracao = await ConfiguracoesRepository().carregar(comercioId);
+    final cliente = await ClienteRepository().buscarPorId(agendamento.clienteId);
+    
+    final dados = DadosMensagem(
+      cliente: agendamento.clienteNome,
+      salao: configuracao.nomeExibicao,
+      profissional: agendamento.profissionalNome,
+      servico: agendamento.servicoNome,
+      data: '${agendamento.inicio.day.toString().padLeft(2, '0')}/${agendamento.inicio.month.toString().padLeft(2, '0')}/${agendamento.inicio.year}',
+      hora: '${agendamento.inicio.hour.toString().padLeft(2, '0')}:${agendamento.inicio.minute.toString().padLeft(2, '0')}',
+      formaPagamento: 'Conforme configurado',
+      valorPago: 0.0,
+      servicos: [
+        ItemResumoMensagem(
+          nome: agendamento.servicoNome,
+          profissional: agendamento.profissionalNome,
+          valorUnitario: agendamento.valorServico,
+          desconto: agendamento.desconto,
+        ),
+      ],
+    );
+
+    final mensagem = const MensagemService().montar(modeloSelecionado.texto, dados);
+
+    if (!mounted) return;
+
+    await mostrarRevisaoMensagem(
+      context,
+      titulo: 'Revisar lembrete',
+      mensagem: mensagem,
+      telefone: cliente?.whatsapp,
+      onEnqueue: cliente?.whatsapp != null && cliente!.whatsapp.isNotEmpty
+          ? (textoFinal) async {
+              await WhatsappQueueService().enfileirarDireto(
+                comercioId: comercioId,
+                destinatario: cliente.whatsapp,
+                texto: textoFinal,
+                agendamentoId: agendamento.id,
+              );
+            }
+          : null,
+    );
+  }
+
   String _mensagemDaAcao(String acao) {
     switch (acao) {
       case 'confirmar':
@@ -668,7 +764,8 @@ class _AgendaPageState extends State<AgendaPage> {
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {
+      heroTag: null,
+      onPressed: () {
           _novoAgendamento();
         },
         backgroundColor: _corPrincipal,
@@ -1008,20 +1105,26 @@ class OpcoesAgendamentoSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(22, 18, 22, 28),
-      decoration: const BoxDecoration(
-        color: Color(0xFFF9F6FC),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+    return ConstrainedBox(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.sizeOf(context).height * 0.9,
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Center(
-            child: Container(
-              width: 48,
-              height: 5,
+      child: Container(
+        decoration: const BoxDecoration(
+          color: Color(0xFFF9F6FC),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        child: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(22, 18, 22, 28),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 48,
+                    height: 5,
               decoration: BoxDecoration(
                 color: const Color(0xFFD6CDDD),
                 borderRadius: BorderRadius.circular(10),
@@ -1092,17 +1195,28 @@ class OpcoesAgendamentoSheet extends StatelessWidget {
               Navigator.pop(context, 'cancelar');
             },
           ),
-          if (podeExcluir)
-            _OpcaoAgendamento(
-              titulo: 'Excluir',
-              icone: Icons.delete_outline,
-              cor: const Color(0xFFD64D64),
-              onTap: () {
-                Navigator.pop(context, 'excluir');
-              },
-            ),
-        ],
+          _OpcaoAgendamento(
+            titulo: 'Enviar lembrete',
+            icone: Icons.chat_bubble_outline,
+            cor: const Color(0xFF00C853),
+            onTap: () {
+              Navigator.pop(context, 'lembrete');
+            },
+          ),
+              if (podeExcluir)
+                _OpcaoAgendamento(
+                  titulo: 'Excluir agendamento',
+                  icone: Icons.delete_outline,
+                  cor: const Color(0xFFD64D64),
+                  onTap: () {
+                    Navigator.pop(context, 'excluir');
+                  },
+                ),
+            ],
+          ),
+        ),
       ),
+    ),
     );
   }
 

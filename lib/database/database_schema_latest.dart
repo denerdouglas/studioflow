@@ -15,6 +15,11 @@ import 'migrations/migration_v11.dart';
 import 'migrations/migration_v12.dart';
 import 'migrations/migration_v13.dart';
 import 'migrations/migration_v14.dart';
+import 'migrations/migration_v15.dart';
+import 'migrations/migration_v16.dart';
+import 'migrations/migration_v17.dart';
+import 'migrations/migration_v18.dart';
+import 'migrations/migration_v19.dart';
 
 abstract final class DatabaseSchemaLatest {
   static Future<void> criar(Database db, int version) async {
@@ -33,6 +38,11 @@ abstract final class DatabaseSchemaLatest {
     await MigrationV12.executar(db, criarBackup: false);
     await MigrationV13.executar(db, criarBackup: false);
     await MigrationV14.executar(db, criarBackup: false);
+    await MigrationV15.executar(db, criarBackup: false);
+    await MigrationV16.executar(db, criarBackup: false);
+    await MigrationV17.executar(db);
+    await MigrationV18.executar(db);
+    await MigrationV19.executar(db);
   }
 
   static Future<void> migrar(
@@ -79,6 +89,21 @@ abstract final class DatabaseSchemaLatest {
     }
     if (versaoAnterior < 14 && novaVersao >= 14) {
       await MigrationV14.executar(db, criarBackup: true);
+    }
+    if (versaoAnterior < 15 && novaVersao >= 15) {
+      await MigrationV15.executar(db, criarBackup: true);
+    }
+    if (versaoAnterior < 16 && novaVersao >= 16) {
+      await MigrationV16.executar(db, criarBackup: true);
+    }
+    if (versaoAnterior < 17 && novaVersao >= 17) {
+      await MigrationV17.executar(db);
+    }
+    if (versaoAnterior < 18 && novaVersao >= 18) {
+      await MigrationV18.executar(db, criarBackup: true);
+    }
+    if (versaoAnterior < 19 && novaVersao >= 19) {
+      await MigrationV19.executar(db, criarBackup: true);
     }
   }
 }

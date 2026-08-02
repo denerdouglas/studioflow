@@ -13,6 +13,9 @@ class ItemEstoqueRegistro {
   final double quantidadeAtual;
   final double estoqueMinimo;
   final String unidade;
+  final double conteudoPorUnidade;
+  final String unidadeConteudo;
+  final bool revisaoModelagemEstoque;
   final double custoUnitario;
   final String fornecedor;
   final String codigoBarras;
@@ -30,6 +33,9 @@ class ItemEstoqueRegistro {
     required this.quantidadeAtual,
     required this.estoqueMinimo,
     required this.unidade,
+    required this.conteudoPorUnidade,
+    required this.unidadeConteudo,
+    required this.revisaoModelagemEstoque,
     required this.custoUnitario,
     required this.fornecedor,
     required this.codigoBarras,
@@ -73,6 +79,9 @@ class ItemEstoqueRegistro {
       'quantidade_atual': quantidadeAtual,
       'estoque_minimo': estoqueMinimo,
       'unidade': unidade,
+      'conteudo_por_unidade': conteudoPorUnidade,
+      'unidade_conteudo': unidadeConteudo,
+      'revisao_modelagem_estoque': revisaoModelagemEstoque ? 1 : 0,
       'custo_unitario': custoUnitario,
       'fornecedor': fornecedor.isEmpty ? null : fornecedor,
       'codigo_barras': codigoBarras.isEmpty ? null : codigoBarras,
@@ -93,6 +102,9 @@ class ItemEstoqueRegistro {
       quantidadeAtual: (mapa['quantidade_atual'] as num? ?? 0).toDouble(),
       estoqueMinimo: (mapa['estoque_minimo'] as num? ?? 0).toDouble(),
       unidade: mapa['unidade'] as String? ?? 'unidade',
+      conteudoPorUnidade: (mapa['conteudo_por_unidade'] as num? ?? 1).toDouble(),
+      unidadeConteudo: mapa['unidade_conteudo'] as String? ?? '',
+      revisaoModelagemEstoque: (mapa['revisao_modelagem_estoque'] as num? ?? 0) == 1,
       custoUnitario: (mapa['custo_unitario'] as num? ?? 0).toDouble(),
       fornecedor: mapa['fornecedor'] as String? ?? '',
       codigoBarras: mapa['codigo_barras'] as String? ?? '',
@@ -114,6 +126,9 @@ class ItemEstoqueRegistro {
     double? quantidadeAtual,
     double? estoqueMinimo,
     String? unidade,
+    double? conteudoPorUnidade,
+    String? unidadeConteudo,
+    bool? revisaoModelagemEstoque,
     double? custoUnitario,
     String? fornecedor,
     String? codigoBarras,
@@ -131,6 +146,9 @@ class ItemEstoqueRegistro {
       quantidadeAtual: quantidadeAtual ?? this.quantidadeAtual,
       estoqueMinimo: estoqueMinimo ?? this.estoqueMinimo,
       unidade: unidade ?? this.unidade,
+      conteudoPorUnidade: conteudoPorUnidade ?? this.conteudoPorUnidade,
+      unidadeConteudo: unidadeConteudo ?? this.unidadeConteudo,
+      revisaoModelagemEstoque: revisaoModelagemEstoque ?? this.revisaoModelagemEstoque,
       custoUnitario: custoUnitario ?? this.custoUnitario,
       fornecedor: fornecedor ?? this.fornecedor,
       codigoBarras: codigoBarras ?? this.codigoBarras,

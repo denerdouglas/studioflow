@@ -355,7 +355,8 @@ class _FinanceiroPageState extends State<FinanceiroPage> {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: _novaMovimentacao,
+      heroTag: null,
+      onPressed: _novaMovimentacao,
         backgroundColor: _corPrincipal,
         foregroundColor: Colors.white,
         icon: const Icon(Icons.add),

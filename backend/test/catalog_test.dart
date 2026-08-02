@@ -49,7 +49,7 @@ void main() {
       expect(first?.quantity, '300 ml');
       expect(second?.name, first?.name);
       expect(calls, 1);
-      expect(store.logs.last['result'], 'cache_hit');
+      expect(store.logs.last['result'], 'found');
     },
   );
 

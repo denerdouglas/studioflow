@@ -91,8 +91,8 @@ class CatalogRegistrationRepository {
         final duplicate = await txn.query(
           'estoque',
           columns: ['id'],
-          where: 'comercio_id = ? AND codigo_barras = ?',
-          whereArgs: [user.comercioId, normalized],
+          where: 'comercio_id = ? AND estoque_destino = ? AND codigo_barras = ?',
+          whereArgs: [user.comercioId, destination, normalized],
           limit: 1,
         );
         if (duplicate.isNotEmpty) {
@@ -156,7 +156,7 @@ class CatalogRegistrationRepository {
           category: input.category.trim(),
           description: input.description.trim(),
           imageUrl: input.imageUrl,
-          unit: input.unit.trim(),
+          physicalUnit: input.unit.trim(),
           source: 'manual',
           confidence: 0.25,
         );

@@ -50,6 +50,7 @@ class ConfiguracoesRepository {
       duracaoPadraoMinutos: int.tryParse(mapa['duracao_padrao'] ?? '') ?? 60,
       notificacoesAtivas: mapa['notificacoes'] != '0',
       confirmarExclusoes: mapa['confirmar_exclusoes'] != '0',
+      permitirGaleriaClientes: mapa['permitir_galeria_clientes'] == '1',
     );
   }
 
@@ -81,6 +82,7 @@ class ConfiguracoesRepository {
         'moeda': 'BRL',
         'notificacoes': configuracao.notificacoesAtivas ? '1' : '0',
         'confirmar_exclusoes': configuracao.confirmarExclusoes ? '1' : '0',
+        'permitir_galeria_clientes': configuracao.permitirGaleriaClientes ? '1' : '0',
       };
       for (final item in valores.entries) {
         await txn.insert('configuracoes', {

@@ -140,6 +140,7 @@ class _ProdutoFornecedoresPageState extends State<ProdutoFornecedoresPage> {
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text('Produtos e fornecedores')),
     floatingActionButton: FloatingActionButton.extended(
+      heroTag: null,
       onPressed: novo,
       icon: const Icon(Icons.add_link),
       label: const Text('Vincular'),

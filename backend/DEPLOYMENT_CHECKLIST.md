@@ -11,8 +11,9 @@ A Fase 1 só pode ser considerada operacional após todos os itens abaixo.
 - [ ] Migrações `001` e `002` executadas.
 - [ ] Usuários separados para migration, runtime e backup.
 - [ ] RLS validado com pelo menos três estabelecimentos.
-- [ ] API publicada atrás de HTTPS.
 - [ ] Domínio e DNS configurados.
+- [ ] API publicada atrás de HTTPS (Proxy reverso).
+- [ ] Rota `GET /health` validada externamente (Health Check).
 - [ ] Logs centralizados e alertas de erro ativos.
 - [ ] Backup automático executado.
 - [ ] Restauração de backup validada.

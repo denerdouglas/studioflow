@@ -21,6 +21,12 @@ class Cliente {
   final double totalGasto;
   final int pontosFidelidade;
 
+  final String? instagramUrl;
+  final String? tiktokUrl;
+  final String? facebookUrl;
+  final String? websiteUrl;
+  final String? avatarPathLocal;
+
   final FichaAnamnese? fichaAnamnese;
   final List<ConsentimentoCliente> consentimentos;
   final List<FotoCliente> fotos;
@@ -43,6 +49,11 @@ class Cliente {
     this.totalAtendimentos = 0,
     this.totalGasto = 0,
     this.pontosFidelidade = 0,
+    this.instagramUrl,
+    this.tiktokUrl,
+    this.facebookUrl,
+    this.websiteUrl,
+    this.avatarPathLocal,
     this.fichaAnamnese,
     this.consentimentos = const [],
     this.fotos = const [],
@@ -96,6 +107,11 @@ class Cliente {
     int? totalAtendimentos,
     double? totalGasto,
     int? pontosFidelidade,
+    String? instagramUrl,
+    String? tiktokUrl,
+    String? facebookUrl,
+    String? websiteUrl,
+    String? avatarPathLocal,
     FichaAnamnese? fichaAnamnese,
     List<ConsentimentoCliente>? consentimentos,
     List<FotoCliente>? fotos,
@@ -120,6 +136,11 @@ class Cliente {
       totalAtendimentos: totalAtendimentos ?? this.totalAtendimentos,
       totalGasto: totalGasto ?? this.totalGasto,
       pontosFidelidade: pontosFidelidade ?? this.pontosFidelidade,
+      instagramUrl: instagramUrl ?? this.instagramUrl,
+      tiktokUrl: tiktokUrl ?? this.tiktokUrl,
+      facebookUrl: facebookUrl ?? this.facebookUrl,
+      websiteUrl: websiteUrl ?? this.websiteUrl,
+      avatarPathLocal: avatarPathLocal ?? this.avatarPathLocal,
       fichaAnamnese: fichaAnamnese ?? this.fichaAnamnese,
       consentimentos: consentimentos ?? this.consentimentos,
       fotos: fotos ?? this.fotos,
@@ -231,20 +252,86 @@ class ConsentimentoCliente {
 
 class FotoCliente {
   final String id;
+  final String comercioId;
   final String clienteId;
-  final String caminhoArquivo;
-  final String tipo;
-  final String? descricao;
-  final DateTime dataRegistro;
+  final String filePathLocal;
+  final String? remoteUrl;
+  final String thumbnailPath;
+  final String? servicoId;
+  final String? agendamentoId;
+  final String? profissionalId;
   final String? atendimentoId;
+  final String? vendaId;
+  final String? descricao;
+  final String categoria;
+  final DateTime dataTrabalho;
+  final DateTime criadoEm;
+  final DateTime atualizadoEm;
+  final int statusSincronizacao;
+  final DateTime? excluidoEm;
 
   const FotoCliente({
     required this.id,
+    required this.comercioId,
     required this.clienteId,
-    required this.caminhoArquivo,
-    required this.tipo,
-    this.descricao,
-    required this.dataRegistro,
+    required this.filePathLocal,
+    this.remoteUrl,
+    required this.thumbnailPath,
+    this.servicoId,
+    this.agendamentoId,
+    this.profissionalId,
     this.atendimentoId,
+    this.vendaId,
+    this.descricao,
+    required this.categoria,
+    required this.dataTrabalho,
+    required this.criadoEm,
+    required this.atualizadoEm,
+    this.statusSincronizacao = 0,
+    this.excluidoEm,
   });
+
+  Map<String, Object?> paraMapa() => {
+        'id': id,
+        'comercio_id': comercioId,
+        'cliente_id': clienteId,
+        'file_path_local': filePathLocal,
+        'remote_url': remoteUrl,
+        'thumbnail_path': thumbnailPath,
+        'servico_id': servicoId,
+        'agendamento_id': agendamentoId,
+        'profissional_id': profissionalId,
+        'atendimento_id': atendimentoId,
+        'venda_id': vendaId,
+        'descricao': descricao,
+        'categoria': categoria,
+        'data_trabalho': dataTrabalho.toIso8601String(),
+        'criado_em': criadoEm.toIso8601String(),
+        'atualizado_em': atualizadoEm.toIso8601String(),
+        'status_sincronizacao': statusSincronizacao,
+        'excluido_em': excluidoEm?.toIso8601String(),
+      };
+
+  factory FotoCliente.doMapa(Map<String, Object?> mapa) => FotoCliente(
+        id: mapa['id'] as String,
+        comercioId: mapa['comercio_id'] as String,
+        clienteId: mapa['cliente_id'] as String,
+        filePathLocal: mapa['file_path_local'] as String,
+        remoteUrl: mapa['remote_url'] as String?,
+        thumbnailPath: mapa['thumbnail_path'] as String,
+        servicoId: mapa['servico_id'] as String?,
+        agendamentoId: mapa['agendamento_id'] as String?,
+        profissionalId: mapa['profissional_id'] as String?,
+        atendimentoId: mapa['atendimento_id'] as String?,
+        vendaId: mapa['venda_id'] as String?,
+        descricao: mapa['descricao'] as String?,
+        categoria: mapa['categoria'] as String,
+        dataTrabalho: DateTime.parse(mapa['data_trabalho'] as String),
+        criadoEm: DateTime.parse(mapa['criado_em'] as String),
+        atualizadoEm: DateTime.parse(mapa['atualizado_em'] as String),
+        statusSincronizacao: (mapa['status_sincronizacao'] as num? ?? 0).toInt(),
+        excluidoEm: mapa['excluido_em'] != null
+            ? DateTime.parse(mapa['excluido_em'] as String)
+            : null,
+      );
 }

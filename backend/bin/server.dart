@@ -7,7 +7,9 @@ import 'package:studioflow_backend/studioflow_backend.dart';
 Future<void> main() async {
   final config = BackendConfig.fromEnvironment();
   final store = PostgresBackendStore.fromUrl(config.databaseUrl);
-  final marketplace = MarketplacePostgresStore.fromUrl(config.databaseUrl);
+  final marketplaceStore = MarketplacePostgresStore(store.pool);
+  final marketplace = MarketplaceService(marketplaceStore);
+  final adminService = MarketplaceAdminService(marketplaceStore);
   final automations = PostgresMessageAutomationStore.fromUrl(
     config.databaseUrl,
   );
@@ -52,6 +54,7 @@ Future<void> main() async {
   final api = StudioFlowApi(
     store: store,
     marketplace: marketplace,
+    adminService: adminService,
     automations: automations,
     catalog: catalog,
     config: config,
@@ -76,7 +79,7 @@ Future<void> main() async {
     await automationEngine.stop();
     await automations.close();
     await catalogStore.close();
-    await marketplace.close();
+    
     await store.close();
   }
 
