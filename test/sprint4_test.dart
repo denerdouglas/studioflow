@@ -225,7 +225,7 @@ void main() {
           novoInicio: DateTime(2026, 7, 24, 13, 30),
           novoFim: DateTime(2026, 7, 24, 14, 30),
         ),
-        throwsStateError,
+        throwsA(isA<ConflitoAgendaException>()),
       );
     });
 

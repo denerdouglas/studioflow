@@ -2,7 +2,7 @@ name: studioflow
 description: "A new Flutter project."
 publish_to: 'none'
 
-version: 1.4.3+4012
+version: 1.4.4+4014
 
 environment:
   sdk: ^3.12.2
@@ -34,12 +34,26 @@ dependencies:
   pdfx: ^2.9.2
   in_app_purchase: ^3.3.0
   in_app_purchase_android: ^0.5.2
+  google_mlkit_text_recognition: ^0.16.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
   sqflite_common_ffi: ^2.3.6
+  flutter_launcher_icons: ^0.14.4
+  flutter_native_splash: ^2.4.8
 
 flutter:
   uses-material-design: true
+
+flutter_launcher_icons:
+  android: "ic_launcher"
+  ios: true
+  image_path: "assets/branding/studioflow-icon-v6.png"
+
+flutter_native_splash:
+  color: "#70569A"
+  image: "assets/branding/studioflow-play-icon-512.png"
+  android: true
+  ios: true

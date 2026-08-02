@@ -21,6 +21,7 @@ class AparenciaRepository {
         'cor_destaque',
         'tema_modo',
         'tema_automatico',
+        'capa_url',
       ],
       where: 'id = ?',
       whereArgs: [comercioId],
@@ -36,6 +37,7 @@ class AparenciaRepository {
       corDestaque: row['cor_destaque'] as String? ?? '#D9C7F2',
       temaModo: row['tema_modo'] as String? ?? 'claro',
       temaAutomatico: (row['tema_automatico'] as num? ?? 1) == 1,
+      capaUrl: row['capa_url'] as String? ?? '',
     );
   }
 
@@ -59,6 +61,7 @@ class AparenciaRepository {
         'cor_destaque': config.corDestaque.toUpperCase(),
         'tema_modo': config.temaModo,
         'tema_automatico': config.temaAutomatico ? 1 : 0,
+        'capa_url': config.capaUrl.trim(),
         'atualizado_em': DateTime.now().toUtc().toIso8601String(),
       },
       where: 'id = ?',

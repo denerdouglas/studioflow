@@ -151,12 +151,13 @@ void main() {
         itens: [ItemCarrinho((await loja.buscarProduto(produto.id))!, 2)],
         desconto: 5,
         pagamentos: const {'pix': 20, 'cartao': 15},
+        profissionalId: 'prof_1',
       );
       expect((await loja.buscarProduto(produto.id))!.quantidadeAtual, 8);
       final pagamentos = await db.query(
-        'venda_pagamentos',
-        where: 'venda_id = ?',
-        whereArgs: [vendaId],
+        'movimentacoes_financeiras',
+        where: "id LIKE ?",
+        whereArgs: ['${vendaId}_p%'],
       );
       expect(pagamentos, hasLength(2));
       await loja.cancelarVenda(vendaId, 'Cancelamento de teste');
@@ -194,6 +195,7 @@ void main() {
         itens: [ItemCarrinho(atualizado, 2)],
         desconto: 0,
         pagamentos: const {'dinheiro': 40},
+        profissionalId: 'prof_1',
       );
       final resumo = await consignacao.resumo(id);
       expect(resumo.recebidos, 5);

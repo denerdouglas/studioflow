@@ -6,6 +6,17 @@ class Profissional {
   final String cargo;
   final String? fotoPerfil;
 
+  final String? documento; // CPF ou outro
+  final String? rg;
+  final String? dataNascimento;
+  final String? chavePix;
+  final String? banco;
+  final String? corAgenda;
+  final String? unidadeId;
+  final String? sexo;
+  final String? observacoes;
+  final String? contatoEmergencia;
+
   final bool ativo;
 
   final List<String> servicosIds;
@@ -27,6 +38,16 @@ class Profissional {
     this.email,
     required this.cargo,
     this.fotoPerfil,
+    this.documento,
+    this.rg,
+    this.dataNascimento,
+    this.chavePix,
+    this.banco,
+    this.corAgenda,
+    this.unidadeId,
+    this.sexo,
+    this.observacoes,
+    this.contatoEmergencia,
     this.ativo = true,
     this.servicosIds = const [],
     this.clientesVinculadosIds = const [],
@@ -80,6 +101,16 @@ class Profissional {
     String? email,
     String? cargo,
     String? fotoPerfil,
+    String? documento,
+    String? rg,
+    String? dataNascimento,
+    String? chavePix,
+    String? banco,
+    String? corAgenda,
+    String? unidadeId,
+    String? sexo,
+    String? observacoes,
+    String? contatoEmergencia,
     bool? ativo,
     List<String>? servicosIds,
     List<String>? clientesVinculadosIds,
@@ -97,6 +128,16 @@ class Profissional {
       email: email ?? this.email,
       cargo: cargo ?? this.cargo,
       fotoPerfil: fotoPerfil ?? this.fotoPerfil,
+      documento: documento ?? this.documento,
+      rg: rg ?? this.rg,
+      dataNascimento: dataNascimento ?? this.dataNascimento,
+      chavePix: chavePix ?? this.chavePix,
+      banco: banco ?? this.banco,
+      corAgenda: corAgenda ?? this.corAgenda,
+      unidadeId: unidadeId ?? this.unidadeId,
+      sexo: sexo ?? this.sexo,
+      observacoes: observacoes ?? this.observacoes,
+      contatoEmergencia: contatoEmergencia ?? this.contatoEmergencia,
       ativo: ativo ?? this.ativo,
       servicosIds: servicosIds ?? this.servicosIds,
       clientesVinculadosIds:

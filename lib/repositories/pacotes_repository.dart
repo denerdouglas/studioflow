@@ -8,6 +8,7 @@ import '../models/domain/acesso.dart';
 import '../models/domain/pacote_servico.dart';
 import '../services/session_controller.dart';
 import 'agenda_completa_repository.dart';
+import 'agenda_repository.dart' show ConflitoAgendaException;
 
 class PacotesRepository {
   final Future<Database> Function() _databaseProvider;
@@ -1117,7 +1118,21 @@ class PacotesRepository {
           limit: 1,
         );
         if (conflito.isNotEmpty || bloqueio.isNotEmpty) {
-          throw StateError('O reagendamento produziria conflito.');
+          final agenda = AgendaCompletaRepository(
+            databaseProvider: _databaseProvider,
+            comercioId: _comercioId,
+            usuarioId: _usuarioInformado,
+          );
+          final duracaoMinutos = fim.difference(inicio).inMinutes;
+          final alternativas = await agenda.horariosDisponiveis(
+            profissionalId: profissionalId,
+            data: inicio,
+            duracaoMinutos: duracaoMinutos,
+          );
+          throw ConflitoAgendaException(
+            'O reagendamento produziria conflito.',
+            alternativas,
+          );
         }
         await txn.update(
           'agendamentos',

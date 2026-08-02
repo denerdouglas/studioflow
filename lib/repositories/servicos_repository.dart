@@ -13,6 +13,10 @@ class ServicoRegistro {
   final bool ativo;
   final double custoEstimado;
   final DateTime dataCadastro;
+  final String? unidadeId;
+  final String? corIdentificacao;
+  final double? comissaoPercentual;
+  final List<String> profissionaisAutorizados;
 
   const ServicoRegistro({
     required this.id,
@@ -24,6 +28,10 @@ class ServicoRegistro {
     required this.ativo,
     required this.custoEstimado,
     required this.dataCadastro,
+    this.unidadeId,
+    this.corIdentificacao,
+    this.comissaoPercentual,
+    this.profissionaisAutorizados = const [],
   });
 
   Map<String, Object?> paraMapa() {
@@ -37,6 +45,9 @@ class ServicoRegistro {
       'ativo': ativo ? 1 : 0,
       'custo_estimado': custoEstimado,
       'data_cadastro': dataCadastro.toIso8601String(),
+      'unidade_id': unidadeId,
+      'cor_identificacao': corIdentificacao,
+      'comissao_percentual': comissaoPercentual,
     };
   }
 
@@ -53,7 +64,18 @@ class ServicoRegistro {
       dataCadastro:
           DateTime.tryParse(mapa['data_cadastro'] as String? ?? '') ??
           DateTime.now(),
+      unidadeId: mapa['unidade_id'] as String?,
+      corIdentificacao: mapa['cor_identificacao'] as String?,
+      comissaoPercentual: mapa['comissao_percentual'] != null ? (mapa['comissao_percentual'] as num).toDouble() : null,
+      profissionaisAutorizados: _parseProfissionais(mapa['profissionais_autorizados']),
     );
+  }
+
+  static List<String> _parseProfissionais(dynamic dado) {
+    if (dado == null) return const [];
+    if (dado is String) return dado.split(',').where((e) => e.isNotEmpty).toList();
+    if (dado is List) return List<String>.from(dado);
+    return const [];
   }
 
   ServicoRegistro copiarCom({
@@ -64,6 +86,10 @@ class ServicoRegistro {
     int? duracaoMinutos,
     bool? ativo,
     double? custoEstimado,
+    String? unidadeId,
+    String? corIdentificacao,
+    double? comissaoPercentual,
+    List<String>? profissionaisAutorizados,
   }) {
     return ServicoRegistro(
       id: id,
@@ -75,6 +101,10 @@ class ServicoRegistro {
       ativo: ativo ?? this.ativo,
       custoEstimado: custoEstimado ?? this.custoEstimado,
       dataCadastro: dataCadastro,
+      unidadeId: unidadeId ?? this.unidadeId,
+      corIdentificacao: corIdentificacao ?? this.corIdentificacao,
+      comissaoPercentual: comissaoPercentual ?? this.comissaoPercentual,
+      profissionaisAutorizados: profissionaisAutorizados ?? this.profissionaisAutorizados,
     );
   }
 }
@@ -90,14 +120,18 @@ class ServicosRepository {
   Future<List<ServicoRegistro>> listar({bool incluirInativos = true}) async {
     final Database db = await _databaseService.database;
 
-    final resultado = await db.query(
-      'servicos',
-      where: incluirInativos
-          ? 'comercio_id = ?'
-          : 'ativo = ? AND comercio_id = ?',
-      whereArgs: incluirInativos ? [_comercioId] : [1, _comercioId],
-      orderBy: 'nome COLLATE NOCASE ASC',
-    );
+    final baseQuery = '''
+      SELECT s.*, GROUP_CONCAT(ps.profissional_id) as profissionais_autorizados
+      FROM servicos s
+      LEFT JOIN profissional_servicos ps ON ps.servico_id = s.id
+      WHERE s.comercio_id = ?
+    ''';
+    
+    final query = incluirInativos 
+        ? '$baseQuery GROUP BY s.id ORDER BY s.nome COLLATE NOCASE ASC'
+        : '$baseQuery AND s.ativo = 1 GROUP BY s.id ORDER BY s.nome COLLATE NOCASE ASC';
+
+    final resultado = await db.rawQuery(query, [_comercioId]);
 
     return resultado.map(ServicoRegistro.doMapa).toList();
   }
@@ -108,23 +142,20 @@ class ServicosRepository {
   }) async {
     final Database db = await _databaseService.database;
 
-    final pesquisa = '%${texto.trim()}%';
+    final termo = '%${texto.toLowerCase()}%';
 
-    String where = 'comercio_id = ? AND (nome LIKE ? OR categoria LIKE ?)';
+    final baseQuery = '''
+      SELECT s.*, GROUP_CONCAT(ps.profissional_id) as profissionais_autorizados
+      FROM servicos s
+      LEFT JOIN profissional_servicos ps ON ps.servico_id = s.id
+      WHERE s.comercio_id = ? AND LOWER(s.nome) LIKE ?
+    ''';
+    
+    final query = incluirInativos 
+        ? '$baseQuery GROUP BY s.id ORDER BY s.nome COLLATE NOCASE ASC'
+        : '$baseQuery AND s.ativo = 1 GROUP BY s.id ORDER BY s.nome COLLATE NOCASE ASC';
 
-    final argumentos = <Object?>[_comercioId, pesquisa, pesquisa];
-
-    if (!incluirInativos) {
-      where += ' AND ativo = ?';
-      argumentos.add(1);
-    }
-
-    final resultado = await db.query(
-      'servicos',
-      where: where,
-      whereArgs: argumentos,
-      orderBy: 'nome COLLATE NOCASE ASC',
-    );
+    final resultado = await db.rawQuery(query, [_comercioId, termo]);
 
     return resultado.map(ServicoRegistro.doMapa).toList();
   }
@@ -132,12 +163,16 @@ class ServicosRepository {
   Future<ServicoRegistro?> buscarPorId(String id) async {
     final Database db = await _databaseService.database;
 
-    final resultado = await db.query(
-      'servicos',
-      where: 'id = ? AND comercio_id = ?',
-      whereArgs: [id, _comercioId],
-      limit: 1,
-    );
+    final query = '''
+      SELECT s.*, GROUP_CONCAT(ps.profissional_id) as profissionais_autorizados
+      FROM servicos s
+      LEFT JOIN profissional_servicos ps ON ps.servico_id = s.id
+      WHERE s.id = ? AND s.comercio_id = ?
+      GROUP BY s.id
+      LIMIT 1
+    ''';
+
+    final resultado = await db.rawQuery(query, [id, _comercioId]);
 
     if (resultado.isEmpty) {
       return null;
@@ -149,25 +184,49 @@ class ServicosRepository {
   Future<void> inserir(ServicoRegistro servico) async {
     final Database db = await _databaseService.database;
 
-    await db.insert('servicos', {
-      ...servico.paraMapa(),
-      'comercio_id': _comercioId,
-    }, conflictAlgorithm: ConflictAlgorithm.abort);
+    await db.transaction((txn) async {
+      await txn.insert('servicos', {
+        ...servico.paraMapa(),
+        'comercio_id': _comercioId,
+      }, conflictAlgorithm: ConflictAlgorithm.abort);
+
+      for (final profissionalId in servico.profissionaisAutorizados) {
+        await txn.insert('profissional_servicos', {
+          'profissional_id': profissionalId,
+          'servico_id': servico.id,
+        }, conflictAlgorithm: ConflictAlgorithm.replace);
+      }
+    });
   }
 
   Future<void> atualizar(ServicoRegistro servico) async {
     final Database db = await _databaseService.database;
 
-    final quantidadeAlterada = await db.update(
-      'servicos',
-      servico.paraMapa(),
-      where: 'id = ? AND comercio_id = ?',
-      whereArgs: [servico.id, _comercioId],
-    );
+    await db.transaction((txn) async {
+      final quantidadeAlterada = await txn.update(
+        'servicos',
+        servico.paraMapa(),
+        where: 'id = ? AND comercio_id = ?',
+        whereArgs: [servico.id, _comercioId],
+      );
 
-    if (quantidadeAlterada == 0) {
-      throw StateError('Serviço não encontrado.');
-    }
+      if (quantidadeAlterada == 0) {
+        throw StateError('Serviço não encontrado.');
+      }
+
+      await txn.delete(
+        'profissional_servicos',
+        where: 'servico_id = ?',
+        whereArgs: [servico.id],
+      );
+
+      for (final profissionalId in servico.profissionaisAutorizados) {
+        await txn.insert('profissional_servicos', {
+          'profissional_id': profissionalId,
+          'servico_id': servico.id,
+        }, conflictAlgorithm: ConflictAlgorithm.replace);
+      }
+    });
   }
 
   Future<void> excluir(String id) async {

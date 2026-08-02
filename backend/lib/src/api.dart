@@ -35,15 +35,15 @@ final class StudioFlowApi {
   StudioFlowApi({
     required this.store,
     required this.config,
+    required this.marketplace,
+    required this.adminService,
+    required this.academy,
+    required this.secureRedirect,
     PasswordSecurity? passwords,
     TokenSecurity? tokens,
     PasswordResetNotifier? resetNotifier,
-    MarketplaceService? marketplace,
-      MarketplaceAdminService? adminService,
     this.automations,
     this.catalog,
-    AcademyService? academy,
-    SecureRedirectService? secureRedirect,
     Uuid? uuid,
   }) : passwords = passwords ?? const PasswordSecurity(),
        tokens =
@@ -57,12 +57,6 @@ final class StudioFlowApi {
            (config.emailProviderUrl != null || config.smsProviderUrl != null
                ? HttpPasswordResetNotifier(config)
                : const DisabledPasswordResetNotifier()),
-         
-         marketplace = marketplace ?? MarketplaceService(store as MarketplaceBackendStore),
-         adminService = adminService ?? MarketplaceAdminService(store as MarketplaceBackendStore),
-         academy = academy ?? AcademyService(store as AcademyBackendStore),
-         secureRedirect = secureRedirect ?? SecureRedirectService(store as AcademyBackendStore),
-       
        _uuid = uuid ?? const Uuid();
 
   Handler get handler {
@@ -89,7 +83,9 @@ final class StudioFlowApi {
       ..get('/v1/academy/search', _academySearch)
       ..get('/v1/academy/categories', _academyCategories)
       ..get('/v1/academy/courses', _academySearch)
-      ..get('/academy/r/<clickId>', _academyRedirect);
+      ..get('/academy/r/<clickId>', _academyRedirect)
+      ..get('/v1/subscriptions/status', _subscriptionStatus)
+      ..post('/v1/scanner/scan', _scannerScan);
     return const Pipeline()
         .addMiddleware(_securityHeaders())
         .addMiddleware(_errorBoundary())
@@ -761,6 +757,24 @@ final class StudioFlowApi {
     } catch (e) {
       return _error(500, 'internal_error', 'Erro ao processar redirecionamento.');
     }
+  }
+
+  Future<Response> _subscriptionStatus(Request request) async {
+    _authenticate(request);
+    return _json(200, {
+      'status': 'active',
+      'plan': 'premium_homologation',
+      'expiresAt': DateTime.now().add(const Duration(days: 365)).toUtc().toIso8601String(),
+    });
+  }
+
+  Future<Response> _scannerScan(Request request) async {
+    _authenticate(request);
+    await _body(request);
+    return _json(200, {
+      'status': 'ok',
+      'message': 'Scanner endpoint mocked for Sprint 1 homologation',
+    });
   }
 }
 

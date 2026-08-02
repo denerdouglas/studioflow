@@ -10,3 +10,5 @@ export 'relatorios_repository.dart';
 export 'servicos_repository.dart';
 export 'infraestrutura_repository.dart';
 export 'academy_repository.dart';
+export 'unidades_repository.dart';
+export 'pecas_unicas_repository.dart';

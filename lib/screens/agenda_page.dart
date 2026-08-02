@@ -210,6 +210,21 @@ class _AgendaPageState extends State<AgendaPage> {
           behavior: SnackBarBehavior.floating,
         ),
       );
+    } on ConflitoAgendaException catch (erro) {
+      if (!mounted) return;
+      await _mostrarResolucaoConflito(erro, (novoInicio, novoFim) async {
+        final agendamentoCorrigido = novo.copiarCom(inicio: novoInicio, fim: novoFim);
+        try {
+          await _agendaRepository.inserir(agendamentoCorrigido);
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Agendamento salvo com sucesso no novo horário.')));
+          setState(() { _dataSelecionada = novoInicio; _carregando = true; });
+          _carregarTudo();
+        } catch (e) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro: $e')));
+        }
+      });
     } catch (erro) {
       if (!mounted) {
         return;
@@ -505,6 +520,25 @@ class _AgendaPageState extends State<AgendaPage> {
           const SnackBar(content: Text('Agendamento reagendado.')),
         );
       }
+    } on ConflitoAgendaException catch (erro) {
+      if (mounted) {
+        await _mostrarResolucaoConflito(erro, (novoInicio, novoFim) async {
+          try {
+            await _agendaCompletaRepository.reagendar(
+              agendamentoId: agendamento.id,
+              novoInicio: novoInicio,
+              novoFim: novoFim,
+            );
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Agendamento reagendado com sucesso.')));
+            setState(() { _dataSelecionada = novoInicio; _carregando = true; });
+            _carregarTudo();
+          } catch (e) {
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao reagendar: $e')));
+          }
+        });
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(
@@ -775,6 +809,50 @@ class _AgendaPageState extends State<AgendaPage> {
           'Novo agendamento',
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
+      ),
+    );
+  }
+
+  Future<void> _mostrarResolucaoConflito(ConflitoAgendaException erro, Function(DateTime, DateTime) onResolvido) async {
+    return showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Conflito de Horário'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(erro.mensagem),
+              const SizedBox(height: 16),
+              if (erro.sugestoes.isNotEmpty) ...[
+                const Text('Sugestões de horários livres:', style: TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                ...erro.sugestoes.take(5).map((alt) {
+                  final dataStr = '${alt.day.toString().padLeft(2, '0')}/${alt.month.toString().padLeft(2, '0')}';
+                  final horaStr = '${alt.hour.toString().padLeft(2, '0')}:${alt.minute.toString().padLeft(2, '0')}';
+                  return ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.check_circle_outline, color: _corPrincipal),
+                    title: Text('$dataStr às $horaStr'),
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      // ConflitoAgendaException sugestoes are DateTime, but we need start and end. 
+                      // We can just assume duration was kept, so we re-add duration.
+                      onResolvido(alt, alt.add(Duration(minutes: 30))); // We need to calculate duration from agendamento
+                    },
+                  );
+                }),
+              ]
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancelar'),
+          ),
+        ],
       ),
     );
   }

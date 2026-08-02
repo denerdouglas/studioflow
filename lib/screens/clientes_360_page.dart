@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-
+import 'package:url_launcher/url_launcher.dart';
 import '../core/helpers/app_formatters.dart';
 import '../models/domain/atendimento.dart';
 import '../repositories/cliente_360_repository.dart';
@@ -100,6 +100,39 @@ class _Cliente360DetalhePageState extends State<Cliente360DetalhePage> {
     }
   }
 
+  Future<void> _abrirWhatsApp(String telefone) async {
+    final numero = telefone.replaceAll(RegExp(r'\D'), '');
+    if (numero.isEmpty) return;
+    final url = Uri.parse('whatsapp://send?phone=55$numero');
+    if (await canLaunchUrl(url)) {
+      await launchUrl(url);
+    } else {
+      final webUrl = Uri.parse('https://wa.me/55$numero');
+      if (await canLaunchUrl(webUrl)) await launchUrl(webUrl);
+    }
+  }
+
+  Future<void> _abrirInstagram(String handle) async {
+    final user = handle.replaceAll('@', '').trim();
+    if (user.isEmpty) return;
+    final url = Uri.parse('instagram://user?username=$user');
+    if (await canLaunchUrl(url)) {
+      await launchUrl(url);
+    } else {
+      final webUrl = Uri.parse('https://instagram.com/$user');
+      if (await canLaunchUrl(webUrl)) await launchUrl(webUrl);
+    }
+  }
+
+  Future<void> _abrirTelefone(String telefone) async {
+    final numero = telefone.replaceAll(RegExp(r'\D'), '');
+    if (numero.isEmpty) return;
+    final url = Uri.parse('tel:$numero');
+    if (await canLaunchUrl(url)) {
+      await launchUrl(url);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final r = _resumo;
@@ -114,13 +147,52 @@ class _Cliente360DetalhePageState extends State<Cliente360DetalhePage> {
               children: [
                 Card(
                   color: Theme.of(context).colorScheme.primaryContainer,
-                  child: ListTile(
-                    leading: const Icon(Icons.person),
-                    title: Text(r.nome),
-                    subtitle: Text(
-                      '${r.whatsapp}${r.email.isEmpty ? '' : '\n${r.email}'}\nPreferência: ${r.profissionalPreferido}',
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.person, size: 40),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(r.nome, style: Theme.of(context).textTheme.titleLarge),
+                                  Text('Preferência: ${r.profissionalPreferido}'),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                          children: [
+                            if (r.whatsapp.isNotEmpty)
+                              IconButton(
+                                icon: const Icon(Icons.message),
+                                tooltip: 'WhatsApp',
+                                onPressed: () => _abrirWhatsApp(r.whatsapp),
+                              ),
+                            if (r.instagram.isNotEmpty)
+                              IconButton(
+                                icon: const Icon(Icons.camera_alt),
+                                tooltip: 'Instagram',
+                                onPressed: () => _abrirInstagram(r.instagram),
+                              ),
+                            if (r.telefone.isNotEmpty)
+                              IconButton(
+                                icon: const Icon(Icons.phone),
+                                tooltip: 'Telefone',
+                                onPressed: () => _abrirTelefone(r.telefone),
+                              ),
+                          ],
+                        ),
+                      ],
                     ),
-                    isThreeLine: true,
                   ),
                 ),
                 Wrap(

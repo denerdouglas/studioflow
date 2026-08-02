@@ -28,11 +28,31 @@ class _VendasLojaPageState extends State<VendasLojaPage> {
   double get total => subtotal - descontoValor;
 
   void adicionar(ProdutoLoja p) {
+    if (p.id.startsWith('peca_')) {
+      if (itens.any((x) => x.produto.id == p.id)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Peça única já adicionada ao carrinho.'))
+        );
+        return;
+      }
+    }
     final i = itens.indexWhere((x) => x.produto.id == p.id);
     setState(() {
       if (i < 0) {
+        if (!p.id.startsWith('peca_') && p.quantidadeAtual < 1) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Estoque insuficiente para este produto.'))
+          );
+          return;
+        }
         itens.add(ItemCarrinho(p, 1));
       } else {
+        if (!p.id.startsWith('peca_') && p.quantidadeAtual < itens[i].quantidade + 1) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Estoque insuficiente para adicionar mais deste produto.'))
+          );
+          return;
+        }
         itens[i] = ItemCarrinho(p, itens[i].quantidade + 1);
       }
     });
@@ -181,6 +201,7 @@ class _VendasLojaPageState extends State<VendasLojaPage> {
         desconto: descontoValor,
         pagamentos: pagamentos,
         clienteId: cliente?.id,
+        profissionalId: SessionController.instance.usuario?.id ?? 'prof_1',
       );
       if (!mounted) return;
       final resumo =
@@ -270,12 +291,26 @@ class _VendasLojaPageState extends State<VendasLojaPage> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           IconButton(
-                            onPressed: () => setState(
-                              () => itens[index] = ItemCarrinho(
-                                item.produto,
-                                item.quantidade + 1,
-                              ),
-                            ),
+                            onPressed: () {
+                              if (item.produto.id.startsWith('peca_')) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('Não é possível aumentar a quantidade de uma peça única.'))
+                                );
+                                return;
+                              }
+                              if (item.quantidade + 1 > item.produto.quantidadeAtual) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('Estoque insuficiente.'))
+                                );
+                                return;
+                              }
+                              setState(
+                                () => itens[index] = ItemCarrinho(
+                                  item.produto,
+                                  item.quantidade + 1,
+                                ),
+                              );
+                            },
                             icon: const Icon(Icons.add_circle_outline),
                           ),
                           IconButton(

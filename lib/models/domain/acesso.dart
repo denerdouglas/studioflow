@@ -243,6 +243,7 @@ class UsuarioAcesso {
   final String corDestaque;
   final String temaModo;
   final bool temaAutomatico;
+  final String capaUrl;
 
   const UsuarioAcesso({
     required this.id,
@@ -264,6 +265,7 @@ class UsuarioAcesso {
     this.corDestaque = '#D9C7F2',
     this.temaModo = 'claro',
     this.temaAutomatico = true,
+    this.capaUrl = '',
   });
 
   bool pode(ModuloPermissao modulo) {
@@ -294,6 +296,7 @@ class UsuarioGerenciavel {
   final String corDestaque;
   final String temaModo;
   final bool temaAutomatico;
+  final String capaUrl;
 
   const UsuarioGerenciavel({
     required this.id,
@@ -313,6 +316,7 @@ class UsuarioGerenciavel {
     this.corDestaque = '#D9C7F2',
     this.temaModo = 'claro',
     this.temaAutomatico = true,
+    this.capaUrl = '',
   });
 }
 

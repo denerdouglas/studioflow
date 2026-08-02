@@ -12,3 +12,5 @@ export 'src/store.dart';
 
 export 'src/marketplace_admin_service.dart';
 export 'src/admin.dart';
+export 'src/academy.dart';
+export 'src/academy_postgres_store.dart';

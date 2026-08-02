@@ -1,6 +1,13 @@
 import 'package:flutter/material.dart';
 
 import '../repositories/servicos_repository.dart';
+import '../repositories/unidades_repository.dart';
+import '../repositories/funcionarios_repository.dart';
+import '../repositories/estoque_repository.dart';
+import '../models/domain/unidade.dart';
+import '../database/database_service.dart';
+import '../services/session_controller.dart';
+import 'package:sqflite/sqflite.dart';
 
 class ServicosPage extends StatefulWidget {
   const ServicosPage({super.key});
@@ -309,6 +316,21 @@ class _ServicosPageState extends State<ServicosPage> {
     if (acao == 'excluir') {
       await _excluirServico(servico);
     }
+
+    if (acao == 'ficha') {
+      _abrirFichaConsumo(servico);
+    }
+  }
+
+  void _abrirFichaConsumo(ServicoRegistro servico) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) {
+        return FichaConsumoSheet(servico: servico);
+      },
+    );
   }
 
   @override
@@ -772,6 +794,14 @@ class OpcoesServicoSheet extends StatelessWidget {
                 Navigator.pop(context, 'excluir');
               },
             ),
+          _OpcaoServico(
+            titulo: 'Ficha de consumo (Materiais)',
+            icone: Icons.inventory_2_outlined,
+            cor: const Color(0xFF15996B),
+            onTap: () {
+              Navigator.pop(context, 'ficha');
+            },
+          ),
         ],
       ),
     );
@@ -860,6 +890,23 @@ class _ServicoFormSheetState extends State<ServicoFormSheet> {
     'Outros',
   ];
 
+  final List<String> _coresHex = const [
+    '#70569A', '#D64D64', '#E58A25', '#15996B', '#2D2140', '#0000FF', '#008000', '#FF00FF', '#FF0000', '#FFFF00', '#00FFFF'
+  ];
+
+  final UnidadesRepository _unidadesRepository = UnidadesRepository();
+  final FuncionariosRepository _funcionariosRepository = FuncionariosRepository();
+
+  List<Unidade> _unidades = [];
+  List<ProfissionalRegistro> _profissionais = [];
+  
+  String? _unidadeId;
+  String? _corIdentificacao;
+  final TextEditingController _comissaoPercentualController = TextEditingController();
+  List<String> _profissionaisAutorizados = [];
+
+  bool _carregandoDependencias = true;
+
   @override
   void initState() {
     super.initState();
@@ -879,9 +926,34 @@ class _ServicoFormSheetState extends State<ServicoFormSheet> {
 
       _categoria = servico.categoria;
       _ativo = servico.ativo;
+      
+      _unidadeId = servico.unidadeId;
+      _corIdentificacao = servico.corIdentificacao;
+      _comissaoPercentualController.text = servico.comissaoPercentual?.toStringAsFixed(2) ?? '';
+      _profissionaisAutorizados = List.from(servico.profissionaisAutorizados);
 
       if (!_categorias.contains(_categoria)) {
         _categoria = 'Outros';
+      }
+    }
+    
+    _carregarDependencias();
+  }
+  
+  Future<void> _carregarDependencias() async {
+    try {
+      final unidades = await _unidadesRepository.listar();
+      final profissionais = await _funcionariosRepository.listar(incluirInativos: false);
+      if (mounted) {
+        setState(() {
+          _unidades = unidades;
+          _profissionais = profissionais;
+          _carregandoDependencias = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _carregandoDependencias = false);
       }
     }
   }
@@ -893,6 +965,7 @@ class _ServicoFormSheetState extends State<ServicoFormSheet> {
     _duracaoController.dispose();
     _custoController.dispose();
     _descricaoController.dispose();
+    _comissaoPercentualController.dispose();
     super.dispose();
   }
 
@@ -907,6 +980,9 @@ class _ServicoFormSheetState extends State<ServicoFormSheet> {
 
     final custo =
         double.tryParse(_custoController.text.trim().replaceAll(',', '.')) ?? 0;
+        
+    final comissaoPercentual =
+        double.tryParse(_comissaoPercentualController.text.trim().replaceAll(',', '.'));
 
     if (nome.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -965,6 +1041,10 @@ class _ServicoFormSheetState extends State<ServicoFormSheet> {
       ativo: _ativo,
       custoEstimado: custo,
       dataCadastro: existente?.dataCadastro ?? agora,
+      unidadeId: _unidadeId,
+      corIdentificacao: _corIdentificacao,
+      comissaoPercentual: comissaoPercentual,
+      profissionaisAutorizados: _profissionaisAutorizados,
     );
 
     Navigator.pop(context, servico);
@@ -1099,6 +1179,86 @@ class _ServicoFormSheetState extends State<ServicoFormSheet> {
                 prefixIcon: Icon(Icons.notes_outlined),
               ),
             ),
+            const SizedBox(height: 14),
+            DropdownButtonFormField<String>(
+              initialValue: _unidadeId,
+              isExpanded: true,
+              decoration: const InputDecoration(
+                labelText: 'Unidade',
+                prefixIcon: Icon(Icons.store_outlined),
+              ),
+              items: _unidades.map((unidade) {
+                return DropdownMenuItem(
+                  value: unidade.id,
+                  child: Text(unidade.nome),
+                );
+              }).toList(),
+              onChanged: (valor) {
+                setState(() {
+                  _unidadeId = valor;
+                });
+              },
+            ),
+            const SizedBox(height: 14),
+            TextField(
+              controller: _comissaoPercentualController,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              decoration: const InputDecoration(
+                labelText: 'Comissão (%)',
+                prefixIcon: Icon(Icons.percent_outlined),
+              ),
+            ),
+            const SizedBox(height: 14),
+            const Text('Cor de Identificação', style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF2D2140))),
+            const SizedBox(height: 8),
+            SizedBox(
+              height: 40,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                itemCount: _coresHex.length,
+                itemBuilder: (context, index) {
+                  final hex = _coresHex[index];
+                  final color = Color(int.parse(hex.replaceFirst('#', '0xff')));
+                  final selected = _corIdentificacao == hex;
+                  return GestureDetector(
+                    onTap: () => setState(() => _corIdentificacao = hex),
+                    child: Container(
+                      width: 40,
+                      height: 40,
+                      margin: const EdgeInsets.only(right: 8),
+                      decoration: BoxDecoration(
+                        color: color,
+                        shape: BoxShape.circle,
+                        border: selected ? Border.all(color: Colors.black, width: 3) : null,
+                      ),
+                    ),
+                  );
+                }
+              ),
+            ),
+            const SizedBox(height: 14),
+            const Text('Profissionais Autorizados', style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF2D2140))),
+            const SizedBox(height: 8),
+            if (_carregandoDependencias)
+              const CircularProgressIndicator()
+            else
+              ..._profissionais.map((p) {
+                return CheckboxListTile(
+                  title: Text(p.nome),
+                  value: _profissionaisAutorizados.contains(p.id),
+                  onChanged: (val) {
+                    setState(() {
+                      if (val == true) {
+                        _profissionaisAutorizados.add(p.id);
+                      } else {
+                        _profissionaisAutorizados.remove(p.id);
+                      }
+                    });
+                  },
+                );
+              }),
             const SizedBox(height: 8),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
@@ -1143,6 +1303,280 @@ class _ServicoFormSheetState extends State<ServicoFormSheet> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class ServicoMaterialRegistro {
+  final String id;
+  final String servicoId;
+  final String itemEstoqueId;
+  final double quantidade;
+  final String? unidadeMedida;
+  final String comercioId;
+
+  const ServicoMaterialRegistro({
+    required this.id,
+    required this.servicoId,
+    required this.itemEstoqueId,
+    required this.quantidade,
+    this.unidadeMedida,
+    required this.comercioId,
+  });
+
+  Map<String, Object?> paraMapa() {
+    return {
+      'id': id,
+      'servico_id': servicoId,
+      'item_estoque_id': itemEstoqueId,
+      'quantidade': quantidade,
+      'unidade_medida': unidadeMedida,
+      'comercio_id': comercioId,
+    };
+  }
+
+  factory ServicoMaterialRegistro.doMapa(Map<String, Object?> mapa) {
+    return ServicoMaterialRegistro(
+      id: mapa['id'] as String,
+      servicoId: mapa['servico_id'] as String,
+      itemEstoqueId: mapa['item_estoque_id'] as String,
+      quantidade: (mapa['quantidade'] as num).toDouble(),
+      unidadeMedida: mapa['unidade_medida'] as String?,
+      comercioId: mapa['comercio_id'] as String,
+    );
+  }
+}
+
+class ServicoMateriaisRepository {
+  final DatabaseService _databaseService;
+
+  ServicoMateriaisRepository({DatabaseService? databaseService})
+    : _databaseService = databaseService ?? DatabaseService.instance;
+
+  String get _comercioId => SessionController.instance.usuario!.comercioId;
+
+  Future<void> criarTabelaSeNecessario() async {
+    final db = await _databaseService.database;
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS servico_materiais (
+        id TEXT PRIMARY KEY,
+        servico_id TEXT NOT NULL,
+        item_estoque_id TEXT NOT NULL,
+        quantidade REAL NOT NULL,
+        unidade_medida TEXT,
+        comercio_id TEXT NOT NULL,
+        FOREIGN KEY (servico_id) REFERENCES servicos(id) ON DELETE CASCADE,
+        FOREIGN KEY (item_estoque_id) REFERENCES estoque(id) ON DELETE CASCADE
+      )
+    ''');
+  }
+
+  Future<List<ServicoMaterialRegistro>> listar(String servicoId) async {
+    await criarTabelaSeNecessario();
+    final db = await _databaseService.database;
+    final resultado = await db.query(
+      'servico_materiais',
+      where: 'servico_id = ? AND comercio_id = ?',
+      whereArgs: [servicoId, _comercioId],
+    );
+    return resultado.map(ServicoMaterialRegistro.doMapa).toList();
+  }
+
+  Future<void> adicionar(ServicoMaterialRegistro material) async {
+    await criarTabelaSeNecessario();
+    final db = await _databaseService.database;
+    await db.insert(
+      'servico_materiais',
+      material.paraMapa(),
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  Future<void> remover(String id) async {
+    await criarTabelaSeNecessario();
+    final db = await _databaseService.database;
+    await db.delete(
+      'servico_materiais',
+      where: 'id = ? AND comercio_id = ?',
+      whereArgs: [id, _comercioId],
+    );
+  }
+}
+
+class FichaConsumoSheet extends StatefulWidget {
+  final ServicoRegistro servico;
+
+  const FichaConsumoSheet({super.key, required this.servico});
+
+  @override
+  State<FichaConsumoSheet> createState() => _FichaConsumoSheetState();
+}
+
+class _FichaConsumoSheetState extends State<FichaConsumoSheet> {
+  final ServicoMateriaisRepository _repoMateriais = ServicoMateriaisRepository();
+  final EstoqueRepository _repoEstoque = EstoqueRepository();
+
+  List<ServicoMaterialRegistro> _materiais = [];
+  List<ItemEstoqueRegistro> _estoque = [];
+  bool _carregando = true;
+
+  String? _itemSelecionado;
+  final TextEditingController _qtdController = TextEditingController();
+  final TextEditingController _unidadeController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _carregarDados();
+  }
+
+  Future<void> _carregarDados() async {
+    setState(() => _carregando = true);
+    try {
+      final estoque = await _repoEstoque.listar(incluirInativos: false);
+      final materiais = await _repoMateriais.listar(widget.servico.id);
+      if (mounted) {
+        setState(() {
+          _estoque = estoque;
+          _materiais = materiais;
+          _carregando = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) setState(() => _carregando = false);
+    }
+  }
+
+  Future<void> _adicionarItem() async {
+    if (_itemSelecionado == null) return;
+    final qtd = double.tryParse(_qtdController.text.replaceAll(',', '.'));
+    if (qtd == null || qtd <= 0) return;
+
+    final novoItem = ServicoMaterialRegistro(
+      id: DateTime.now().microsecondsSinceEpoch.toString(),
+      servicoId: widget.servico.id,
+      itemEstoqueId: _itemSelecionado!,
+      quantidade: qtd,
+      unidadeMedida: _unidadeController.text,
+      comercioId: SessionController.instance.usuario!.comercioId,
+    );
+
+    await _repoMateriais.adicionar(novoItem);
+    _itemSelecionado = null;
+    _qtdController.clear();
+    _unidadeController.clear();
+    await _carregarDados();
+  }
+
+  Future<void> _removerItem(String id) async {
+    await _repoMateriais.remover(id);
+    await _carregarDados();
+  }
+
+  @override
+  void dispose() {
+    _qtdController.dispose();
+    _unidadeController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final teclado = MediaQuery.viewInsetsOf(context).bottom;
+
+    return Container(
+      padding: EdgeInsets.fromLTRB(22, 22, 22, teclado + 25),
+      height: MediaQuery.of(context).size.height * 0.85,
+      decoration: const BoxDecoration(
+        color: Color(0xFFF9F6FC),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Center(
+            child: Container(
+              width: 48,
+              height: 5,
+              decoration: BoxDecoration(
+                color: const Color(0xFFD6CDDD),
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+          const Text(
+            'Ficha de Consumo',
+            style: TextStyle(
+              fontSize: 25,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF2D2140),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Materiais usados no serviço: ${widget.servico.nome}',
+            style: const TextStyle(fontSize: 13, color: Color(0xFF766A85)),
+          ),
+          const SizedBox(height: 22),
+          DropdownButtonFormField<String>(
+            initialValue: _itemSelecionado,
+            isExpanded: true,
+            decoration: const InputDecoration(labelText: 'Item de Estoque'),
+            items: _estoque.map((item) {
+              return DropdownMenuItem(
+                value: item.id,
+                child: Text(item.nome),
+              );
+            }).toList(),
+            onChanged: (v) => setState(() => _itemSelecionado = v),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _qtdController,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(labelText: 'Quantidade'),
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: TextField(
+                  controller: _unidadeController,
+                  decoration: const InputDecoration(labelText: 'Unidade de medida'),
+                ),
+              ),
+              const SizedBox(width: 14),
+              IconButton(
+                icon: const Icon(Icons.add_circle, color: Color(0xFF70569A), size: 36),
+                onPressed: _adicionarItem,
+              )
+            ],
+          ),
+          const SizedBox(height: 22),
+          Expanded(
+            child: _carregando
+                ? const Center(child: CircularProgressIndicator())
+                : ListView.builder(
+                    itemCount: _materiais.length,
+                    itemBuilder: (context, index) {
+                      final material = _materiais[index];
+                      final itemEstoque = _estoque.firstWhere((e) => e.id == material.itemEstoqueId, orElse: () => ItemEstoqueRegistro.doMapa({'id':'','nome':'Desconhecido'}));
+                      return ListTile(
+                        title: Text(itemEstoque.nome),
+                        subtitle: Text('${material.quantidade} ${material.unidadeMedida ?? ''}'),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.delete, color: Colors.red),
+                          onPressed: () => _removerItem(material.id),
+                        ),
+                      );
+                    },
+                  ),
+          )
+        ],
       ),
     );
   }

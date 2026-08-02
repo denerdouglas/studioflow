@@ -836,6 +836,7 @@ class AcessoRepository {
       corDestaque: mapa['cor_destaque'] as String? ?? '#D9C7F2',
       temaModo: mapa['tema_modo'] as String? ?? 'claro',
       temaAutomatico: (mapa['tema_automatico'] as num? ?? 1) == 1,
+      capaUrl: mapa['capa_url'] as String? ?? '',
     );
   }
 

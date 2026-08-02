@@ -10,6 +10,9 @@ Future<void> main() async {
   final marketplaceStore = MarketplacePostgresStore(store.pool);
   final marketplace = MarketplaceService(marketplaceStore);
   final adminService = MarketplaceAdminService(marketplaceStore);
+  final academyStore = AcademyPostgresStore(store);
+  final academy = AcademyService(academyStore);
+  final secureRedirect = SecureRedirectService(academyStore);
   final automations = PostgresMessageAutomationStore.fromUrl(
     config.databaseUrl,
   );
@@ -55,6 +58,8 @@ Future<void> main() async {
     store: store,
     marketplace: marketplace,
     adminService: adminService,
+    academy: academy,
+    secureRedirect: secureRedirect,
     automations: automations,
     catalog: catalog,
     config: config,

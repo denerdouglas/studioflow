@@ -13,6 +13,23 @@ class ConfiguracaoComercio {
   final bool notificacoesAtivas;
   final bool confirmarExclusoes;
   final bool permitirGaleriaClientes;
+  final String? documentoTipo;
+  final String? documento;
+  final String? inscricaoEstadual;
+  final String? instagram;
+  final String? cep;
+  final String? numero;
+  final String? complemento;
+  final String? bairro;
+  final String? cidade;
+  final String? estado;
+  final String? capaUrl;
+  final String? logoPath;
+  final String? corPrincipal;
+  final String? corSecundaria;
+  final String? corDestaque;
+  final String? temaModo;
+  final bool? temaAutomatico;
 
   const ConfiguracaoComercio({
     required this.comercioId,
@@ -29,6 +46,23 @@ class ConfiguracaoComercio {
     required this.notificacoesAtivas,
     required this.confirmarExclusoes,
     this.permitirGaleriaClientes = false,
+    this.documentoTipo,
+    this.documento,
+    this.inscricaoEstadual,
+    this.instagram,
+    this.cep,
+    this.numero,
+    this.complemento,
+    this.bairro,
+    this.cidade,
+    this.estado,
+    this.capaUrl,
+    this.logoPath,
+    this.corPrincipal,
+    this.corSecundaria,
+    this.corDestaque,
+    this.temaModo,
+    this.temaAutomatico,
   });
 
   String get moeda => 'BRL';
@@ -47,6 +81,23 @@ class ConfiguracaoComercio {
     bool? notificacoesAtivas,
     bool? confirmarExclusoes,
     bool? permitirGaleriaClientes,
+    String? documentoTipo,
+    String? documento,
+    String? inscricaoEstadual,
+    String? instagram,
+    String? cep,
+    String? numero,
+    String? complemento,
+    String? bairro,
+    String? cidade,
+    String? estado,
+    String? capaUrl,
+    String? logoPath,
+    String? corPrincipal,
+    String? corSecundaria,
+    String? corDestaque,
+    String? temaModo,
+    bool? temaAutomatico,
   }) {
     return ConfiguracaoComercio(
       comercioId: comercioId,
@@ -63,6 +114,23 @@ class ConfiguracaoComercio {
       notificacoesAtivas: notificacoesAtivas ?? this.notificacoesAtivas,
       confirmarExclusoes: confirmarExclusoes ?? this.confirmarExclusoes,
       permitirGaleriaClientes: permitirGaleriaClientes ?? this.permitirGaleriaClientes,
+      documentoTipo: documentoTipo ?? this.documentoTipo,
+      documento: documento ?? this.documento,
+      inscricaoEstadual: inscricaoEstadual ?? this.inscricaoEstadual,
+      instagram: instagram ?? this.instagram,
+      cep: cep ?? this.cep,
+      numero: numero ?? this.numero,
+      complemento: complemento ?? this.complemento,
+      bairro: bairro ?? this.bairro,
+      cidade: cidade ?? this.cidade,
+      estado: estado ?? this.estado,
+      capaUrl: capaUrl ?? this.capaUrl,
+      logoPath: logoPath ?? this.logoPath,
+      corPrincipal: corPrincipal ?? this.corPrincipal,
+      corSecundaria: corSecundaria ?? this.corSecundaria,
+      corDestaque: corDestaque ?? this.corDestaque,
+      temaModo: temaModo ?? this.temaModo,
+      temaAutomatico: temaAutomatico ?? this.temaAutomatico,
     );
   }
 }

@@ -28,7 +28,7 @@ val releaseSigningAvailable = listOf(
 ).all { !it.isNullOrBlank() }
 
 android {
-    namespace = "com.example.studioflow"
+    namespace = "com.rolgsystems.studioflow"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -39,7 +39,7 @@ android {
 
     defaultConfig {
         // Identificador comercial definitivo do StudioFlow.
-        applicationId = "com.example.studioflow"
+        applicationId = "com.rolgsystems.studioflow"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
@@ -86,3 +86,4 @@ kotlin {
 flutter {
     source = "../.."
 }
+

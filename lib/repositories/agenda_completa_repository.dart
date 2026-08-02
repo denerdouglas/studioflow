@@ -7,6 +7,7 @@ import '../models/domain/acesso.dart';
 import '../models/domain/atendimento.dart';
 import '../services/session_controller.dart';
 import '../services/whatsapp_queue_service.dart';
+import 'agenda_repository.dart' show ConflitoAgendaException;
 import 'pacotes_repository.dart';
 
 class DiagnosticoExclusaoAgendamento {
@@ -228,8 +229,9 @@ class AgendaCompletaRepository {
     required DateTime data,
     required int duracaoMinutos,
     int intervaloMinutos = 15,
+    DatabaseExecutor? txn,
   }) async {
-    final db = await _databaseProvider();
+    final db = txn ?? await _databaseProvider();
     final horarios = await db.query(
       'horarios_profissionais',
       where:
@@ -331,7 +333,17 @@ class AgendaCompletaRepository {
         limit: 1,
       );
       if (conflitos.isNotEmpty) {
-        throw StateError('O novo horário está ocupado.');
+        final duracaoMinutos = novoFim.difference(novoInicio).inMinutes;
+        final alternativas = await horariosDisponiveis(
+          profissionalId: atual['profissional_id'] as String,
+          data: novoInicio,
+          duracaoMinutos: duracaoMinutos,
+          txn: txn,
+        );
+        throw ConflitoAgendaException(
+          'O novo horário está ocupado.',
+          alternativas,
+        );
       }
       await txn.update(
         'agendamentos',
@@ -565,6 +577,12 @@ class AgendaCompletaRepository {
         where: 'id = ? AND comercio_id = ?',
         whereArgs: [agendamentoId, _comercioId],
       );
+      
+      if (status == 'concluido' && anterior != 'concluido') {
+        await _consumirMateriaisEstoque(txn, agendamentoId: agendamentoId);
+      } else if (anterior == 'concluido' && status != 'concluido') {
+        await _estornarMateriaisEstoque(txn, agendamentoId: agendamentoId);
+      }
       if (status == 'cancelado') {
         final agora = DateTime.now().toUtc().toIso8601String();
         await txn.update(
@@ -673,5 +691,143 @@ class AgendaCompletaRepository {
       minutos ~/ 60,
       minutos % 60,
     );
+  }
+
+  double _calcularFatorConversao(String unidadeMedida, String unidadeEstoque, String unidadeConteudo, double conteudoPorUnidade) {
+    if (unidadeMedida == unidadeEstoque || unidadeMedida.isEmpty) return 1.0;
+    
+    if (unidadeMedida == unidadeConteudo && conteudoPorUnidade > 0) {
+      return 1.0 / conteudoPorUnidade;
+    }
+    
+    if (unidadeMedida == 'ml' || unidadeMedida == 'mililitro') {
+      if (unidadeEstoque == 'litro' || unidadeEstoque == 'l') return 1.0 / 1000.0;
+    } else if (unidadeMedida == 'g' || unidadeMedida == 'grama') {
+      if (unidadeEstoque == 'kg' || unidadeEstoque == 'quilograma') return 1.0 / 1000.0;
+    }
+
+    return 1.0;
+  }
+
+  Future<void> _consumirMateriaisEstoque(
+    DatabaseExecutor txn, {
+    required String agendamentoId,
+  }) async {
+    final baixasExistentes = await txn.query(
+      'auditoria_estoque_consumo',
+      columns: ['id'],
+      where: 'agendamento_id = ? AND comercio_id = ? AND tipo_movimento = ?',
+      whereArgs: [agendamentoId, _comercioId, 'baixa'],
+      limit: 1,
+    );
+    if (baixasExistentes.isNotEmpty) return;
+
+    final agendamento = await txn.query(
+      'agendamentos',
+      columns: ['cliente_id', 'servico_id', 'profissional_id'],
+      where: 'id = ? AND comercio_id = ?',
+      whereArgs: [agendamentoId, _comercioId],
+      limit: 1,
+    );
+
+    if (agendamento.isEmpty) return;
+
+    final servicoId = agendamento.first['servico_id'] as String;
+    final clienteId = agendamento.first['cliente_id'] as String;
+    final profissionalId = agendamento.first['profissional_id'] as String;
+
+    final materiais = await txn.query(
+      'servico_materiais',
+      columns: ['estoque_id', 'quantidade', 'unidade_medida'],
+      where: 'servico_id = ? AND comercio_id = ? AND ativo = 1',
+      whereArgs: [servicoId, _comercioId],
+    );
+
+    for (final material in materiais) {
+      final estoqueId = material['estoque_id'] as String;
+      final quantidadeOriginal = material['quantidade'] as num;
+      final unidadeMedida = material['unidade_medida'] as String? ?? '';
+
+      final estoqueItem = await txn.query(
+        'estoque',
+        columns: ['unidade', 'conteudo_por_unidade', 'unidade_conteudo'],
+        where: 'id = ? AND comercio_id = ?',
+        whereArgs: [estoqueId, _comercioId],
+        limit: 1,
+      );
+
+      if (estoqueItem.isEmpty) continue;
+
+      final unidadeEstoque = estoqueItem.first['unidade'] as String? ?? '';
+      final unidadeConteudo = estoqueItem.first['unidade_conteudo'] as String? ?? '';
+      final conteudoPorUnidade = (estoqueItem.first['conteudo_por_unidade'] as num? ?? 1).toDouble();
+
+      final fator = _calcularFatorConversao(unidadeMedida, unidadeEstoque, unidadeConteudo, conteudoPorUnidade);
+      final quantidadeCalculada = quantidadeOriginal * fator;
+
+      await txn.execute(
+        'UPDATE estoque SET quantidade_atual = quantidade_atual - ? WHERE id = ? AND comercio_id = ?',
+        [quantidadeCalculada, estoqueId, _comercioId],
+      );
+
+      await txn.insert('auditoria_estoque_consumo', {
+        'id': _id('aud'),
+        'comercio_id': _comercioId,
+        'data_hora': DateTime.now().toUtc().toIso8601String(),
+        'profissional_id': profissionalId,
+        'cliente_id': clienteId,
+        'servico_id': servicoId,
+        'agendamento_id': agendamentoId,
+        'estoque_id': estoqueId,
+        'quantidade': quantidadeCalculada,
+        'tipo_movimento': 'baixa',
+        'criado_em': DateTime.now().toUtc().toIso8601String(),
+      });
+    }
+  }
+
+  Future<void> _estornarMateriaisEstoque(
+    DatabaseExecutor txn, {
+    required String agendamentoId,
+  }) async {
+    final estornosExistentes = await txn.query(
+      'auditoria_estoque_consumo',
+      columns: ['id'],
+      where: 'agendamento_id = ? AND comercio_id = ? AND tipo_movimento = ?',
+      whereArgs: [agendamentoId, _comercioId, 'estorno'],
+      limit: 1,
+    );
+    if (estornosExistentes.isNotEmpty) return;
+
+    final consumos = await txn.query(
+      'auditoria_estoque_consumo',
+      columns: ['id', 'estoque_id', 'quantidade', 'profissional_id', 'cliente_id', 'servico_id'],
+      where: 'agendamento_id = ? AND comercio_id = ? AND tipo_movimento = ?',
+      whereArgs: [agendamentoId, _comercioId, 'baixa'],
+    );
+
+    for (final consumo in consumos) {
+      final estoqueId = consumo['estoque_id'] as String;
+      final quantidade = consumo['quantidade'] as num;
+
+      await txn.execute(
+        'UPDATE estoque SET quantidade_atual = quantidade_atual + ? WHERE id = ? AND comercio_id = ?',
+        [quantidade, estoqueId, _comercioId],
+      );
+
+      await txn.insert('auditoria_estoque_consumo', {
+        'id': _id('aud_est'),
+        'comercio_id': _comercioId,
+        'data_hora': DateTime.now().toUtc().toIso8601String(),
+        'profissional_id': consumo['profissional_id'] as String,
+        'cliente_id': consumo['cliente_id'] as String?,
+        'servico_id': consumo['servico_id'] as String,
+        'agendamento_id': agendamentoId,
+        'estoque_id': estoqueId,
+        'quantidade': quantidade,
+        'tipo_movimento': 'estorno',
+        'criado_em': DateTime.now().toUtc().toIso8601String(),
+      });
+    }
   }
 }

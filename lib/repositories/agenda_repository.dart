@@ -4,7 +4,17 @@ import '../database/database_service.dart';
 import '../models/domain/acesso.dart';
 import '../services/session_controller.dart';
 import '../services/whatsapp_queue_service.dart';
+import 'agenda_completa_repository.dart';
 import 'pacotes_repository.dart';
+
+class ConflitoAgendaException implements Exception {
+  final String mensagem;
+  final List<DateTime> sugestoes;
+  const ConflitoAgendaException(this.mensagem, this.sugestoes);
+
+  @override
+  String toString() => mensagem;
+}
 
 class AgendamentoRegistro {
   final String id;
@@ -123,6 +133,8 @@ class AgendamentoRegistro {
   }
 
   AgendamentoRegistro copiarCom({
+    DateTime? inicio,
+    DateTime? fim,
     String? status,
     bool? confirmado,
     bool? compareceu,
@@ -138,8 +150,8 @@ class AgendamentoRegistro {
       profissionalNome: profissionalNome,
       servicoId: servicoId,
       servicoNome: servicoNome,
-      inicio: inicio,
-      fim: fim,
+      inicio: inicio ?? this.inicio,
+      fim: fim ?? this.fim,
       status: status ?? this.status,
       valorServico: valorServico,
       desconto: desconto,
@@ -237,8 +249,19 @@ class AgendaRepository {
     );
 
     if (possuiConflito) {
-      throw StateError(
+      final agendaCompleta = AgendaCompletaRepository(
+        databaseProvider: () => _databaseService.database,
+        comercioId: _comercioId,
+      );
+      final duracaoMinutos = agendamento.fim.difference(agendamento.inicio).inMinutes;
+      final alternativas = await agendaCompleta.horariosDisponiveis(
+        profissionalId: agendamento.profissionalId,
+        data: agendamento.inicio,
+        duracaoMinutos: duracaoMinutos,
+      );
+      throw ConflitoAgendaException(
         'Já existe um agendamento nesse horário para essa profissional.',
+        alternativas,
       );
     }
 
@@ -282,7 +305,20 @@ class AgendaRepository {
     );
 
     if (possuiConflito) {
-      throw StateError('Já existe outro agendamento nesse horário.');
+      final agendaCompleta = AgendaCompletaRepository(
+        databaseProvider: () => _databaseService.database,
+        comercioId: _comercioId,
+      );
+      final duracaoMinutos = agendamento.fim.difference(agendamento.inicio).inMinutes;
+      final alternativas = await agendaCompleta.horariosDisponiveis(
+        profissionalId: agendamento.profissionalId,
+        data: agendamento.inicio,
+        duracaoMinutos: duracaoMinutos,
+      );
+      throw ConflitoAgendaException(
+        'Já existe outro agendamento nesse horário.',
+        alternativas,
+      );
     }
 
     final quantidadeAlterada = await db.update(

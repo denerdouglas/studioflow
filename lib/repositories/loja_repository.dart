@@ -89,6 +89,39 @@ class LojaRepository {
     final valor = codigo.trim();
     if (valor.length < 4) throw StateError('Código de barras inválido.');
     final db = await _databaseProvider();
+    
+    final pecas = await db.query(
+      'pecas_unicas',
+      where: 'comercio_id = ? AND codigo_exclusivo = ?',
+      whereArgs: [u.comercioId, valor],
+      limit: 1,
+    );
+    if (pecas.isNotEmpty) {
+      final p = pecas.first;
+      if (p['status'] != 'disponivel') {
+         throw StateError('Peça única não está disponível (status: ${p['status']}).');
+      }
+      return ProdutoLoja(
+        id: p['id'] as String,
+        comercioId: u.comercioId,
+        nome: p['nome'] as String,
+        categoria: 'Peça Única',
+        tipo: 'peca_unica',
+        modalidade: ModalidadeProduto.proprio,
+        custo: (p['custo'] as num).toDouble(),
+        precoVenda: (p['preco'] as num).toDouble(),
+        margem: 0,
+        quantidadeAtual: 1,
+        estoqueMinimo: 0,
+        quantidadeSugerida: 0,
+        unidade: 'un',
+        quantidadeEmbalagem: 1,
+        ativo: true,
+        criadoEm: DateTime.parse(p['data_cadastro'] as String),
+        atualizadoEm: DateTime.now(),
+      );
+    }
+
     final maps = await db.query(
       'estoque',
       where:
@@ -352,6 +385,7 @@ class LojaRepository {
     required List<ItemCarrinho> itens,
     required double desconto,
     required Map<String, double> pagamentos,
+    required String profissionalId,
     String? clienteId,
     String? observacoes,
   }) async {
@@ -368,63 +402,101 @@ class LojaRepository {
     final db = await _databaseProvider();
     final vendaId = IdGenerator.temporal();
     await db.transaction((txn) async {
-      final numero = 'V${DateTime.now().millisecondsSinceEpoch}';
-      await txn.insert('vendas', {
+      await txn.insert('pdv_vendas', {
         'id': vendaId,
-        'numero': numero,
         'comercio_id': u.comercioId,
+        'profissional_id': profissionalId,
         'cliente_id': clienteId,
-        'usuario_id': u.id,
-        'subtotal': subtotal,
-        'desconto': desconto,
-        'total': total,
+        'valor_total': total,
+        'data_venda': DateTime.now().toIso8601String(),
         'status': 'concluida',
-        'observacoes': observacoes,
-        'criada_em': DateTime.now().toIso8601String(),
       });
       for (var index = 0; index < itens.length; index++) {
         final item = itens[index];
-        await txn.insert('venda_itens', {
+        await txn.insert('pdv_venda_itens', {
           'id': '${vendaId}_$index',
-          'venda_id': vendaId,
-          'comercio_id': u.comercioId,
+          'pdv_venda_id': vendaId,
           'produto_id': item.produto.id,
-          'nome_produto': item.produto.nome,
           'quantidade': item.quantidade,
-          'preco_unitario': item.produto.precoVenda,
-          'desconto': item.desconto,
-          'total': item.total,
+          'valor_unitario': item.produto.precoVenda,
         });
-        await _movimentarTxn(
-          txn,
-          produtoId: item.produto.id,
-          tipo: TipoMovimentoLoja.venda,
-          quantidade: item.quantidade,
-          origem: 'venda',
-          referenciaId: vendaId,
-          observacao: 'Baixa automática da venda $numero',
-        );
-        await _sincronizarReposicaoTxn(txn, item.produto.id);
-        if (item.produto.modalidade == ModalidadeProduto.consignado) {
-          await txn.rawUpdate(
-            '''UPDATE consignacao_itens
-            SET quantidade_vendida = quantidade_vendida + ?
-            WHERE produto_id = ? AND comercio_id = ? AND consignacao_id IN
-              (SELECT id FROM consignacoes WHERE status = 'aberta')''',
-            [item.quantidade, item.produto.id, u.comercioId],
+        
+        if (item.produto.id.startsWith('peca_')) {
+          if (item.quantidade > 1) throw StateError('Peça única não pode ser vendida mais de uma vez na mesma venda.');
+          final changed = await txn.update(
+            'pecas_unicas',
+            {
+              'status': 'vendida',
+              'profissional_vendedor_id': profissionalId,
+              'data_venda': DateTime.now().toIso8601String(),
+            },
+            where: 'id = ? AND comercio_id = ? AND status = ?',
+            whereArgs: [item.produto.id, u.comercioId, 'disponivel'],
           );
+          if (changed == 0) throw StateError('Peça única já vendida ou indisponível.');
+        } else {
+          await _movimentarTxn(
+            txn,
+            produtoId: item.produto.id,
+            tipo: TipoMovimentoLoja.venda,
+            quantidade: item.quantidade,
+            origem: 'venda',
+            referenciaId: vendaId,
+            observacao: 'Baixa automática da venda',
+          );
+          await _sincronizarReposicaoTxn(txn, item.produto.id);
+          if (item.produto.modalidade == ModalidadeProduto.consignado) {
+            await txn.rawUpdate(
+              '''UPDATE consignacao_itens
+              SET quantidade_vendida = quantidade_vendida + ?
+              WHERE produto_id = ? AND comercio_id = ? AND consignacao_id IN
+                (SELECT id FROM consignacoes WHERE status = 'aberta')''',
+              [item.quantidade, item.produto.id, u.comercioId],
+            );
+          }
         }
       }
       var p = 0;
       for (final pagamento in pagamentos.entries) {
-        await txn.insert('venda_pagamentos', {
+        await txn.insert('movimentacoes_financeiras', {
           'id': '${vendaId}_p${p++}',
-          'venda_id': vendaId,
-          'comercio_id': u.comercioId,
-          'forma': pagamento.key,
+          'tipo': 'receita',
+          'descricao': 'Venda PDV',
           'valor': pagamento.value,
-          'status': 'confirmado_manual',
+          'forma_pagamento': pagamento.key,
+          'status': 'pago',
+          'data': DateTime.now().toIso8601String(),
+          'data_criacao': DateTime.now().toIso8601String(),
+          'categoria': 'venda de produto',
+          'cliente_id': clienteId,
+          'profissional_id': profissionalId,
+          'usuario_responsavel_id': u.id,
+          'observacoes': observacoes,
         });
+      }
+      final profs = await txn.query('profissionais', where: 'id = ?', whereArgs: [profissionalId], limit: 1);
+      if (profs.isNotEmpty) {
+        final prof = profs.first;
+        final comissaoProdutos = (prof['comissao_produtos'] as num?)?.toDouble() ?? 
+                                 (prof['percentual_comissao'] as num?)?.toDouble() ?? 0.0;
+        if (comissaoProdutos > 0) {
+          final valorComissao = total * (comissaoProdutos / 100);
+          final tableInfo = await txn.rawQuery("PRAGMA table_info(comissoes)");
+          final comissaoMap = <String, Object?>{
+            'id': '${vendaId}_com',
+            'profissional_id': profissionalId,
+            'valor_servico': total,
+            'percentual_comissao': comissaoProdutos,
+            'valor_comissao': valorComissao,
+            'data_geracao': DateTime.now().toIso8601String(),
+            'status': 'pendente',
+            'observacoes': 'Comissão PDV',
+          };
+          if (tableInfo.any((c) => c['name'] == 'pdv_venda_id')) comissaoMap['pdv_venda_id'] = vendaId;
+          if (tableInfo.any((c) => c['name'] == 'agendamento_id')) comissaoMap['agendamento_id'] = vendaId;
+          if (tableInfo.any((c) => c['name'] == 'servico_id')) comissaoMap['servico_id'] = 'pdv';
+          try { await txn.insert('comissoes', comissaoMap); } catch (_) {}
+        }
       }
     });
     return vendaId;
@@ -438,7 +510,7 @@ class LojaRepository {
     final db = await _databaseProvider();
     await db.transaction((txn) async {
       final venda = await txn.query(
-        'vendas',
+        'pdv_vendas',
         where: 'id = ? AND comercio_id = ? AND status = ?',
         whereArgs: [vendaId, u.comercioId, 'concluida'],
         limit: 1,
@@ -447,43 +519,53 @@ class LojaRepository {
         throw StateError('Venda não encontrada ou já cancelada.');
       }
       final itens = await txn.query(
-        'venda_itens',
-        where: 'venda_id = ?',
+        'pdv_venda_itens',
+        where: 'pdv_venda_id = ?',
         whereArgs: [vendaId],
       );
       for (final item in itens) {
-        await _movimentarTxn(
-          txn,
-          produtoId: item['produto_id'] as String,
-          tipo: TipoMovimentoLoja.cancelamentoVenda,
-          quantidade: (item['quantidade'] as num).toDouble(),
-          origem: 'cancelamento_venda',
-          referenciaId: vendaId,
-          observacao: motivo,
-        );
+        if ((item['produto_id'] as String).startsWith('peca_')) {
+          await txn.update(
+            'pecas_unicas',
+            {'status': 'disponivel', 'cliente_id': null, 'profissional_vendedor_id': null, 'data_venda': null, 'comissao': null},
+            where: 'id = ? AND comercio_id = ?',
+            whereArgs: [item['produto_id'], u.comercioId],
+          );
+        } else {
+          await _movimentarTxn(
+            txn,
+            produtoId: item['produto_id'] as String,
+            tipo: TipoMovimentoLoja.cancelamentoVenda,
+            quantidade: (item['quantidade'] as num).toDouble(),
+            origem: 'cancelamento_venda',
+            referenciaId: vendaId,
+            observacao: motivo,
+          );
+        }
       }
       await txn.update(
-        'vendas',
+        'pdv_vendas',
         {
           'status': 'cancelada',
-          'cancelada_em': DateTime.now().toIso8601String(),
-          'observacoes': motivo,
         },
         where: "id = ? AND comercio_id = ?",
         whereArgs: [vendaId, u.comercioId],
       );
+      // Removendo as movimentações financeiras relacionadas
+      await txn.delete('movimentacoes_financeiras', where: 'descricao = ? OR id LIKE ?', whereArgs: ['Venda PDV', '${vendaId}_p%']);
+      await txn.delete('comissoes', where: 'id LIKE ?', whereArgs: ['${vendaId}_com%']);
     });
   }
 
   Future<List<Map<String, Object?>>> listarVendas() async {
     final u = _usuario;
     final db = await _databaseProvider();
-    return db.query(
-      'vendas',
-      where: 'comercio_id = ?',
-      whereArgs: [u.comercioId],
-      orderBy: 'criada_em DESC',
-    );
+    return db.rawQuery('''
+      SELECT id, substr(id, 1, 8) as numero, valor_total as total, status, data_venda as criada_em
+      FROM pdv_vendas
+      WHERE comercio_id = ?
+      ORDER BY data_venda DESC
+    ''', [u.comercioId]);
   }
 
   Future<void> _sincronizarReposicaoTxn(

@@ -188,6 +188,8 @@ class ResumoCliente360 {
   final String clienteId;
   final String nome;
   final String whatsapp;
+  final String telefone;
+  final String instagram;
   final String email;
   final DateTime? aniversario;
   final String profissionalPreferido;
@@ -203,6 +205,8 @@ class ResumoCliente360 {
     required this.clienteId,
     required this.nome,
     required this.whatsapp,
+    required this.telefone,
+    required this.instagram,
     required this.email,
     this.aniversario,
     required this.profissionalPreferido,

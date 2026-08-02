@@ -15,6 +15,16 @@ class ProfissionalRegistro {
   final double metaMensal;
   final double faturamentoMes;
   final DateTime dataCadastro;
+  final String? documento;
+  final String? rg;
+  final String? dataNascimento;
+  final String? chavePix;
+  final String? banco;
+  final String? corAgenda;
+  final String? unidadeId;
+  final String? sexo;
+  final String? observacoes;
+  final String? contatoEmergencia;
 
   const ProfissionalRegistro({
     required this.id,
@@ -28,6 +38,16 @@ class ProfissionalRegistro {
     required this.metaMensal,
     required this.faturamentoMes,
     required this.dataCadastro,
+    this.documento,
+    this.rg,
+    this.dataNascimento,
+    this.chavePix,
+    this.banco,
+    this.corAgenda,
+    this.unidadeId,
+    this.sexo,
+    this.observacoes,
+    this.contatoEmergencia,
   });
 
   Map<String, Object?> paraMapa() {
@@ -43,6 +63,16 @@ class ProfissionalRegistro {
       'meta_mensal': metaMensal,
       'faturamento_mes': faturamentoMes,
       'data_cadastro': dataCadastro.toIso8601String(),
+      'documento': documento,
+      'rg': rg,
+      'data_nascimento': dataNascimento,
+      'chave_pix': chavePix,
+      'banco': banco,
+      'cor_agenda': corAgenda,
+      'unidade_id': unidadeId,
+      'sexo': sexo,
+      'observacoes': observacoes,
+      'contato_emergencia': contatoEmergencia,
     };
   }
 
@@ -62,6 +92,16 @@ class ProfissionalRegistro {
       dataCadastro:
           DateTime.tryParse(mapa['data_cadastro'] as String? ?? '') ??
           DateTime.now(),
+      documento: mapa['documento'] as String?,
+      rg: mapa['rg'] as String?,
+      dataNascimento: mapa['data_nascimento'] as String?,
+      chavePix: mapa['chave_pix'] as String?,
+      banco: mapa['banco'] as String?,
+      corAgenda: mapa['cor_agenda'] as String?,
+      unidadeId: mapa['unidade_id'] as String?,
+      sexo: mapa['sexo'] as String?,
+      observacoes: mapa['observacoes'] as String?,
+      contatoEmergencia: mapa['contato_emergencia'] as String?,
     );
   }
 
@@ -75,6 +115,16 @@ class ProfissionalRegistro {
     double? percentualComissao,
     double? metaMensal,
     double? faturamentoMes,
+    String? documento,
+    String? rg,
+    String? dataNascimento,
+    String? chavePix,
+    String? banco,
+    String? corAgenda,
+    String? unidadeId,
+    String? sexo,
+    String? observacoes,
+    String? contatoEmergencia,
   }) {
     return ProfissionalRegistro(
       id: id,
@@ -88,6 +138,16 @@ class ProfissionalRegistro {
       metaMensal: metaMensal ?? this.metaMensal,
       faturamentoMes: faturamentoMes ?? this.faturamentoMes,
       dataCadastro: dataCadastro,
+      documento: documento ?? this.documento,
+      rg: rg ?? this.rg,
+      dataNascimento: dataNascimento ?? this.dataNascimento,
+      chavePix: chavePix ?? this.chavePix,
+      banco: banco ?? this.banco,
+      corAgenda: corAgenda ?? this.corAgenda,
+      unidadeId: unidadeId ?? this.unidadeId,
+      sexo: sexo ?? this.sexo,
+      observacoes: observacoes ?? this.observacoes,
+      contatoEmergencia: contatoEmergencia ?? this.contatoEmergencia,
     );
   }
 }

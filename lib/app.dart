@@ -38,12 +38,8 @@ class StudioFlowApp extends StatelessWidget {
           ),
           localizationsDelegates: GlobalMaterialLocalizations.delegates,
           supportedLocales: const [Locale('pt', 'BR')],
-          theme: AppTheme.padrao.copyWith(colorScheme: claro),
-          darkTheme: ThemeData(
-            useMaterial3: true,
-            colorScheme: escuro,
-            scaffoldBackgroundColor: escuro.surface,
-          ),
+          theme: AppTheme.buildTheme(claro),
+          darkTheme: AppTheme.buildTheme(escuro),
           themeMode: modo,
           home: const AppBootstrapPage(),
         );

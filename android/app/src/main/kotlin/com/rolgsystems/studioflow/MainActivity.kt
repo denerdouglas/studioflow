@@ -1,4 +1,4 @@
-﻿package com.example.studioflow
+﻿package com.rolgsystems.studioflow
 
 import io.flutter.embedding.android.FlutterActivity
 

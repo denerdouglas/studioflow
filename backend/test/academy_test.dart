@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'package:shelf/shelf.dart';
 import 'package:studioflow_backend/studioflow_backend.dart';
-import 'package:studioflow_backend/src/academy.dart';
 import 'package:studioflow_backend/src/academy_memory_store.dart';
 import 'package:test/test.dart';
 import 'package:uuid/uuid.dart';
@@ -111,9 +110,11 @@ void main() {
 
     handler = StudioFlowApi(
       store: store,
-      config: config,
+      marketplace: MarketplaceService(store),
+      adminService: MarketplaceAdminService(store),
       academy: AcademyService(academyStore),
       secureRedirect: SecureRedirectService(academyStore),
+      config: config,
     ).handler;
 
     // Simulate login for tests (fast way)

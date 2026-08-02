@@ -20,6 +20,15 @@ class SessionController extends ChangeNotifier {
   bool get carregando => _carregando;
   bool get autenticado => _usuario != null;
 
+  String? _unidadeAtiva;
+  String? get unidadeAtiva => _unidadeAtiva;
+
+  void setUnidadeAtiva(String? id) {
+    if (_unidadeAtiva == id) return;
+    _unidadeAtiva = id;
+    notifyListeners();
+  }
+
   Future<void> inicializar() async {
     _usuario = await _repository.restaurarSessao();
     _carregando = false;

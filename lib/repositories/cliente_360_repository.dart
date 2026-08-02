@@ -75,6 +75,8 @@ class Cliente360Repository {
       clienteId: clienteId,
       nome: c['nome'] as String,
       whatsapp: c['whatsapp'] as String? ?? '',
+      telefone: c['telefone'] as String? ?? '',
+      instagram: (c.containsKey('instagram') ? c['instagram'] as String? : null) ?? '',
       email: c['email'] as String? ?? '',
       aniversario: DateTime.tryParse(c['data_nascimento'] as String? ?? ''),
       profissionalPreferido:
