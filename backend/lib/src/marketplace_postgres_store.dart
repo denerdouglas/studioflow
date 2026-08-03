@@ -129,6 +129,91 @@ final class MarketplacePostgresStore implements MarketplaceBackendStore {
   }
 
   @override
+  Future<List<MarketplaceOffer>> searchOffers(String query) async {
+    final result = await _pool.execute(
+      Sql.named(
+        "SELECT * FROM marketplace_offers WHERE active=true AND verified_at >= now()-interval '30 days' AND (title ILIKE @query OR seller ILIKE @query OR COALESCE(brand,'') ILIKE @query OR COALESCE(category,'') ILIKE @query OR gtin=@exact OR product_code=@exact) ORDER BY priority DESC, price_cents NULLS LAST, verified_at DESC",
+      ),
+      parameters: {'query': '%${query.trim()}%', 'exact': query.trim()},
+    );
+    return result.map(_mapOffer).toList();
+  }
+
+  @override
+  Future<List<MarketplaceOffer>> listOffers() async {
+    final result = await _pool.execute(
+      'SELECT * FROM marketplace_offers ORDER BY updated_at DESC',
+    );
+    return result.map(_mapOffer).toList();
+  }
+
+  @override
+  Future<void> saveOffer(MarketplaceOffer offer) async {
+    await _pool.execute(
+      Sql.named('''INSERT INTO marketplace_offers
+      (id,partner_id,title,seller,destination_url,price_cents,active,verified_at,brand,category,gtin,product_code,keywords)
+      VALUES (@id,@partner,@title,@seller,@url,@price,@active,@verified,@brand,@category,@gtin,@code,@keywords)
+      ON CONFLICT (id) DO UPDATE SET partner_id=EXCLUDED.partner_id,title=EXCLUDED.title,
+      seller=EXCLUDED.seller,destination_url=EXCLUDED.destination_url,price_cents=EXCLUDED.price_cents,
+      active=EXCLUDED.active,verified_at=EXCLUDED.verified_at,brand=EXCLUDED.brand,
+      category=EXCLUDED.category,gtin=EXCLUDED.gtin,product_code=EXCLUDED.product_code,
+      keywords=EXCLUDED.keywords,updated_at=now()'''),
+      parameters: {
+        'id': offer.id,
+        'partner': offer.partnerId,
+        'title': offer.title,
+        'seller': offer.seller,
+        'url': offer.destinationUrl,
+        'price': offer.priceCents,
+        'active': offer.active,
+        'verified': offer.verifiedAt,
+        'brand': offer.brand,
+        'category': offer.category,
+        'gtin': offer.gtin,
+        'code': offer.productCode,
+        'keywords': offer.keywords,
+      },
+    );
+  }
+
+  @override
+  Future<List<MarketplaceClick>> listClicks() async {
+    final result = await _pool.execute(
+      'SELECT * FROM marketplace_clicks ORDER BY clicked_at DESC LIMIT 500',
+    );
+    return result.map((row) {
+      final m = row.toColumnMap();
+      return MarketplaceClick(
+        id: m['id'].toString(),
+        businessId: m['business_id']?.toString(),
+        userId: m['user_id'].toString(),
+        partnerId: m['partner_id'] as String,
+        destinationUrl: m['destination_url'] as String,
+        clickStatus: m['click_status'] as String,
+        source: m['source'] as String?,
+        campaignId: m['campaign_id'] as String?,
+        userAgentHash: m['user_agent_hash'] as String?,
+        ipHash: m['ip_hash'] as String?,
+        rankingPosition: m['ranking_position'] as int?,
+        rankingReason: m['ranking_reason'] as String?,
+        clickedAt: m['clicked_at'] as DateTime,
+        redirectedAt: m['redirected_at'] as DateTime?,
+        expiresAt: m['expires_at'] as DateTime?,
+      );
+    }).toList();
+  }
+
+  @override
+  Future<List<Map<String, Object?>>> listSearchDemands() async {
+    final result = await _pool.execute(
+      'SELECT * FROM affiliate_search_demands ORDER BY search_count DESC,last_searched_at DESC LIMIT 500',
+    );
+    return result
+        .map((row) => Map<String, Object?>.from(row.toColumnMap()))
+        .toList();
+  }
+
+  @override
   Future<void> logSearch({
     required String? businessId,
     required String userId,
@@ -153,6 +238,17 @@ final class MarketplacePostgresStore implements MarketplaceBackendStore {
         'time': responseTimeMs,
       },
     );
+    if (resultsCount == 0) {
+      await _pool.execute(
+        Sql.named(
+          '''INSERT INTO affiliate_search_demands
+        (business_id,query,normalized_query) VALUES (@business,@query,lower(trim(@query)))
+        ON CONFLICT (business_id,normalized_query) DO UPDATE SET
+          search_count=affiliate_search_demands.search_count+1,last_searched_at=now()''',
+        ),
+        parameters: {'business': businessId, 'query': query},
+      );
+    }
   }
 
   @override
@@ -256,6 +352,26 @@ final class MarketplacePostgresStore implements MarketplaceBackendStore {
         'reason': reason,
         'ip': ipAddressHash,
       },
+    );
+  }
+
+  MarketplaceOffer _mapOffer(ResultRow row) {
+    final m = row.toColumnMap();
+    return MarketplaceOffer(
+      id: m['id'] as String,
+      partnerId: m['partner_id'] as String,
+      title: m['title'] as String,
+      seller: m['seller'] as String,
+      destinationUrl: m['destination_url'] as String,
+      priceCents: m['price_cents'] as int?,
+      active: m['active'] as bool,
+      verifiedAt: m['verified_at'] as DateTime,
+      brand: m['brand'] as String?,
+      category: m['category'] as String?,
+      gtin: m['gtin'] as String?,
+      productCode: m['product_code'] as String?,
+      keywords:
+          (m['keywords'] as List?)?.whereType<String>().toList() ?? const [],
     );
   }
 

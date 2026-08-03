@@ -5,12 +5,14 @@ import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as path;
 
 import '../core/helpers/app_formatters.dart';
+import '../core/utils/instagram_url.dart';
 import '../models/domain/atendimento.dart';
 import '../models/domain/cliente.dart';
 import '../repositories/cliente_repository.dart';
 import '../repositories/cliente_fotos_repository.dart';
 import '../repositories/cliente_360_repository.dart';
 import '../services/session_controller.dart';
+import '../services/external_action_service.dart';
 import '../widgets/shared/premium_card.dart';
 import '../widgets/shared/simple_bar_chart.dart';
 import 'agenda_page.dart';
@@ -168,6 +170,114 @@ class _ClienteDetalhesPremiumPageState extends State<ClienteDetalhesPremiumPage>
     }
   }
 
+  Future<void> _editarContato() async {
+    final nome = TextEditingController(text: _cliente.nome);
+    final whatsapp = TextEditingController(text: _cliente.whatsapp);
+    final telefone = TextEditingController(text: _cliente.telefone);
+    final instagram = TextEditingController(text: _cliente.instagramUrl);
+    final atualizado = await showDialog<ClienteRegistro>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Editar contato'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nome,
+                decoration: const InputDecoration(labelText: 'Nome *'),
+              ),
+              TextField(
+                controller: whatsapp,
+                keyboardType: TextInputType.phone,
+                decoration: const InputDecoration(labelText: 'WhatsApp *'),
+              ),
+              TextField(
+                controller: telefone,
+                keyboardType: TextInputType.phone,
+                decoration: const InputDecoration(labelText: 'Telefone'),
+              ),
+              TextField(
+                controller: instagram,
+                keyboardType: TextInputType.url,
+                decoration: const InputDecoration(labelText: 'Instagram *'),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final perfil = InstagramUrl.normalizar(instagram.text);
+              if (nome.text.trim().isEmpty ||
+                  whatsapp.text.trim().isEmpty ||
+                  perfil == null) {
+                ScaffoldMessenger.of(dialogContext).showSnackBar(
+                  const SnackBar(
+                    content: Text(
+                      'Preencha os campos obrigatórios com dados válidos.',
+                    ),
+                  ),
+                );
+                return;
+              }
+              Navigator.pop(
+                dialogContext,
+                _cliente.copiarCom(
+                  nome: nome.text.trim(),
+                  whatsapp: whatsapp.text.trim(),
+                  telefone: telefone.text.trim(),
+                  instagramUrl: perfil,
+                ),
+              );
+            },
+            child: const Text('Salvar'),
+          ),
+        ],
+      ),
+    );
+    nome.dispose();
+    whatsapp.dispose();
+    telefone.dispose();
+    instagram.dispose();
+    if (atualizado == null) return;
+    await widget.repository.atualizar(atualizado);
+    if (!mounted) return;
+    setState(() => _cliente = atualizado);
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Contato atualizado.')));
+  }
+
+  Future<void> _inativarCliente() async {
+    final confirmou = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Inativar cliente?'),
+        content: const Text(
+          'O cadastro sairá da lista, mas o histórico será preservado.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Inativar'),
+          ),
+        ],
+      ),
+    );
+    if (confirmou != true) return;
+    await widget.repository.excluir(_cliente.id);
+    if (mounted) Navigator.pop(context, 'excluido');
+  }
+
   @override
   Widget build(BuildContext context) {
     final corPrincipal = Theme.of(context).colorScheme.primary;
@@ -243,6 +353,16 @@ class _ClienteDetalhesPremiumPageState extends State<ClienteDetalhesPremiumPage>
                 ),
               ),
               actions: [
+                IconButton(
+                  icon: const Icon(Icons.edit_outlined),
+                  tooltip: 'Editar contato',
+                  onPressed: _editarContato,
+                ),
+                IconButton(
+                  icon: const Icon(Icons.person_off_outlined),
+                  tooltip: 'Inativar cliente',
+                  onPressed: _inativarCliente,
+                ),
                 IconButton(
                   icon: const Icon(Icons.calendar_month),
                   tooltip: 'Agendar',
@@ -483,13 +603,35 @@ class _ResumoTab extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
-            _AcaoRapida(icone: Icons.chat, label: 'WhatsApp', onTap: () {}),
-            _AcaoRapida(icone: Icons.phone, label: 'Ligar', onTap: () {}),
-            _AcaoRapida(
-              icone: Icons.camera_alt,
-              label: 'Instagram',
-              onTap: () {},
-            ),
+            if (cliente.whatsapp.trim().isNotEmpty)
+              _AcaoRapida(
+                icone: Icons.chat,
+                label: 'WhatsApp',
+                cor: const Color(0xFF25D366),
+                onTap: () => const ExternalActionService().abrirWhatsApp(
+                  telefone: cliente.whatsapp,
+                  mensagem: '',
+                ),
+              ),
+            if (cliente.instagramUrl != null)
+              _AcaoRapida(
+                icone: Icons.camera_alt,
+                label: 'Instagram',
+                cor: const Color(0xFFE1306C),
+                onTap: () {
+                  final uri = InstagramUrl.uri(cliente.instagramUrl);
+                  if (uri != null) {
+                    const ExternalActionService().abrirUrlExterna(uri);
+                  }
+                },
+              ),
+            if (cliente.telefone.trim().isNotEmpty)
+              _AcaoRapida(
+                icone: Icons.phone,
+                label: 'Telefone',
+                onTap: () =>
+                    const ExternalActionService().ligar(cliente.telefone),
+              ),
           ],
         ),
         const SizedBox(height: 24),
@@ -577,11 +719,13 @@ class _AcaoRapida extends StatelessWidget {
   final IconData icone;
   final String label;
   final VoidCallback onTap;
+  final Color? cor;
 
   const _AcaoRapida({
     required this.icone,
     required this.label,
     required this.onTap,
+    this.cor,
   });
 
   @override

@@ -7,8 +7,10 @@ import 'package:studioflow_backend/src/database_config.dart';
 import 'models.dart';
 import 'store.dart';
 import 'package:studioflow_backend/src/admin.dart';
+import 'package:studioflow_backend/src/public_booking.dart';
 
-final class PostgresBackendStore implements BackendStore, AdminBackendStore {
+final class PostgresBackendStore
+    implements BackendStore, AdminBackendStore, PublicBookingStore {
   final Pool _pool;
 
   Pool get pool => _pool;
@@ -561,6 +563,554 @@ final class PostgresBackendStore implements BackendStore, AdminBackendStore {
       createdAt: row['created_at'] as DateTime,
     );
   }
+
+  @override
+  Future<PublicBookingBusiness> ensurePublicBooking({
+    required String businessId,
+    required String businessName,
+  }) {
+    return _pool.runTx((tx) async {
+      await tx.execute(
+        Sql.named("SELECT pg_advisory_xact_lock(hashtext(@id))"),
+        parameters: {'id': businessId},
+      );
+      final current = await tx.execute(
+        Sql.named(
+          'SELECT booking_slug, booking_enabled, display_name, logo_url, cover_url, color_primary, color_secondary, phone, whatsapp, instagram, city, state FROM businesses WHERE id = @id',
+        ),
+        parameters: {'id': businessId},
+      );
+      if (current.isEmpty) throw StateError('Estabelecimento não encontrado.');
+      final row = current.single.toColumnMap();
+      var slug = row['booking_slug'] as String?;
+      if (slug == null || slug.isEmpty) {
+        var base = PublicBookingSlug.normalize(businessName);
+        if (base.length < 3 || PublicBookingSlug.reserved.contains(base)) {
+          base =
+              'studio-${businessId.substring(0, businessId.length < 8 ? businessId.length : 8)}';
+        }
+        slug = base;
+        var suffix = 2;
+        while ((await tx.execute(
+          Sql.named('SELECT 1 FROM businesses WHERE booking_slug = @slug'),
+          parameters: {'slug': slug},
+        )).isNotEmpty) {
+          slug = '$base-${suffix++}';
+        }
+        await tx.execute(
+          Sql.named(
+            "UPDATE businesses SET booking_slug=@slug, booking_enabled=TRUE, booking_public_url=@url, booking_created_at=COALESCE(booking_created_at, now()), booking_updated_at=now() WHERE id=@id",
+          ),
+          parameters: {
+            'id': businessId,
+            'slug': slug,
+            'url': 'https://studioflowapp.com.br/agendar/$slug',
+          },
+        );
+      }
+      return _publicBusiness(businessId, slug!, row);
+    });
+  }
+
+  @override
+  Future<PublicBookingBusiness?> findPublicBooking(String slug) async {
+    final result = await _pool.execute(
+      Sql.named(
+        'SELECT id, booking_slug, booking_enabled, display_name, logo_url, cover_url, color_primary, color_secondary, phone, whatsapp, instagram, city, state FROM businesses WHERE booking_slug=@slug OR old_booking_slugs @> to_jsonb(ARRAY[@slug]::text[]) LIMIT 1',
+      ),
+      parameters: {'slug': slug},
+    );
+    if (result.isEmpty) return null;
+    final row = result.single.toColumnMap();
+    return _publicBusiness(
+      row['id'] as String,
+      row['booking_slug'] as String,
+      row,
+    );
+  }
+
+  PublicBookingBusiness _publicBusiness(
+    String id,
+    String slug,
+    Map<String, Object?> row,
+  ) => PublicBookingBusiness(
+    businessId: id,
+    slug: slug,
+    name: row['display_name'] as String? ?? 'StudioFlow',
+    enabled: row['booking_enabled'] as bool? ?? true,
+    profile: {
+      for (final key in const [
+        'logo_url',
+        'cover_url',
+        'color_primary',
+        'color_secondary',
+        'phone',
+        'whatsapp',
+        'instagram',
+        'city',
+        'state',
+      ])
+        if (row[key] != null) key: row[key],
+    },
+  );
+
+  @override
+  Future<List<Map<String, Object?>>> publicEntities({
+    required String businessId,
+    required String entity,
+  }) async {
+    final result = await _pool.execute(
+      Sql.named(
+        "SELECT entity_id, payload FROM sync_records WHERE business_id=@businessId AND entity=@entity AND deleted=FALSE AND COALESCE(payload->>'ativo','true') NOT IN ('false','0') ORDER BY payload->>'nome'",
+      ),
+      parameters: {'businessId': businessId, 'entity': entity},
+    );
+    const allowed = {
+      'id',
+      'nome',
+      'preco',
+      'duracao_minutos',
+      'unidade_id',
+      'profissional_id',
+      'servico_id',
+      'horario_abertura',
+      'horario_fechamento',
+    };
+    return result.map((row) {
+      final payload = row.toColumnMap()['payload'];
+      final data = Map<String, Object?>.from(
+        payload is Map ? payload : jsonDecode(payload.toString()) as Map,
+      );
+      data['id'] ??= row.toColumnMap()['entity_id'];
+      data.removeWhere((key, _) => !allowed.contains(key));
+      return data;
+    }).toList();
+  }
+
+  @override
+  Future<List<Map<String, Object?>>> publicSchedulingRecords({
+    required String businessId,
+    required Set<String> entities,
+  }) async {
+    final records = <Map<String, Object?>>[];
+    for (final entity in entities) {
+      final rows = await _pool.execute(
+        Sql.named(
+          'SELECT entity_id, payload FROM sync_records WHERE business_id=@businessId AND entity=@entity AND deleted=FALSE',
+        ),
+        parameters: {'businessId': businessId, 'entity': entity},
+      );
+      for (final row in rows) {
+        final columns = row.toColumnMap();
+        final raw = columns['payload'];
+        final payload = Map<String, Object?>.from(
+          raw is Map ? raw : jsonDecode(raw.toString()) as Map,
+        );
+        records.add({
+          ...payload,
+          '_entity': entity,
+          'id': payload['id'] ?? columns['entity_id'],
+        });
+      }
+    }
+    return records;
+  }
+
+  @override
+  Future<PublicAppointment> createPublicAppointment({
+    required String businessId,
+    required String idempotencyKey,
+    required String tokenHash,
+    required String publicToken,
+    required String serviceId,
+    String? professionalId,
+    String? unitId,
+    required String clientName,
+    required String clientPhone,
+    String? notes,
+    required DateTime startsAt,
+    required DateTime endsAt,
+  }) => _pool.runTx((tx) async {
+    final lockKey =
+        '$businessId::${professionalId ?? 'any'}::${startsAt.toUtc().toIso8601String()}';
+    await tx.execute(
+      Sql.named('SELECT pg_advisory_xact_lock(hashtext(@key))'),
+      parameters: {'key': lockKey},
+    );
+    final previous = await tx.execute(
+      Sql.named(
+        'SELECT * FROM public_appointments WHERE business_id=@businessId AND idempotency_key=@key',
+      ),
+      parameters: {'businessId': businessId, 'key': idempotencyKey},
+    );
+    if (previous.isNotEmpty) {
+      return _appointment(previous.single.toColumnMap(), '');
+    }
+    final owner = await tx.execute(
+      Sql.named(
+        "SELECT id FROM users WHERE business_id=@businessId AND active=TRUE ORDER BY CASE role WHEN 'dono' THEN 0 ELSE 1 END LIMIT 1",
+      ),
+      parameters: {'businessId': businessId},
+    );
+    if (owner.isEmpty) {
+      throw StateError('Estabelecimento sem responsável ativo.');
+    }
+    final userId = owner.single.toColumnMap()['id'] as String;
+    final valid = await tx.execute(
+      Sql.named('''
+      SELECT
+        EXISTS(SELECT 1 FROM sync_records WHERE business_id=@businessId
+          AND entity='servicos' AND entity_id=@serviceId AND deleted=FALSE
+          AND COALESCE(payload->>'ativo','true') NOT IN ('false','0')) service_ok,
+        EXISTS(SELECT 1 FROM sync_records WHERE business_id=@businessId
+          AND entity='profissionais' AND entity_id=@professionalId
+          AND deleted=FALSE
+          AND COALESCE(payload->>'ativo','true') NOT IN ('false','0')) professional_ok,
+        (@unitId IS NULL OR EXISTS(SELECT 1 FROM sync_records
+          WHERE business_id=@businessId AND entity='unidades'
+            AND entity_id=@unitId AND deleted=FALSE)) unit_ok,
+        NOT EXISTS(SELECT 1 FROM sync_records links
+          WHERE links.business_id=@businessId
+            AND links.entity='profissional_servicos' AND links.deleted=FALSE
+            AND links.payload->>'profissional_id'=@professionalId)
+        OR EXISTS(SELECT 1 FROM sync_records links
+          WHERE links.business_id=@businessId
+            AND links.entity='profissional_servicos' AND links.deleted=FALSE
+            AND links.payload->>'profissional_id'=@professionalId
+            AND links.payload->>'servico_id'=@serviceId) link_ok
+    '''),
+      parameters: {
+        'businessId': businessId,
+        'serviceId': serviceId,
+        'professionalId': professionalId,
+        'unitId': unitId,
+      },
+    );
+    final checks = valid.single.toColumnMap();
+    if (checks['service_ok'] != true ||
+        checks['professional_ok'] != true ||
+        checks['unit_ok'] != true ||
+        checks['link_ok'] != true) {
+      throw StateError('Serviço, profissional ou unidade indisponível.');
+    }
+    final conflict = await tx.execute(
+      Sql.named('''
+      SELECT 1 FROM (
+        SELECT starts_at inicio, ends_at fim FROM public_appointments
+        WHERE business_id=@businessId AND status NOT IN ('cancelado','rejeitado')
+          AND professional_id IS NOT DISTINCT FROM @professionalId
+        UNION ALL
+        SELECT (payload->>'inicio')::timestamptz, (payload->>'fim')::timestamptz
+        FROM sync_records WHERE business_id=@businessId
+          AND entity='agendamentos' AND deleted=FALSE
+          AND payload->>'profissional_id' IS NOT DISTINCT FROM @professionalId
+          AND COALESCE(payload->>'status','agendado') <> 'cancelado'
+      ) x WHERE inicio < @endsAt AND fim > @startsAt LIMIT 1
+    '''),
+      parameters: {
+        'businessId': businessId,
+        'professionalId': professionalId,
+        'startsAt': startsAt.toUtc(),
+        'endsAt': endsAt.toUtc(),
+      },
+    );
+    if (conflict.isNotEmpty) throw StateError('Horário indisponível.');
+    final phone = clientPhone.replaceAll(RegExp(r'D'), '');
+    final clients = await tx.execute(
+      Sql.named('''
+      SELECT entity_id FROM sync_records
+      WHERE business_id=@businessId AND entity='clientes' AND deleted=FALSE
+        AND regexp_replace(COALESCE(payload->>'whatsapp',
+          payload->>'telefone',''),'D','','g')=@phone LIMIT 1
+    '''),
+      parameters: {'businessId': businessId, 'phone': phone},
+    );
+    final clientId = clients.isEmpty
+        ? 'public_client_${tokenHash.substring(0, 20)}'
+        : clients.single.toColumnMap()['entity_id'] as String;
+    if (clients.isEmpty) {
+      await _upsertPublicSync(tx, businessId, userId, 'clientes', clientId, {
+        'id': clientId,
+        'comercio_id': businessId,
+        'nome': clientName,
+        'whatsapp': phone,
+        'telefone': phone,
+        'ativo': true,
+        'data_cadastro': DateTime.now().toUtc().toIso8601String(),
+      });
+    }
+    final appointmentId = 'public_appointment_${tokenHash.substring(0, 20)}';
+    await _upsertPublicSync(
+      tx,
+      businessId,
+      userId,
+      'agendamentos',
+      appointmentId,
+      {
+        'id': appointmentId,
+        'comercio_id': businessId,
+        'unidade_id': unitId,
+        'cliente_id': clientId,
+        'profissional_id': professionalId,
+        'servico_id': serviceId,
+        'inicio': startsAt.toUtc().toIso8601String(),
+        'fim': endsAt.toUtc().toIso8601String(),
+        'origem': 'agendamento_publico',
+        'status': 'agendado',
+        'observacoes': notes,
+        'excluido': 0,
+      },
+    );
+    final result = await tx.execute(
+      Sql.named('''
+      INSERT INTO public_appointments
+        (id,public_token_hash,idempotency_key,business_id,unit_id,service_id,
+         professional_id,client_id,appointment_id,client_name,client_phone,
+         notes,starts_at,ends_at)
+      VALUES(@id,@hash,@key,@businessId,@unitId,@serviceId,@professionalId,
+        @clientId,@appointmentId,@name,@phone,@notes,@startsAt,@endsAt)
+      RETURNING *
+    '''),
+      parameters: {
+        'id': 'pub_${tokenHash.substring(0, 24)}',
+        'hash': tokenHash,
+        'key': idempotencyKey,
+        'businessId': businessId,
+        'unitId': unitId,
+        'serviceId': serviceId,
+        'professionalId': professionalId,
+        'clientId': clientId,
+        'appointmentId': appointmentId,
+        'name': clientName,
+        'phone': phone,
+        'notes': notes,
+        'startsAt': startsAt.toUtc(),
+        'endsAt': endsAt.toUtc(),
+      },
+    );
+    await tx.execute(
+      Sql.named('''
+      INSERT INTO audit_logs(event,business_id,user_id,success,details)
+      VALUES('public_booking.created',@businessId,@userId,TRUE,
+        CAST(@details AS jsonb))
+    '''),
+      parameters: {
+        'businessId': businessId,
+        'userId': userId,
+        'details': jsonEncode({'appointmentId': appointmentId}),
+      },
+    );
+    return _appointment(result.single.toColumnMap(), publicToken);
+  });
+  @override
+  Future<PublicAppointment?> findPublicAppointmentByIdempotency({
+    required String businessId,
+    required String idempotencyKey,
+  }) async {
+    final result = await _pool.execute(
+      Sql.named(
+        'SELECT * FROM public_appointments WHERE business_id=@businessId AND idempotency_key=@key',
+      ),
+      parameters: {'businessId': businessId, 'key': idempotencyKey},
+    );
+    return result.isEmpty
+        ? null
+        : _appointment(result.single.toColumnMap(), '');
+  }
+
+  @override
+  Future<PublicAppointment?> findPublicAppointment(String tokenHash) async {
+    final result = await _pool.execute(
+      Sql.named(
+        'SELECT * FROM public_appointments WHERE public_token_hash=@hash',
+      ),
+      parameters: {'hash': tokenHash},
+    );
+    return result.isEmpty
+        ? null
+        : _appointment(result.single.toColumnMap(), '');
+  }
+
+  @override
+  Future<PublicAppointment?> updatePublicAppointment({
+    required String tokenHash,
+    required String status,
+    DateTime? startsAt,
+    DateTime? endsAt,
+  }) => _pool.runTx((tx) async {
+    final found = await tx.execute(
+      Sql.named(
+        'SELECT * FROM public_appointments WHERE public_token_hash=@hash FOR UPDATE',
+      ),
+      parameters: {'hash': tokenHash},
+    );
+    if (found.isEmpty) return null;
+    final row = found.single.toColumnMap();
+    final businessId = row['business_id'] as String;
+    final appointmentId = row['appointment_id'] as String?;
+    if (appointmentId == null) throw StateError('Vínculo principal ausente.');
+    final owner = await tx.execute(
+      Sql.named(
+        "SELECT id FROM users WHERE business_id=@businessId AND active=TRUE ORDER BY CASE role WHEN 'dono' THEN 0 ELSE 1 END LIMIT 1",
+      ),
+      parameters: {'businessId': businessId},
+    );
+    if (owner.isEmpty) {
+      throw StateError('Estabelecimento sem responsável ativo.');
+    }
+    final userId = owner.single.toColumnMap()['id'] as String;
+    final main = await tx.execute(
+      Sql.named(
+        "SELECT payload FROM sync_records WHERE business_id=@businessId AND entity='agendamentos' AND entity_id=@appointmentId AND deleted=FALSE FOR UPDATE",
+      ),
+      parameters: {'businessId': businessId, 'appointmentId': appointmentId},
+    );
+    if (main.isEmpty) throw StateError('Agendamento principal ausente.');
+    final raw = main.single.toColumnMap()['payload'];
+    final payload = Map<String, Object?>.from(
+      raw is Map ? raw : jsonDecode(raw.toString()) as Map,
+    );
+    var nextStart = startsAt ?? row['starts_at'] as DateTime;
+    var nextEnd = endsAt ?? row['ends_at'] as DateTime;
+    if (startsAt != null) {
+      final service = await tx.execute(
+        Sql.named(
+          "SELECT payload FROM sync_records WHERE business_id=@businessId AND entity='servicos' AND entity_id=@serviceId AND deleted=FALSE",
+        ),
+        parameters: {'businessId': businessId, 'serviceId': row['service_id']},
+      );
+      if (service.isEmpty) throw StateError('Serviço indisponível.');
+      final serviceRaw = service.single.toColumnMap()['payload'];
+      final servicePayload = serviceRaw is Map
+          ? serviceRaw
+          : jsonDecode(serviceRaw.toString()) as Map;
+      final minutes =
+          ((servicePayload['duracao_minutos'] as num?)?.toInt() ?? 0).clamp(
+            1,
+            480,
+          );
+      nextStart = startsAt.toUtc();
+      nextEnd = nextStart.add(Duration(minutes: minutes));
+      final conflict = await tx.execute(
+        Sql.named('''
+        SELECT 1 FROM sync_records WHERE business_id=@businessId
+          AND entity='agendamentos' AND entity_id<>@appointmentId
+          AND deleted=FALSE
+          AND payload->>'profissional_id' IS NOT DISTINCT FROM @professionalId
+          AND COALESCE(payload->>'status','agendado') <> 'cancelado'
+          AND (payload->>'inicio')::timestamptz < @endsAt
+          AND (payload->>'fim')::timestamptz > @startsAt LIMIT 1
+      '''),
+        parameters: {
+          'businessId': businessId,
+          'appointmentId': appointmentId,
+          'professionalId': row['professional_id'],
+          'startsAt': nextStart,
+          'endsAt': nextEnd,
+        },
+      );
+      if (conflict.isNotEmpty) throw StateError('Horário indisponível.');
+    }
+    payload['status'] = status;
+    payload['inicio'] = nextStart.toUtc().toIso8601String();
+    payload['fim'] = nextEnd.toUtc().toIso8601String();
+    await _upsertPublicSync(
+      tx,
+      businessId,
+      userId,
+      'agendamentos',
+      appointmentId,
+      payload,
+    );
+    final updated = await tx.execute(
+      Sql.named('''
+      UPDATE public_appointments SET status=@status,starts_at=@startsAt,
+        ends_at=@endsAt,updated_at=now()
+      WHERE public_token_hash=@hash RETURNING *
+    '''),
+      parameters: {
+        'hash': tokenHash,
+        'status': status,
+        'startsAt': nextStart.toUtc(),
+        'endsAt': nextEnd.toUtc(),
+      },
+    );
+    await tx.execute(
+      Sql.named('''
+      INSERT INTO audit_logs(event,business_id,user_id,success,details)
+      VALUES(@event,@businessId,@userId,TRUE,CAST(@details AS jsonb))
+    '''),
+      parameters: {
+        'event': 'public_booking.$status',
+        'businessId': businessId,
+        'userId': userId,
+        'details': jsonEncode({'appointmentId': appointmentId}),
+      },
+    );
+    return _appointment(updated.single.toColumnMap(), '');
+  });
+  Future<void> _upsertPublicSync(
+    Session tx,
+    String businessId,
+    String userId,
+    String entity,
+    String entityId,
+    Map<String, Object?> payload,
+  ) async {
+    final current = await tx.execute(
+      Sql.named(
+        'SELECT server_version FROM sync_records WHERE business_id=@businessId AND entity=@entity AND entity_id=@entityId FOR UPDATE',
+      ),
+      parameters: {
+        'businessId': businessId,
+        'entity': entity,
+        'entityId': entityId,
+      },
+    );
+    final version = current.isEmpty
+        ? 1
+        : (current.single.toColumnMap()['server_version'] as int) + 1;
+    final parameters = {
+      'businessId': businessId,
+      'entity': entity,
+      'entityId': entityId,
+      'version': version,
+      'payload': jsonEncode(payload),
+      'userId': userId,
+    };
+    await tx.execute(
+      Sql.named('''
+      INSERT INTO sync_records(business_id,entity,entity_id,server_version,
+        payload,deleted,updated_by,updated_at)
+      VALUES(@businessId,@entity,@entityId,@version,CAST(@payload AS jsonb),
+        FALSE,@userId,now())
+      ON CONFLICT(business_id,entity,entity_id) DO UPDATE SET
+        server_version=EXCLUDED.server_version,payload=EXCLUDED.payload,
+        deleted=FALSE,updated_by=EXCLUDED.updated_by,updated_at=now()
+    '''),
+      parameters: parameters,
+    );
+    await tx.execute(
+      Sql.named('''
+      INSERT INTO sync_changes(business_id,entity,entity_id,server_version,
+        payload,deleted,updated_by)
+      VALUES(@businessId,@entity,@entityId,@version,CAST(@payload AS jsonb),
+        FALSE,@userId)
+    '''),
+      parameters: parameters,
+    );
+  }
+
+  PublicAppointment _appointment(Map<String, Object?> row, String token) =>
+      PublicAppointment(
+        token: token,
+        businessId: row['business_id'] as String,
+        serviceId: row['service_id'] as String,
+        professionalId: row['professional_id'] as String?,
+        startsAt: row['starts_at'] as DateTime,
+        endsAt: row['ends_at'] as DateTime,
+        status: row['status'] as String,
+      );
 
   @override
   Future<void> close() => _pool.close();

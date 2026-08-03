@@ -17,6 +17,7 @@ import 'admin.dart';
 import 'security.dart';
 import 'store.dart';
 import 'academy.dart';
+import 'public_booking.dart';
 
 final class StudioFlowApi {
   final BackendStore store;
@@ -31,6 +32,7 @@ final class StudioFlowApi {
   final AcademyService academy;
   final SecureRedirectService secureRedirect;
   final Uuid _uuid;
+  final Map<String, List<DateTime>> _publicRateLimits = {};
 
   StudioFlowApi({
     required this.store,
@@ -74,6 +76,12 @@ final class StudioFlowApi {
       ..get('/r/<clickId>', _marketplaceRedirect)
       ..get('/v1/platform-admin/partners', _adminListPartners)
       ..post('/v1/platform-admin/partners', _adminCreatePartner)
+      ..get('/v1/platform-admin/offers', _adminListOffers)
+      ..post('/v1/platform-admin/offers', _adminSaveOffer)
+      ..post('/v1/platform-admin/offers/import-csv', _adminImportOffers)
+      ..get('/v1/platform-admin/offers/export-csv', _adminExportOffers)
+      ..get('/v1/platform-admin/affiliate-clicks', _adminAffiliateClicks)
+      ..get('/v1/platform-admin/affiliate-demands', _adminAffiliateDemands)
       ..get('/v1/messages/history', _messageHistory)
       ..get('/v1/catalog/gtin/<gtin>', _catalogGtin)
       ..get('/products/barcode/<barcode>', _catalogGtin)
@@ -85,7 +93,22 @@ final class StudioFlowApi {
       ..get('/v1/academy/courses', _academySearch)
       ..get('/academy/r/<clickId>', _academyRedirect)
       ..get('/v1/subscriptions/status', _subscriptionStatus)
-      ..post('/v1/scanner/scan', _scannerScan);
+      ..post('/v1/scanner/scan', _scannerScan)
+      ..get('/v1/public/booking/<slug>', _publicBooking)
+      ..get('/v1/public/booking/<slug>/services', _publicServices)
+      ..get('/v1/public/booking/<slug>/professionals', _publicProfessionals)
+      ..get('/v1/public/booking/<slug>/availability', _publicAvailability)
+      ..post('/v1/public/booking/<slug>/appointments', _publicCreateAppointment)
+      ..get('/v1/public/appointments/<token>', _publicAppointment)
+      ..post(
+        '/v1/public/appointments/<token>/confirm',
+        _publicConfirmAppointment,
+      )
+      ..post('/v1/public/appointments/<token>/cancel', _publicCancelAppointment)
+      ..post(
+        '/v1/public/appointments/<token>/reschedule',
+        _publicRescheduleAppointment,
+      );
     return const Pipeline()
         .addMiddleware(_securityHeaders())
         .addMiddleware(_errorBoundary())
@@ -120,6 +143,12 @@ final class StudioFlowApi {
       login: login,
       passwordHash: passwords.hash(password),
     );
+    if (store case final PublicBookingStore bookingStore) {
+      await bookingStore.ensurePublicBooking(
+        businessId: account.businessId,
+        businessName: account.businessName,
+      );
+    }
     await store.audit(
       event: 'auth.business_registered',
       businessId: account.businessId,
@@ -128,6 +157,452 @@ final class StudioFlowApi {
       details: const {},
     );
     return _issueSession(account, statusCode: 201);
+  }
+
+  PublicBookingStore get _bookingStore {
+    final current = store;
+    if (current is! PublicBookingStore) {
+      throw StateError('Agendamento pÃƒÂºblico indisponÃƒÂ­vel.');
+    }
+    return current as PublicBookingStore;
+  }
+
+  Future<PublicBookingBusiness?> _enabledBooking(String slug) async {
+    final normalized = PublicBookingSlug.normalize(slug);
+    if (normalized != slug || PublicBookingSlug.reserved.contains(slug)) {
+      return null;
+    }
+    return _bookingStore.findPublicBooking(slug);
+  }
+
+  Future<Response> _publicBooking(Request request, String slug) async {
+    if (!_allowPublic(request)) {
+      return _error(429, 'rate_limited', 'Tente novamente em instantes.');
+    }
+    final booking = await _enabledBooking(slug);
+    if (booking == null) {
+      return _error(
+        404,
+        'booking_not_found',
+        'Estabelecimento nÃƒÂ£o encontrado.',
+      );
+    }
+    return _json(200, {
+      ...booking.toJson(),
+      if (!booking.enabled)
+        'message':
+            'Agendamento online temporariamente indisponÃƒÂ­vel. Entre em contato com o estabelecimento.',
+    });
+  }
+
+  Future<Response> _publicServices(Request request, String slug) =>
+      _publicEntityResponse(request, slug, 'servicos');
+  Future<Response> _publicProfessionals(Request request, String slug) =>
+      _publicEntityResponse(request, slug, 'profissionais');
+
+  Future<Response> _publicEntityResponse(
+    Request request,
+    String slug,
+    String entity,
+  ) async {
+    if (!_allowPublic(request)) {
+      return _error(429, 'rate_limited', 'Tente novamente em instantes.');
+    }
+    final booking = await _enabledBooking(slug);
+    if (booking == null) {
+      return _error(
+        404,
+        'booking_not_found',
+        'Estabelecimento nÃƒÂ£o encontrado.',
+      );
+    }
+    if (!booking.enabled) {
+      return _error(
+        503,
+        'booking_disabled',
+        'Agendamento online temporariamente indisponÃƒÂ­vel.',
+      );
+    }
+    return _json(200, {
+      'results': await _bookingStore.publicEntities(
+        businessId: booking.businessId,
+        entity: entity,
+      ),
+    });
+  }
+
+  Future<Response> _publicAvailability(Request request, String slug) async {
+    final booking = await _enabledBooking(slug);
+    if (booking == null) {
+      return _error(
+        404,
+        'booking_not_found',
+        'Estabelecimento nÃƒÂ£o encontrado.',
+      );
+    }
+    if (!booking.enabled) {
+      return _error(
+        503,
+        'booking_disabled',
+        'Agendamento online temporariamente indisponÃƒÂ­vel.',
+      );
+    }
+    final date = DateTime.tryParse(request.url.queryParameters['date'] ?? '');
+    if (date == null) {
+      return _error(400, 'invalid_date', 'Informe uma data vÃƒÂ¡lida.');
+    }
+    final now = DateTime.now();
+    if (date.isBefore(DateTime(now.year, now.month, now.day))) {
+      return _error(400, 'past_date', 'A data nÃƒÂ£o pode estar no passado.');
+    }
+    final serviceId = request.url.queryParameters['serviceId']?.trim();
+    final professionalId = request.url.queryParameters['professionalId']
+        ?.trim();
+    final unitId = request.url.queryParameters['unitId']?.trim();
+    if (serviceId == null || serviceId.isEmpty) {
+      return _error(400, 'invalid_service', 'Informe o serviÃƒÂ§o.');
+    }
+    final rows = await _bookingStore.publicSchedulingRecords(
+      businessId: booking.businessId,
+      entities: const {
+        'servicos',
+        'profissionais',
+        'profissional_servicos',
+        'horarios_profissionais',
+        'agendamentos',
+        'bloqueios_agenda',
+        'folgas_profissionais',
+        'ferias_profissionais',
+      },
+    );
+    final services = rows.where(
+      (r) =>
+          r['_entity'] == 'servicos' &&
+          r['id'] == serviceId &&
+          r['ativo'] != false &&
+          r['ativo'] != 0,
+    );
+    if (services.isEmpty) {
+      return _error(400, 'invalid_service', 'ServiÃƒÂ§o indisponÃƒÂ­vel.');
+    }
+    final duration = ((services.first['duracao_minutos'] as num?)?.toInt() ?? 0)
+        .clamp(1, 480);
+    DateTime? clock(Object? value) {
+      final p = value?.toString().split(':');
+      if (p == null || p.length < 2) return null;
+      final h = int.tryParse(p[0]), m = int.tryParse(p[1]);
+      return h == null || m == null
+          ? null
+          : DateTime(date.year, date.month, date.day, h, m);
+    }
+
+    DateTime? stamp(Map<String, Object?> r, List<String> keys) {
+      for (final k in keys) {
+        final value = DateTime.tryParse(r[k]?.toString() ?? '');
+        if (value != null) return value;
+      }
+      return null;
+    }
+
+    final professionals = rows.where((r) {
+      if (r['_entity'] != 'profissionais' ||
+          r['ativo'] == false ||
+          r['ativo'] == 0) {
+        return false;
+      }
+      if (professionalId?.isNotEmpty == true && r['id'] != professionalId) {
+        return false;
+      }
+      if (unitId?.isNotEmpty == true &&
+          r['unidade_id'] != null &&
+          r['unidade_id'] != unitId) {
+        return false;
+      }
+      final links = rows.where(
+        (l) =>
+            l['_entity'] == 'profissional_servicos' &&
+            l['profissional_id'] == r['id'],
+      );
+      return links.isEmpty || links.any((l) => l['servico_id'] == serviceId);
+    });
+    final slots = <String>{};
+    for (final pro in professionals) {
+      for (final work in rows.where(
+        (r) =>
+            r['_entity'] == 'horarios_profissionais' &&
+            r['profissional_id'] == pro['id'] &&
+            (r['dia_semana'] as num?)?.toInt() == date.weekday &&
+            (unitId?.isNotEmpty != true ||
+                r['unidade_id'] == null ||
+                r['unidade_id'] == unitId),
+      )) {
+        final open = clock(work['hora_inicio'] ?? work['horario_inicio']);
+        final close = clock(work['hora_fim'] ?? work['horario_fim']);
+        if (open == null || close == null) continue;
+        final pauseA = clock(work['intervalo_inicio']),
+            pauseB = clock(work['intervalo_fim']);
+        for (
+          var slot = open;
+          !slot.add(Duration(minutes: duration)).isAfter(close);
+          slot = slot.add(const Duration(minutes: 15))
+        ) {
+          final end = slot.add(Duration(minutes: duration));
+          if (slot.isBefore(now) ||
+              (pauseA != null &&
+                  pauseB != null &&
+                  slot.isBefore(pauseB) &&
+                  end.isAfter(pauseA))) {
+            continue;
+          }
+          final busy = rows.any((r) {
+            if (!const {
+              'agendamentos',
+              'bloqueios_agenda',
+              'folgas_profissionais',
+              'ferias_profissionais',
+            }.contains(r['_entity'])) {
+              return false;
+            }
+            if (r['profissional_id'] != null &&
+                r['profissional_id'] != pro['id']) {
+              return false;
+            }
+            if (unitId?.isNotEmpty == true &&
+                r['unidade_id'] != null &&
+                r['unidade_id'] != unitId) {
+              return false;
+            }
+            if (r['_entity'] == 'agendamentos' &&
+                (r['status'] == 'cancelado' ||
+                    r['excluido'] == 1 ||
+                    r['excluido'] == true)) {
+              return false;
+            }
+            final a = stamp(r, const ['inicio', 'data_inicio', 'inicio_em']);
+            final b = stamp(r, const ['fim', 'termino', 'data_fim', 'fim_em']);
+            return a != null && b != null && slot.isBefore(b) && end.isAfter(a);
+          });
+          if (!busy) slots.add(slot.toIso8601String());
+        }
+      }
+    }
+    final result = slots.toList()..sort();
+    return _json(200, {
+      'date': date.toIso8601String().split('T').first,
+      'serviceId': serviceId,
+      'durationMinutes': duration,
+      if (unitId?.isNotEmpty == true) 'unitId': unitId,
+      if (professionalId?.isNotEmpty == true) 'professionalId': professionalId,
+      'timezone':
+          request.url.queryParameters['timezone'] ?? 'America/Sao_Paulo',
+      'slots': result,
+      if (result.isEmpty) 'message': 'Nenhum horÃƒÂ¡rio disponÃƒÂ­vel.',
+    });
+  }
+
+  Future<Response> _publicCreateAppointment(
+    Request request,
+    String slug,
+  ) async {
+    if (!_allowPublic(request, limit: 10)) {
+      return _error(
+        429,
+        'rate_limited',
+        'Muitas tentativas. Aguarde um momento.',
+      );
+    }
+    final booking = await _enabledBooking(slug);
+    if (booking == null) {
+      return _error(
+        404,
+        'booking_not_found',
+        'Estabelecimento nÃƒÂ£o encontrado.',
+      );
+    }
+    if (!booking.enabled) {
+      return _error(
+        503,
+        'booking_disabled',
+        'Agendamento online temporariamente indisponÃƒÂ­vel.',
+      );
+    }
+    final body = await _body(request);
+    final serviceId = _requiredText(body, 'serviceId', max: 100);
+    final name = _requiredText(body, 'name', max: 160);
+    final phone = _requiredText(
+      body,
+      'phone',
+      max: 32,
+    ).replaceAll(RegExp(r'\D'), '');
+    if (phone.length < 10 || phone.length > 15) {
+      return _error(400, 'invalid_phone', 'Informe um WhatsApp vÃƒÂ¡lido.');
+    }
+    final startsAt = DateTime.tryParse(
+      _requiredText(body, 'startsAt', max: 40),
+    );
+    final endsAt = DateTime.tryParse(_requiredText(body, 'endsAt', max: 40));
+    if (startsAt == null ||
+        endsAt == null ||
+        !endsAt.isAfter(startsAt) ||
+        endsAt.difference(startsAt) > const Duration(hours: 8)) {
+      return _error(400, 'invalid_slot', 'HorÃƒÂ¡rio invÃƒÂ¡lido.');
+    }
+    final services = await _bookingStore.publicEntities(
+      businessId: booking.businessId,
+      entity: 'servicos',
+    );
+    if (!services.any((item) => item['id'] == serviceId)) {
+      return _error(400, 'invalid_service', 'ServiÃƒÂ§o indisponÃƒÂ­vel.');
+    }
+    final service = services.firstWhere((item) => item['id'] == serviceId);
+    final duration = ((service['duracao_minutos'] as num?)?.toInt() ?? 0).clamp(
+      1,
+      480,
+    );
+    final calculatedEnd = startsAt.add(Duration(minutes: duration));
+    final availabilityQuery = <String, String>{
+      'date': startsAt.toIso8601String().split('T').first,
+      'serviceId': serviceId,
+      if ((body['professionalId'] as String?)?.trim().isNotEmpty == true)
+        'professionalId': (body['professionalId'] as String).trim(),
+      if ((body['unitId'] as String?)?.trim().isNotEmpty == true)
+        'unitId': (body['unitId'] as String).trim(),
+    };
+    final idempotency = request.headers['idempotency-key']?.trim();
+    if (idempotency == null ||
+        idempotency.length < 8 ||
+        idempotency.length > 100) {
+      return _error(
+        400,
+        'invalid_idempotency_key',
+        'Identificador da solicitaÃƒÂ§ÃƒÂ£o invÃƒÂ¡lido.',
+      );
+    }
+    final availabilityResponse = await _publicAvailability(
+      Request(
+        'GET',
+        Uri(
+          scheme: 'http',
+          host: 'localhost',
+          path: '/v1/public/booking/$slug/availability',
+          queryParameters: availabilityQuery,
+        ),
+      ),
+      slug,
+    );
+    if (availabilityResponse.statusCode != 200) return availabilityResponse;
+    final availabilityBody =
+        jsonDecode(await availabilityResponse.readAsString()) as Map;
+    final availableSlots = List<String>.from(availabilityBody['slots'] as List);
+    if (!availableSlots.contains(startsAt.toIso8601String())) {
+      final previous = await _bookingStore.findPublicAppointmentByIdempotency(
+        businessId: booking.businessId,
+        idempotencyKey: idempotency,
+      );
+      if (previous != null) return _json(201, previous.toJson());
+      return _error(
+        409,
+        'slot_conflict',
+        'Este horÃƒÂ¡rio nÃƒÂ£o estÃƒÂ¡ mais disponÃƒÂ­vel.',
+      );
+    }
+    final publicToken =
+        _uuid.v4().replaceAll('-', '') + _uuid.v4().replaceAll('-', '');
+    final tokenHash = sha256.convert(utf8.encode(publicToken)).toString();
+    try {
+      final appointment = await _bookingStore.createPublicAppointment(
+        businessId: booking.businessId,
+        idempotencyKey: idempotency,
+        tokenHash: tokenHash,
+        publicToken: publicToken,
+        serviceId: serviceId,
+        professionalId: body['professionalId'] as String?,
+        unitId: body['unitId'] as String?,
+        clientName: name,
+        clientPhone: phone,
+        notes: (body['notes'] as String?)?.trim(),
+        startsAt: startsAt,
+        endsAt: calculatedEnd,
+      );
+      await store.audit(
+        event: 'public_booking.created',
+        businessId: booking.businessId,
+        success: true,
+        details: {
+          'serviceId': serviceId,
+          'startsAt': startsAt.toUtc().toIso8601String(),
+        },
+      );
+      return _json(201, appointment.toJson());
+    } on StateError {
+      return _error(
+        409,
+        'slot_conflict',
+        'Este horÃƒÂ¡rio nÃƒÂ£o estÃƒÂ¡ mais disponÃƒÂ­vel.',
+      );
+    }
+  }
+
+  Future<Response> _publicAppointment(Request request, String token) async {
+    final appointment = await _bookingStore.findPublicAppointment(
+      sha256.convert(utf8.encode(token)).toString(),
+    );
+    return appointment == null
+        ? _error(404, 'appointment_not_found', 'Agendamento nÃƒÂ£o encontrado.')
+        : _json(200, appointment.toJson());
+  }
+
+  Future<Response> _publicConfirmAppointment(Request request, String token) =>
+      _changePublicAppointment(token, 'confirmado');
+  Future<Response> _publicCancelAppointment(Request request, String token) =>
+      _changePublicAppointment(token, 'cancelado');
+
+  Future<Response> _publicRescheduleAppointment(
+    Request request,
+    String token,
+  ) async {
+    final body = await _body(request);
+    final startsAt = DateTime.tryParse(
+      _requiredText(body, 'startsAt', max: 40),
+    );
+    final endsAt = DateTime.tryParse(_requiredText(body, 'endsAt', max: 40));
+    if (startsAt == null || endsAt == null || !endsAt.isAfter(startsAt)) {
+      return _error(400, 'invalid_slot', 'HorÃƒÂ¡rio invÃƒÂ¡lido.');
+    }
+    final value = await _bookingStore.updatePublicAppointment(
+      tokenHash: sha256.convert(utf8.encode(token)).toString(),
+      status: 'reagendado',
+      startsAt: startsAt,
+      endsAt: endsAt,
+    );
+    return value == null
+        ? _error(404, 'appointment_not_found', 'Agendamento nÃƒÂ£o encontrado.')
+        : _json(200, value.toJson());
+  }
+
+  Future<Response> _changePublicAppointment(String token, String status) async {
+    final value = await _bookingStore.updatePublicAppointment(
+      tokenHash: sha256.convert(utf8.encode(token)).toString(),
+      status: status,
+    );
+    return value == null
+        ? _error(404, 'appointment_not_found', 'Agendamento nÃƒÂ£o encontrado.')
+        : _json(200, value.toJson());
+  }
+
+  bool _allowPublic(Request request, {int limit = 30}) {
+    final key =
+        request.headers['x-forwarded-for']?.split(',').first.trim() ??
+        request.context['shelf.io.connection_info']?.toString() ??
+        'unknown';
+    final now = DateTime.now();
+    final entries = _publicRateLimits.putIfAbsent(
+      key,
+      () => <DateTime>[],
+    )..removeWhere((item) => now.difference(item) > const Duration(minutes: 1));
+    if (entries.length >= limit) return false;
+    entries.add(now);
+    return true;
   }
 
   Future<Response> _login(Request request) async {
@@ -145,7 +620,7 @@ final class StudioFlowApi {
         success: false,
         details: {'loginHash': tokens.hashOpaqueToken(login)},
       );
-      return _error(401, 'invalid_credentials', 'Login ou senha inválidos.');
+      return _error(401, 'invalid_credentials', 'Login ou senha invÃƒÂ¡lidos.');
     }
     if (selectedBusinessId == null && valid.length > 1) {
       return _json(200, {
@@ -162,7 +637,7 @@ final class StudioFlowApi {
       return _error(
         400,
         'invalid_business',
-        'O estabelecimento selecionado não pertence a esta conta.',
+        'O estabelecimento selecionado nÃƒÂ£o pertence a esta conta.',
       );
     }
     return _issueSession(account);
@@ -221,12 +696,12 @@ final class StudioFlowApi {
       return _error(
         401,
         'invalid_refresh_token',
-        'Sessão expirada ou inválida.',
+        'SessÃƒÂ£o expirada ou invÃƒÂ¡lida.',
       );
     }
     final account = await store.findAccount(session.userId, session.businessId);
     if (account == null || !account.active) {
-      return _error(401, 'inactive_account', 'Conta indisponível.');
+      return _error(401, 'inactive_account', 'Conta indisponÃƒÂ­vel.');
     }
     final newRefresh = tokens.createOpaqueToken();
     final expiresAt = DateTime.now().toUtc().add(config.refreshTokenDuration);
@@ -274,7 +749,7 @@ final class StudioFlowApi {
       return _error(
         503,
         'provider_not_configured',
-        'Recuperação por $channel ainda não foi configurada no servidor.',
+        'RecuperaÃƒÂ§ÃƒÂ£o por $channel ainda nÃƒÂ£o foi configurada no servidor.',
       );
     }
     final selectedBusinessId = (body['businessId'] as String?)?.trim();
@@ -307,7 +782,7 @@ final class StudioFlowApi {
     }
     return _json(202, {
       'message':
-          'Se a conta existir, as instruções serão enviadas pelo canal escolhido.',
+          'Se a conta existir, as instruÃƒÂ§ÃƒÂµes serÃƒÂ£o enviadas pelo canal escolhido.',
     });
   }
 
@@ -320,7 +795,11 @@ final class StudioFlowApi {
       newPasswordHash: passwords.hash(password),
     );
     if (account == null) {
-      return _error(400, 'invalid_reset_token', 'Token inválido ou expirado.');
+      return _error(
+        400,
+        'invalid_reset_token',
+        'Token invÃƒÂ¡lido ou expirado.',
+      );
     }
     await store.audit(
       event: 'auth.password_reset',
@@ -337,14 +816,16 @@ final class StudioFlowApi {
     final body = await _body(request);
     final rawOperations = body['operations'];
     if (rawOperations is! List || rawOperations.length > 100) {
-      throw const FormatException('Envie de 0 a 100 operações.');
+      throw const FormatException('Envie de 0 a 100 operaÃƒÂ§ÃƒÂµes.');
     }
     final operations = rawOperations.map((raw) {
-      if (raw is! Map) throw const FormatException('Operação inválida.');
+      if (raw is! Map) {
+        throw const FormatException('OperaÃƒÂ§ÃƒÂ£o invÃƒÂ¡lida.');
+      }
       final map = Map<String, dynamic>.from(raw);
       final operation = _requiredText(map, 'operation', max: 16);
       if (!const {'criar', 'atualizar', 'excluir'}.contains(operation)) {
-        throw const FormatException('Tipo de operação inválido.');
+        throw const FormatException('Tipo de operaÃƒÂ§ÃƒÂ£o invÃƒÂ¡lido.');
       }
       final payload = map['payload'];
       return SyncMutation(
@@ -400,8 +881,8 @@ final class StudioFlowApi {
             product: CatalogProductData.fromJson(mutation.payload),
           );
         } on FormatException {
-          // A sincronização do comércio permanece válida; uma sugestão pública
-          // malformada apenas deixa de alimentar o catálogo compartilhado.
+          // A sincronizaÃƒÂ§ÃƒÂ£o do comÃƒÂ©rcio permanece vÃƒÂ¡lida; uma sugestÃƒÂ£o pÃƒÂºblica
+          // malformada apenas deixa de alimentar o catÃƒÂ¡logo compartilhado.
         }
       }
     }
@@ -434,7 +915,7 @@ final class StudioFlowApi {
       return _error(
         503,
         'catalog_not_configured',
-        'Catálogo externo ainda não foi configurado no servidor.',
+        'CatÃƒÂ¡logo externo ainda nÃƒÂ£o foi configurado no servidor.',
       );
     }
     try {
@@ -459,7 +940,7 @@ final class StudioFlowApi {
       return _error(
         503,
         'catalog_temporarily_unavailable',
-        'A fonte externa está temporariamente indisponível. Tente novamente ou cadastre manualmente.',
+        'A fonte externa estÃƒÂ¡ temporariamente indisponÃƒÂ­vel. Tente novamente ou cadastre manualmente.',
       );
     }
   }
@@ -472,19 +953,43 @@ final class StudioFlowApi {
         'Informe uma busca entre 2 e 120 caracteres.',
       );
     }
+    final started = DateTime.now();
+    final offers = await marketplace.searchOffers(query);
+    final results = <Map<String, Object?>>[];
+    for (var index = 0; index < offers.length; index++) {
+      final offer = offers[index];
+      try {
+        final redirect = await marketplace.generateRedirectUrl(
+          userId: actor.userId,
+          businessId: actor.businessId,
+          partnerId: offer.partnerId,
+          destinationUrl: offer.destinationUrl,
+          source: request.url.queryParameters['source'] ?? 'app',
+          rankingPosition: index + 1,
+          rankingReason: 'catalog_match',
+        );
+        results.add({...offer.toJson(), 'destinationUrl': redirect});
+      } on Object {
+        // Links invÃ¡lidos ou fora da allowlist nunca sÃ£o exibidos.
+      }
+    }
     await marketplace.logSearch(
       businessId: actor.businessId!,
       userId: actor.userId,
       query: query,
-      source: 'app',
+      source: request.url.queryParameters['source'] ?? 'app',
       cacheHit: false,
-      resultsCount: 0,
-      responseTimeMs: 50,
+      resultsCount: results.length,
+      responseTimeMs: DateTime.now().difference(started).inMilliseconds,
     );
-    return _json(200, {
-      'results': [],
-      'message': 'Pesquisa de marketplace ainda em homologação na etapa 3B.3',
-    });
+    if (results.isEmpty) {
+      return _error(
+        503,
+        'affiliate_catalog_not_configured',
+        'Nenhuma oferta parceira estÃ¡ cadastrada para esta pesquisa. A demanda foi registrada.',
+      );
+    }
+    return _json(200, {'query': query, 'offers': results});
   }
 
   Future<Response> _marketplaceRedirect(Request request, String clickId) async {
@@ -529,6 +1034,146 @@ final class StudioFlowApi {
     return _json(201, p.toJson());
   }
 
+  Future<Response> _adminListOffers(Request request) async {
+    await _authenticatePlatformAdmin(request);
+    final offers = await marketplace.listOffers();
+    return _json(200, {
+      'offers': offers.map((offer) => offer.toJson()).toList(),
+    });
+  }
+
+  Future<Response> _adminSaveOffer(Request request) async {
+    await _authenticatePlatformAdmin(
+      request,
+      requiredRole: 'marketplace_admin',
+    );
+    final body = await _body(request);
+    final uri = Uri.tryParse(_requiredText(body, 'destinationUrl', max: 2048));
+    if (uri == null || uri.scheme != 'https' || uri.userInfo.isNotEmpty) {
+      throw const FormatException('Link afiliado invÃ¡lido.');
+    }
+    final offer = MarketplaceOffer(
+      id: body['id'] as String? ?? _uuid.v4(),
+      partnerId: _requiredText(body, 'partnerId', max: 100),
+      title: _requiredText(body, 'title', max: 200),
+      seller: _requiredText(body, 'seller', max: 160),
+      destinationUrl: uri.toString(),
+      priceCents: (body['priceCents'] as num?)?.toInt(),
+      active: body['active'] as bool? ?? true,
+      verifiedAt: DateTime.now().toUtc(),
+      brand: body['brand'] as String?,
+      category: body['category'] as String?,
+      gtin: body['gtin'] as String?,
+      productCode: body['productCode'] as String?,
+      keywords:
+          (body['keywords'] as List?)?.whereType<String>().toList() ?? const [],
+    );
+    await marketplace.saveOffer(offer);
+    return _json(200, offer.toJson());
+  }
+
+  Future<Response> _adminImportOffers(Request request) async {
+    await _authenticatePlatformAdmin(
+      request,
+      requiredRole: 'marketplace_admin',
+    );
+    final body = await _body(request);
+    final lines = const LineSplitter().convert(
+      _requiredText(body, 'csv', max: 1024 * 1024),
+    );
+    if (lines.length < 2) throw const FormatException('CSV sem dados.');
+    final header = lines.first.split(',').map((item) => item.trim()).toList();
+    var imported = 0;
+    for (final line in lines.skip(1).where((line) => line.trim().isNotEmpty)) {
+      final values = line.split(',').map((item) => item.trim()).toList();
+      final row = <String, String>{};
+      for (var i = 0; i < header.length && i < values.length; i++) {
+        row[header[i]] = values[i];
+      }
+      final uri = Uri.tryParse(row['destination_url'] ?? '');
+      if (uri == null || uri.scheme != 'https' || uri.userInfo.isNotEmpty) {
+        continue;
+      }
+      await marketplace.saveOffer(
+        MarketplaceOffer(
+          id: row['id']?.isNotEmpty == true ? row['id']! : _uuid.v4(),
+          partnerId: row['partner_id'] ?? '',
+          title: row['title'] ?? '',
+          seller: row['seller'] ?? '',
+          destinationUrl: uri.toString(),
+          priceCents: int.tryParse(row['price_cents'] ?? ''),
+          active: row['active'] != 'false',
+          verifiedAt: DateTime.now().toUtc(),
+          brand: row['brand'],
+          category: row['category'],
+          gtin: row['gtin'],
+          productCode: row['product_code'],
+          keywords: (row['keywords'] ?? '')
+              .split('|')
+              .where((item) => item.isNotEmpty)
+              .toList(),
+        ),
+      );
+      imported++;
+    }
+    return _json(200, {'imported': imported});
+  }
+
+  Future<Response> _adminExportOffers(Request request) async {
+    await _authenticatePlatformAdmin(request);
+    final offers = await marketplace.listOffers();
+    final buffer = StringBuffer(
+      'id,partner_id,title,seller,destination_url,price_cents,active\n',
+    );
+    for (final offer in offers) {
+      String csv(String value) => '"${value.replaceAll('"', '""')}"';
+      buffer.writeln(
+        [
+          csv(offer.id),
+          csv(offer.partnerId),
+          csv(offer.title),
+          csv(offer.seller),
+          csv(offer.destinationUrl),
+          offer.priceCents ?? '',
+          offer.active,
+        ].join(','),
+      );
+    }
+    return Response.ok(
+      buffer.toString(),
+      headers: {
+        'content-type': 'text/csv; charset=utf-8',
+        'content-disposition': 'attachment; filename="affiliate-products.csv"',
+      },
+    );
+  }
+
+  Future<Response> _adminAffiliateClicks(Request request) async {
+    await _authenticatePlatformAdmin(request);
+    final clicks = await marketplace.listClicks();
+    return _json(200, {
+      'clicks': clicks
+          .map(
+            (click) => {
+              'id': click.id,
+              'businessId': click.businessId,
+              'userId': click.userId,
+              'partnerId': click.partnerId,
+              'status': click.clickStatus,
+              'source': click.source,
+              'clickedAt': click.clickedAt.toIso8601String(),
+              'redirectedAt': click.redirectedAt?.toIso8601String(),
+            },
+          )
+          .toList(),
+    });
+  }
+
+  Future<Response> _adminAffiliateDemands(Request request) async {
+    await _authenticatePlatformAdmin(request);
+    return _json(200, {'demands': await marketplace.listSearchDemands()});
+  }
+
   Future<Response> _messageHistory(Request request) async {
     final actor = _authenticate(request);
     final automation = automations;
@@ -536,7 +1181,7 @@ final class StudioFlowApi {
       return _error(
         503,
         'automation_unavailable',
-        'Automação de mensagens não configurada neste servidor.',
+        'AutomaÃƒÂ§ÃƒÂ£o de mensagens nÃƒÂ£o configurada neste servidor.',
       );
     }
     final limit =
@@ -552,7 +1197,7 @@ final class StudioFlowApi {
         config.whatsappVerifyToken != null &&
         query['hub.verify_token'] == config.whatsappVerifyToken;
     if (!valid) {
-      return _error(403, 'invalid_verify_token', 'Verificação recusada.');
+      return _error(403, 'invalid_verify_token', 'VerificaÃƒÂ§ÃƒÂ£o recusada.');
     }
     return Response.ok(
       query['hub.challenge'] ?? '',
@@ -567,7 +1212,7 @@ final class StudioFlowApi {
       return _error(
         503,
         'whatsapp_not_configured',
-        'Webhook WhatsApp indisponível.',
+        'Webhook WhatsApp indisponÃƒÂ­vel.',
       );
     }
     final raw = await request.readAsString();
@@ -577,7 +1222,11 @@ final class StudioFlowApi {
     final received = request.headers['x-hub-signature-256'] ?? '';
     final digest = Hmac(sha256, utf8.encode(secret)).convert(utf8.encode(raw));
     if (!_constantEquals(received, 'sha256=$digest')) {
-      return _error(401, 'invalid_meta_signature', 'Assinatura Meta inválida.');
+      return _error(
+        401,
+        'invalid_meta_signature',
+        'Assinatura Meta invÃƒÂ¡lida.',
+      );
     }
     final decoded = jsonDecode(raw);
     if (decoded is! Map) return Response(204);
@@ -629,13 +1278,13 @@ final class StudioFlowApi {
       return _error(
         503,
         'automation_unavailable',
-        'Automação de mensagens não configurada neste servidor.',
+        'AutomaÃƒÂ§ÃƒÂ£o de mensagens nÃƒÂ£o configurada neste servidor.',
       );
     }
     final expected = config.automationWebhookToken;
     final received = request.headers['x-automation-webhook-token'];
     if (expected == null || received == null || received != expected) {
-      return _error(401, 'invalid_webhook_token', 'Webhook não autorizado.');
+      return _error(401, 'invalid_webhook_token', 'Webhook nÃƒÂ£o autorizado.');
     }
     final body = await _body(request);
     final externalId = _requiredText(body, 'externalId', max: 256);
@@ -654,7 +1303,7 @@ final class StudioFlowApi {
       throw const ApiException(
         401,
         'missing_token',
-        'Token de acesso obrigatário.',
+        'Token de acesso obrigatÃƒÂ¡rio.',
       );
     }
     try {
@@ -669,7 +1318,7 @@ final class StudioFlowApi {
       throw const ApiException(
         401,
         'invalid_token',
-        'Token inválido ou expirado.',
+        'Token invÃƒÂ¡lido ou expirado.',
       );
     }
   }
@@ -684,7 +1333,7 @@ final class StudioFlowApi {
       throw const ApiException(
         403,
         'forbidden',
-        'Acesso negado: Requer elevação administrativa.',
+        'Acesso negado: Requer elevaÃƒÂ§ÃƒÂ£o administrativa.',
       );
     }
 
@@ -719,7 +1368,7 @@ final class StudioFlowApi {
       throw const ApiException(413, 'payload_too_large', 'Corpo muito grande.');
     }
     final decoded = jsonDecode(content);
-    if (decoded is! Map) throw const FormatException('JSON inválido.');
+    if (decoded is! Map) throw const FormatException('JSON invÃƒÂ¡lido.');
     return Map<String, dynamic>.from(decoded);
   }
 
@@ -730,7 +1379,7 @@ final class StudioFlowApi {
   }) {
     final value = body[key];
     if (value is! String || value.trim().isEmpty || value.length > max) {
-      throw FormatException('Campo obrigatório inválido: $key.');
+      throw FormatException('Campo obrigatÃƒÂ³rio invÃƒÂ¡lido: $key.');
     }
     return value.trim();
   }
@@ -738,7 +1387,7 @@ final class StudioFlowApi {
   static String? _optionalIdentifier(Object? raw) {
     if (raw == null) return null;
     if (raw is! String || !RegExp(r'^[A-Za-z0-9_-]{8,128}$').hasMatch(raw)) {
-      throw const FormatException('Identificador externo inválido.');
+      throw const FormatException('Identificador externo invÃƒÂ¡lido.');
     }
     return raw;
   }
@@ -799,23 +1448,21 @@ final class StudioFlowApi {
 
   Future<Response> _subscriptionStatus(Request request) async {
     _authenticate(request);
-    return _json(200, {
-      'status': 'active',
-      'plan': 'premium_homologation',
-      'expiresAt': DateTime.now()
-          .add(const Duration(days: 365))
-          .toUtc()
-          .toIso8601String(),
-    });
+    return _error(
+      503,
+      'billing_not_configured',
+      'Assinaturas indisponÃƒÂ­veis: configuraÃƒÂ§ÃƒÂ£o da Google Play pendente.',
+    );
   }
 
   Future<Response> _scannerScan(Request request) async {
     _authenticate(request);
     await _body(request);
-    return _json(200, {
-      'status': 'ok',
-      'message': 'Scanner endpoint mocked for Sprint 1 homologation',
-    });
+    return _error(
+      503,
+      'scanner_http_unavailable',
+      'O scanner funciona localmente no aplicativo; processamento HTTP nÃƒÂ£o estÃƒÂ¡ configurado.',
+    );
   }
 }
 
@@ -860,7 +1507,7 @@ Middleware _errorBoundary() {
         return _error(
           500,
           'internal_error',
-          'Não foi possível concluir a solicitação.',
+          'NÃƒÂ£o foi possÃƒÂ­vel concluir a solicitaÃƒÂ§ÃƒÂ£o.',
         );
       }
     };

@@ -2,6 +2,7 @@ import 'package:sqflite/sqflite.dart';
 
 import '../core/security/password_hasher.dart';
 import '../core/utils/id_generator.dart';
+import '../core/utils/booking_slug.dart';
 import '../database/database_service.dart';
 import '../database/migrations/migration_v2_impl.dart';
 import '../models/domain/acesso.dart';
@@ -26,6 +27,7 @@ class AcessoRepository {
     final comercioId = 'com_${IdGenerator.temporal(agora)}';
     final usuarioId = 'usr_${IdGenerator.temporal()}';
     final codigo = _codigoComercio(comercioId);
+    final bookingSlug = await BookingSlug.available(db, entrada.nomeComercio);
 
     await db.transaction((txn) async {
       await txn.insert('comercios', {
@@ -38,6 +40,11 @@ class AcessoRepository {
         'telefone': entrada.telefone.trim(),
         'email': entrada.email.trim().toLowerCase(),
         'ativo': 1,
+        'booking_slug': bookingSlug,
+        'booking_enabled': 1,
+        'booking_public_url': BookingSlug.publicUrl(bookingSlug),
+        'booking_created_at': agora.toIso8601String(),
+        'booking_updated_at': agora.toIso8601String(),
         'criado_em': agora.toIso8601String(),
         'atualizado_em': agora.toIso8601String(),
       });

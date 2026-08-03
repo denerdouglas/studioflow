@@ -49,9 +49,8 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
 
     if (!mounted) return;
 
-    if (result != null) {
-      // Saved successfully
-      Navigator.pop(context, result);
+    if (result is ExtractedTagData && result.codigo != null) {
+      Navigator.pop(context, result.codigo);
     } else {
       // Cancelled, resume scanner
       setState(() => _processando = false);
@@ -68,6 +67,36 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
 
     if (raw == null) return;
     await _processarCodigo(raw.trim());
+  }
+
+  Future<void> _digitarCodigo() async {
+    final controller = TextEditingController();
+    final codigo = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Digitar código'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(labelText: 'Código ou referência'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () =>
+                Navigator.pop(dialogContext, controller.text.trim()),
+            child: const Text('Revisar'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (codigo != null && codigo.trim().isNotEmpty) {
+      await _processarCodigo(codigo.trim());
+    }
   }
 
   Future<void> _usarOcr() async {
@@ -117,8 +146,8 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
 
       if (!mounted) return;
 
-      if (result != null) {
-        Navigator.pop(context, result);
+      if (result is ExtractedTagData && result.codigo != null) {
+        Navigator.pop(context, result.codigo);
       } else {
         setState(() => _processando = false);
         _controller.start();
@@ -231,6 +260,12 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
                       onPressed: _processando ? null : _usarOcr,
                       icon: const Icon(Icons.text_fields),
                       label: const Text('Ler Textos / Extrair Etiqueta (OCR)'),
+                    ),
+                    const SizedBox(height: 8),
+                    TextButton.icon(
+                      onPressed: _processando ? null : _digitarCodigo,
+                      icon: const Icon(Icons.keyboard),
+                      label: const Text('Digitar manualmente'),
                     ),
                   ],
                 ),

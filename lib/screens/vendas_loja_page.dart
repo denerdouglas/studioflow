@@ -6,7 +6,7 @@ import '../models/domain/loja.dart';
 import '../repositories/cliente_repository.dart';
 import '../repositories/loja_repository.dart';
 import '../services/session_controller.dart';
-import 'barcode_scanner_page.dart';
+import 'vision_scanner_page.dart';
 
 class VendasLojaPage extends StatefulWidget {
   const VendasLojaPage({super.key});
@@ -184,7 +184,7 @@ class _VendasLojaPageState extends State<VendasLojaPage> {
   Future<void> ler() async {
     final codigo = await Navigator.push<String>(
       context,
-      MaterialPageRoute(builder: (_) => const BarcodeScannerPage()),
+      MaterialPageRoute(builder: (_) => const VisionScannerPage()),
     );
     if (codigo == null) return;
     try {

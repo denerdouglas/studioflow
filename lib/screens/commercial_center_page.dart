@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../core/helpers/app_formatters.dart';
 
 import '../repositories/commercial_repository.dart';
-import 'barcode_scanner_page.dart';
+import 'vision_scanner_page.dart';
 import 'catalog_registration_page.dart';
 import 'estoque_page.dart';
 import 'produtos_loja_page.dart';
@@ -68,7 +68,7 @@ class _CommercialCenterPageState extends State<CommercialCenterPage> {
   Future<void> _scan() async {
     final code = await Navigator.push<String>(
       context,
-      MaterialPageRoute(builder: (_) => const BarcodeScannerPage()),
+      MaterialPageRoute(builder: (_) => const VisionScannerPage()),
     );
     if (!mounted || code == null) return;
     _code.text = code;

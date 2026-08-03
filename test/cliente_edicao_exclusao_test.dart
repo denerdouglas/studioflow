@@ -39,6 +39,7 @@ void main() {
           nome: 'Cliente Atualizada',
           whatsapp: '11922222222',
           email: 'atualizada@studioflow.test',
+          instagramUrl: 'https://www.instagram.com/cliente.atualizada/',
         ),
       );
 
@@ -46,6 +47,10 @@ void main() {
       expect(atualizado?.nome, 'Cliente Atualizada');
       expect(atualizado?.whatsapp, '11922222222');
       expect(atualizado?.email, 'atualizada@studioflow.test');
+      expect(
+        atualizado?.instagramUrl,
+        'https://www.instagram.com/cliente.atualizada/',
+      );
       expect((await repository.listar()).single.nome, 'Cliente Atualizada');
     });
 

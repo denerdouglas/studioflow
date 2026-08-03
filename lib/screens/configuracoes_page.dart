@@ -6,6 +6,7 @@ import '../repositories/configuracoes_repository.dart';
 import '../core/routes/app_routes.dart';
 import '../services/session_controller.dart';
 import 'aparencia_page.dart';
+import 'agendamento_online_page.dart';
 import 'configuracao_comercial_page.dart';
 import 'modelos_mensagens_page.dart';
 import 'pagamentos_sprint4_page.dart';
@@ -193,6 +194,22 @@ class _ConfiguracoesPageState extends State<ConfiguracoesPage> {
                       ),
                     ),
                   ),
+                Card(
+                  child: ListTile(
+                    leading: const Icon(Icons.event_available_outlined),
+                    title: const Text('Agendamento Online'),
+                    subtitle: const Text(
+                      'Link público, compartilhamento e QR Code',
+                    ),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => Navigator.push(
+                      context,
+                      AppRoutes.material(
+                        builder: (_) => const AgendamentoOnlinePage(),
+                      ),
+                    ),
+                  ),
+                ),
                 Card(
                   child: ListTile(
                     leading: const Icon(Icons.palette_outlined),

@@ -5,10 +5,9 @@ import '../core/utils/id_generator.dart';
 import '../integrations/marketplace_provider.dart';
 import '../models/domain/loja.dart';
 import '../repositories/compras_repository.dart';
-import '../repositories/consignacao_repository.dart';
 import '../repositories/loja_repository.dart';
 import '../services/session_controller.dart';
-import 'barcode_scanner_page.dart';
+import 'vision_scanner_page.dart';
 
 double _numero(String valor) =>
     double.tryParse(valor.replaceAll(',', '.')) ?? 0;
@@ -688,7 +687,7 @@ class _OrdensCompraPageState extends State<OrdensCompraPage> {
         if (!mounted) return;
         final codigo = await Navigator.push<String>(
           context,
-          MaterialPageRoute(builder: (_) => const BarcodeScannerPage()),
+          MaterialPageRoute(builder: (_) => const VisionScannerPage()),
         );
         if (codigo == null) return;
         final produto = await LojaRepository().buscarCodigo(codigo);
@@ -836,191 +835,6 @@ class _OrdensCompraPageState extends State<OrdensCompraPage> {
                         ),
                     ],
                   ),
-                ),
-              )
-              .toList(),
-        );
-      },
-    ),
-  );
-}
-
-class ConsignacoesPage extends StatefulWidget {
-  const ConsignacoesPage({super.key});
-  @override
-  State<ConsignacoesPage> createState() => _ConsignacoesPageState();
-}
-
-class _ConsignacoesPageState extends State<ConsignacoesPage> {
-  final repo = ConsignacaoRepository();
-  late Future<List<Map<String, Object?>>> future;
-  @override
-  void initState() {
-    super.initState();
-    carregar();
-  }
-
-  void carregar() => setState(() => future = repo.listar());
-  Future<void> nova() async {
-    final loja = LojaRepository();
-    final fs = await loja.listarFornecedores(ativos: true),
-        ps = await loja.listarProdutos();
-    if (!mounted) return;
-    FornecedorLoja? f;
-    ProdutoLoja? p;
-    final q = TextEditingController(text: '1'),
-        rep = TextEditingController(),
-        preco = TextEditingController(),
-        perc = TextEditingController(text: '30'),
-        lote = TextEditingController();
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setD) => AlertDialog(
-          title: const Text('Receber consignação'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                DropdownButtonFormField<FornecedorLoja>(
-                  decoration: const InputDecoration(labelText: 'Fornecedor'),
-                  items: fs
-                      .map(
-                        (x) => DropdownMenuItem(value: x, child: Text(x.nome)),
-                      )
-                      .toList(),
-                  onChanged: (v) => setD(() => f = v),
-                ),
-                DropdownButtonFormField<ProdutoLoja>(
-                  decoration: const InputDecoration(labelText: 'Produto'),
-                  items: ps
-                      .map(
-                        (x) => DropdownMenuItem(value: x, child: Text(x.nome)),
-                      )
-                      .toList(),
-                  onChanged: (v) => setD(() => p = v),
-                ),
-                TextField(
-                  controller: q,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Quantidade recebida',
-                  ),
-                ),
-                TextField(
-                  controller: rep,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Repasse unitário',
-                  ),
-                ),
-                TextField(
-                  controller: preco,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Preço de venda',
-                  ),
-                ),
-                TextField(
-                  controller: perc,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Percentual do salão',
-                  ),
-                ),
-                TextField(
-                  controller: lote,
-                  decoration: const InputDecoration(labelText: 'Lote/coleção'),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancelar'),
-            ),
-            FilledButton(
-              onPressed: f == null || p == null
-                  ? null
-                  : () => Navigator.pop(context, true),
-              child: const Text('Receber'),
-            ),
-          ],
-        ),
-      ),
-    );
-    if (ok == true) {
-      await repo.receber(
-        fornecedorId: f!.id,
-        produtoId: p!.id,
-        quantidade: _numero(q.text),
-        repasse: _numero(rep.text),
-        precoVenda: _numero(preco.text),
-        percentualSalao: _numero(perc.text),
-        lote: lote.text,
-      );
-      carregar();
-    }
-  }
-
-  Future<void> resumo(Map<String, Object?> c) async {
-    final r = await repo.resumo(c['id'] as String);
-    if (!mounted) return;
-    showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Fechamento da consignação'),
-        content: Text(
-          'Recebidos: ${r.recebidos}\nVendidos: ${r.vendidos}\nDisponíveis: ${r.disponiveis}\nDevolvidos: ${r.devolvidos}\nFaturamento: R\$ ${r.faturamento.toStringAsFixed(2)}\nValor do salão: R\$ ${r.valorSalao.toStringAsFixed(2)}\nDevido ao fornecedor: R\$ ${r.valorFornecedor.toStringAsFixed(2)}',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Voltar'),
-          ),
-          if (c['status'] == 'aberta')
-            FilledButton(
-              onPressed: () async {
-                await repo.fechar(c['id'] as String);
-                if (context.mounted) Navigator.pop(context);
-                carregar();
-              },
-              child: const Text('Fechar consignação'),
-            ),
-        ],
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Consignações')),
-    floatingActionButton: FloatingActionButton.extended(
-      heroTag: null,
-      onPressed: nova,
-      icon: const Icon(Icons.add),
-      label: const Text('Receber'),
-    ),
-    body: FutureBuilder<List<Map<String, Object?>>>(
-      future: future,
-      builder: (context, snap) {
-        if (!snap.hasData) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        if (snap.data!.isEmpty) {
-          return const Center(child: Text('Nenhuma consignação.'));
-        }
-        return ListView(
-          children: snap.data!
-              .map(
-                (c) => ListTile(
-                  title: Text(
-                    '${c['fornecedor_nome']} • ${c['lote_colecao'] ?? 'Sem lote'}',
-                  ),
-                  subtitle: Text('${c['status']} • ${c['recebida_em']}'),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => resumo(c),
                 ),
               )
               .toList(),

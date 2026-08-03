@@ -4,6 +4,7 @@ import 'package:flutter_contacts/flutter_contacts.dart';
 import '../core/routes/app_routes.dart';
 import '../widgets/shared/sheet_handle.dart';
 import '../core/utils/phone_normalizer.dart';
+import '../core/utils/instagram_url.dart';
 import '../models/domain/mensagem_modelo.dart';
 import '../models/domain/configuracao_comercial.dart';
 import '../models/domain/configuracao_comercio.dart';
@@ -444,6 +445,7 @@ class _CadastroClienteSheetState extends State<CadastroClienteSheet> {
 
   final TextEditingController _whatsappController = TextEditingController();
   final TextEditingController _telefoneController = TextEditingController();
+  final TextEditingController _instagramController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _aniversarioController = TextEditingController();
   bool _consentimentoWhatsapp = false;
@@ -464,6 +466,7 @@ class _CadastroClienteSheetState extends State<CadastroClienteSheet> {
     _nomeController.dispose();
     _whatsappController.dispose();
     _telefoneController.dispose();
+    _instagramController.dispose();
     _emailController.dispose();
     _aniversarioController.dispose();
     _observacoesController.dispose();
@@ -558,11 +561,14 @@ class _CadastroClienteSheetState extends State<CadastroClienteSheet> {
   void _salvar() {
     final nome = _nomeController.text.trim();
     final whatsapp = _whatsappController.text.trim();
+    final instagram = InstagramUrl.normalizar(_instagramController.text);
 
-    if (nome.isEmpty || whatsapp.isEmpty) {
+    if (nome.isEmpty || whatsapp.isEmpty || instagram == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Preencha o nome e o WhatsApp.'),
+          content: Text(
+            'Preencha nome, WhatsApp e um perfil válido do Instagram.',
+          ),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -579,6 +585,7 @@ class _CadastroClienteSheetState extends State<CadastroClienteSheet> {
         nome: nome,
         whatsapp: whatsapp,
         telefone: _telefoneController.text.trim(),
+        instagramUrl: instagram,
         email: _emailController.text.trim(),
         dataNascimento: _dataCliente(_aniversarioController.text),
         consentimentoWhatsapp: _consentimentoWhatsapp,
@@ -663,6 +670,16 @@ class _CadastroClienteSheetState extends State<CadastroClienteSheet> {
               decoration: const InputDecoration(
                 labelText: 'Telefone',
                 prefixIcon: Icon(Icons.phone_outlined),
+              ),
+            ),
+            const SizedBox(height: 14),
+            TextField(
+              controller: _instagramController,
+              keyboardType: TextInputType.url,
+              decoration: const InputDecoration(
+                labelText: 'Instagram *',
+                hintText: '@usuario ou instagram.com/usuario',
+                prefixIcon: Icon(Icons.camera_alt_outlined),
               ),
             ),
             const SizedBox(height: 14),
@@ -769,6 +786,7 @@ class _EditarClienteSheetState extends State<EditarClienteSheet> {
   late final TextEditingController _nomeController;
   late final TextEditingController _whatsappController;
   late final TextEditingController _telefoneController;
+  late final TextEditingController _instagramController;
   late final TextEditingController _emailController;
   late final TextEditingController _aniversarioController;
   late bool _consentimentoWhatsapp;
@@ -791,6 +809,9 @@ class _EditarClienteSheetState extends State<EditarClienteSheet> {
 
     _whatsappController = TextEditingController(text: widget.cliente.whatsapp);
     _telefoneController = TextEditingController(text: widget.cliente.telefone);
+    _instagramController = TextEditingController(
+      text: widget.cliente.instagramUrl,
+    );
     _emailController = TextEditingController(text: widget.cliente.email);
     final nascimento = widget.cliente.dataNascimento;
     _aniversarioController = TextEditingController(
@@ -817,6 +838,7 @@ class _EditarClienteSheetState extends State<EditarClienteSheet> {
     _nomeController.dispose();
     _whatsappController.dispose();
     _telefoneController.dispose();
+    _instagramController.dispose();
     _emailController.dispose();
     _aniversarioController.dispose();
     _observacoesController.dispose();
@@ -826,11 +848,14 @@ class _EditarClienteSheetState extends State<EditarClienteSheet> {
   void _salvar() {
     final nome = _nomeController.text.trim();
     final whatsapp = _whatsappController.text.trim();
+    final instagram = InstagramUrl.normalizar(_instagramController.text);
 
-    if (nome.isEmpty || whatsapp.isEmpty) {
+    if (nome.isEmpty || whatsapp.isEmpty || instagram == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Preencha o nome e o WhatsApp.'),
+          content: Text(
+            'Preencha nome, WhatsApp e um perfil válido do Instagram.',
+          ),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -844,6 +869,7 @@ class _EditarClienteSheetState extends State<EditarClienteSheet> {
         nome: nome,
         whatsapp: whatsapp,
         telefone: _telefoneController.text.trim(),
+        instagramUrl: instagram,
         email: _emailController.text.trim(),
         dataNascimento: _dataCliente(_aniversarioController.text),
         consentimentoWhatsapp: _consentimentoWhatsapp,
@@ -904,6 +930,16 @@ class _EditarClienteSheetState extends State<EditarClienteSheet> {
               decoration: const InputDecoration(
                 labelText: 'Telefone',
                 prefixIcon: Icon(Icons.phone_outlined),
+              ),
+            ),
+            const SizedBox(height: 14),
+            TextField(
+              controller: _instagramController,
+              keyboardType: TextInputType.url,
+              decoration: const InputDecoration(
+                labelText: 'Instagram *',
+                hintText: '@usuario ou instagram.com/usuario',
+                prefixIcon: Icon(Icons.camera_alt_outlined),
               ),
             ),
             const SizedBox(height: 14),

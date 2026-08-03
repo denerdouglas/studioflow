@@ -42,6 +42,9 @@ class ExternalActionService {
     return launchUrl(Uri(scheme: 'tel', path: numero));
   }
 
+  Future<bool> abrirUrlExterna(Uri url) =>
+      launchUrl(url, mode: LaunchMode.externalApplication);
+
   Future<ResultadoWhatsApp> abrirWhatsApp({
     String? telefone,
     required String mensagem,

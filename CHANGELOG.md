@@ -1,4 +1,24 @@
 # Changelog
+
+## [1.4.6] - 2026-08-03
+
+### Changed
+- Corrige a navegação inferior para Início, Agenda, Loja e Mais; Loja abre a Loja do Salão.
+- Move Clientes para Mais preservando o layout premium e os temas Light/Dark.
+- Torna o Instagram obrigatório, normaliza o perfil e abre a URL exata salva.
+- Ativa WhatsApp, Instagram e Telefone no detalhe premium e preserva edição e inativação lógica.
+- Centraliza as entradas de scanner em código/QR, OCR, revisão e digitação manual.
+- Conecta o agendamento público ao motor de agenda e ao cadastro principal, com confirmação, cancelamento, reagendamento, idempotência e sincronização.
+- Substitui a IA local estática por conversa operacional com histórico, consultas reais, isolamento, permissões e ações com prévia.
+- Entrega comandas de produtos com cliente, scanner/código, itens, desconto, comissão, estoque, pagamentos, compartilhamento e estorno.
+- Entrega maletas de joias consignadas com peças únicas, estados, venda, devolução, conferência, arquivamento e histórico.
+- Entrega contas a receber vinculadas às comandas, com vencimento configurável, filtros, pagamentos parciais/totais e estorno.
+- Completa o catálogo administrativo de afiliados com ofertas, CSV, demandas sem resultado, cliques e redirect seguro.
+
+### Fixed
+- Remove respostas de sucesso simuladas do scanner HTTP, assinatura e marketplace quando a integração real não está configurada.
+- Mantém as páginas públicas e legais existentes sem novo deploy nesta finalização local.
+
 All notable changes to this project will be documented in this file.
 
 ## [1.4.5] - 2026-08-03

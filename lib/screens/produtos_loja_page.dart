@@ -6,7 +6,7 @@ import '../models/domain/loja.dart';
 import '../repositories/loja_repository.dart';
 import '../services/product_lookup_service.dart';
 import '../services/session_controller.dart';
-import 'barcode_scanner_page.dart';
+import 'vision_scanner_page.dart';
 import 'estoque_page.dart';
 
 class ProdutosLojaPage extends StatefulWidget {
@@ -64,7 +64,7 @@ class _ProdutosLojaPageState extends State<ProdutosLojaPage> {
   Future<void> _lerCodigo() async {
     final codigo = await Navigator.push<String>(
       context,
-      MaterialPageRoute(builder: (_) => const BarcodeScannerPage()),
+      MaterialPageRoute(builder: (_) => const VisionScannerPage()),
     );
     if (!mounted || codigo == null) return;
     try {
@@ -302,7 +302,7 @@ class _ProdutoFormPageState extends State<ProdutoFormPage> {
   Future<void> _scan() async {
     final codigo = await Navigator.push<String>(
       context,
-      MaterialPageRoute(builder: (_) => const BarcodeScannerPage()),
+      MaterialPageRoute(builder: (_) => const VisionScannerPage()),
     );
     if (!mounted || codigo == null) return;
     setState(() => consultandoCodigo = true);

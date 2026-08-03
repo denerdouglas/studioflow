@@ -8,7 +8,7 @@ class ExtractedTagData {
   final String? material;
   final double? preco;
 
-  ExtractedTagData({
+  const ExtractedTagData({
     this.codigo,
     this.nome,
     this.fornecedor,
@@ -20,108 +20,99 @@ class ExtractedTagData {
 
 class VisionOcrService {
   static Future<ExtractedTagData> processImage(String imagePath) async {
-    final inputImage = InputImage.fromFilePath(imagePath);
-    final textRecognizer = TextRecognizer(script: TextRecognitionScript.latin);
-
+    final recognizer = TextRecognizer(script: TextRecognitionScript.latin);
     try {
-      final RecognizedText recognizedText = await textRecognizer.processImage(
-        inputImage,
+      final result = await recognizer.processImage(
+        InputImage.fromFilePath(imagePath),
       );
-      final text = recognizedText.text;
-
-      // Simple regex based parsing for demonstration/extraction.
-      // Can be enhanced based on typical tag formats.
-      String? codigo;
-      String? nome;
-      String? fornecedor;
-      String? descricao;
-      String? material;
-      double? preco;
-
-      final lines = text
-          .split('\n')
-          .map((e) => e.trim())
-          .where((e) => e.isNotEmpty)
-          .toList();
-
-      for (int i = 0; i < lines.length; i++) {
-        final lower = lines[i].toLowerCase();
-
-        if (lower.contains('código') ||
-            lower.contains('codigo') ||
-            lower.contains('ref') ||
-            RegExp(r'^\d{8,14}$').hasMatch(lower)) {
-          if (codigo == null) {
-            if (lower.contains(':')) {
-              codigo = lines[i].split(':').last.trim();
-            } else if (RegExp(r'^\d{8,14}$').hasMatch(lower)) {
-              codigo = lines[i];
-            } else if (i + 1 < lines.length) {
-              codigo = lines[i + 1];
-            }
-          }
-        }
-
-        if (lower.contains('rs') ||
-            lower.contains(r'r$') ||
-            lower.contains(r'$')) {
-          if (preco == null) {
-            final match = RegExp(r'[\d.,]+').firstMatch(lower);
-            if (match != null) {
-              final valStr = match
-                  .group(0)!
-                  .replaceAll('.', '')
-                  .replaceAll(',', '.');
-              preco = double.tryParse(valStr);
-            }
-          }
-        }
-
-        if (lower.contains('marca') || lower.contains('fornecedor')) {
-          if (fornecedor == null) {
-            if (lower.contains(':')) {
-              fornecedor = lines[i].split(':').last.trim();
-            } else if (i + 1 < lines.length) {
-              fornecedor = lines[i + 1];
-            }
-          }
-        }
-
-        if (lower.contains('material') || lower.contains('comp')) {
-          if (material == null) {
-            if (lower.contains(':')) {
-              material = lines[i].split(':').last.trim();
-            } else if (i + 1 < lines.length) {
-              material = lines[i + 1];
-            }
-          }
-        }
-      }
-
-      // Fallbacks
-      if (lines.isNotEmpty) {
-        // Assume first line that is not a code or price is the name
-        for (final line in lines) {
-          final l = line.toLowerCase();
-          if (!l.contains(r'r$') &&
-              !l.contains('código') &&
-              !RegExp(r'^\d+$').hasMatch(l)) {
-            nome = line;
-            break;
-          }
-        }
-      }
-
-      return ExtractedTagData(
-        codigo: codigo,
-        nome: nome,
-        fornecedor: fornecedor,
-        descricao: descricao,
-        material: material,
-        preco: preco,
-      );
+      return parseText(result.text);
     } finally {
-      textRecognizer.close();
+      await recognizer.close();
     }
+  }
+
+  static ExtractedTagData parseText(String text) {
+    final lines = text
+        .split(RegExp(r'[\r\n]+'))
+        .map((line) => line.trim())
+        .where((line) => line.isNotEmpty)
+        .toList();
+    String? codigo;
+    double? preco;
+    String? nome;
+    String? fornecedor;
+    String? descricao;
+    String? material;
+
+    final pricePattern = RegExp(
+      r'(?:R\$|RS|\$)\s*([0-9]{1,6}(?:[.,][0-9]{2})?)',
+      caseSensitive: false,
+    );
+    final plainMoneyPattern = RegExp(r'^([0-9]{1,6})[,.]([0-9]{2})$');
+    final codePattern = RegExp(r'^\d{4,14}$');
+    final materialPattern = RegExp(
+      r'\b(prata|ouro|aço|aco|folheado|banhado|algodão|algodao|couro|seda)\b',
+      caseSensitive: false,
+    );
+
+    for (final line in lines) {
+      final price = pricePattern.firstMatch(line);
+      final plainPrice = plainMoneyPattern.firstMatch(line);
+      if (preco == null && (price != null || plainPrice != null)) {
+        final value =
+            price?.group(1) ?? '${plainPrice!.group(1)},${plainPrice.group(2)}';
+        preco = double.tryParse(value.replaceAll('.', '').replaceAll(',', '.'));
+        continue;
+      }
+      final compact = line.replaceAll(RegExp(r'[\s-]'), '');
+      if (codigo == null && codePattern.hasMatch(compact)) {
+        codigo = compact;
+        continue;
+      }
+      final lower = line.toLowerCase();
+      if ((lower.startsWith('código:') ||
+              lower.startsWith('codigo:') ||
+              lower.startsWith('ref:') ||
+              lower.startsWith('referência:')) &&
+          codigo == null) {
+        final candidate = line.split(':').last.replaceAll(RegExp(r'\D'), '');
+        if (codePattern.hasMatch(candidate)) codigo = candidate;
+        continue;
+      }
+      if ((lower.startsWith('marca:') || lower.startsWith('fornecedor:')) &&
+          fornecedor == null) {
+        fornecedor = line.split(':').last.trim();
+        continue;
+      }
+      if ((lower.startsWith('material:') ||
+              lower.startsWith('descrição:') ||
+              lower.startsWith('descricao:')) &&
+          descricao == null) {
+        descricao = line.split(':').last.trim();
+        material = materialPattern.firstMatch(descricao)?.group(0);
+        continue;
+      }
+      if (nome == null) {
+        nome = line;
+        if (materialPattern.hasMatch(line)) {
+          descricao = line;
+          material = materialPattern.firstMatch(line)?.group(0);
+        }
+      } else if (material == null && materialPattern.hasMatch(line)) {
+        descricao = line;
+        material = materialPattern.firstMatch(line)?.group(0);
+      } else {
+        fornecedor ??= line;
+      }
+    }
+
+    return ExtractedTagData(
+      codigo: codigo,
+      nome: nome,
+      fornecedor: fornecedor,
+      descricao: descricao,
+      material: material,
+      preco: preco,
+    );
   }
 }

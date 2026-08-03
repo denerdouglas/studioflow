@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../repositories/estoque_repository.dart';
 import '../services/vision_ocr_service.dart';
 
 class VisionScannerPreviewPage extends StatefulWidget {
@@ -25,7 +24,6 @@ class _VisionScannerPreviewPageState extends State<VisionScannerPreviewPage> {
   late final TextEditingController _materialController;
   late final TextEditingController _precoController;
 
-  bool _salvando = false;
   String? _erro;
 
   @override
@@ -62,76 +60,34 @@ class _VisionScannerPreviewPageState extends State<VisionScannerPreviewPage> {
     super.dispose();
   }
 
-  Future<void> _salvar() async {
+  void _confirmar() {
     final codigo = _codigoController.text.trim();
-    final nome = _nomeController.text.trim();
-
     if (codigo.isEmpty) {
       setState(() => _erro = 'O código é obrigatório.');
       return;
     }
-
-    if (nome.isEmpty) {
-      setState(() => _erro = 'O nome é obrigatório.');
-      return;
-    }
-
-    setState(() {
-      _salvando = true;
-      _erro = null;
-    });
-
-    try {
-      final repo = EstoqueRepository();
-
-      // Checar se já existe um produto com o mesmo código de barras
-      final itens = await repo.listar(incluirInativos: true);
-      final existeCodigo = itens.any((i) => i.codigoBarras == codigo);
-      if (existeCodigo) {
-        setState(() {
-          _erro = 'Já existe um produto no estoque com este código de barras.';
-          _salvando = false;
-        });
-        return;
-      }
-
-      final preco =
-          double.tryParse(_precoController.text.replaceAll(',', '.')) ?? 0;
-
-      final novoItem = ItemEstoqueRegistro(
-        id: DateTime.now().microsecondsSinceEpoch.toString(),
-        nome: nome,
-        categoria: 'Outros',
-        tipo: 'revenda',
-        quantidadeAtual: 1, // Start with 1 for now or 0
-        estoqueMinimo: 1,
-        unidade: 'unidade',
-        conteudoPorUnidade: 1,
-        unidadeConteudo: '',
-        revisaoModelagemEstoque: false,
-        custoUnitario: preco,
-        fornecedor: _fornecedorController.text.trim(),
-        codigoBarras: codigo,
-        dataValidade: null,
-        ativo: true,
-        descontarAutomaticamente: true,
-        observacoes:
-            'Material: ${_materialController.text.trim()}\nDesc: ${_descricaoController.text.trim()}',
-        dataCadastro: DateTime.now(),
-      );
-
-      await repo.inserir(novoItem);
-
-      if (!mounted) return;
-      Navigator.pop(context, novoItem);
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _erro = 'Erro ao salvar: $e';
-          _salvando = false;
-        });
-      }
-    }
+    final preco = double.tryParse(
+      _precoController.text.trim().replaceAll('.', '').replaceAll(',', '.'),
+    );
+    Navigator.pop(
+      context,
+      ExtractedTagData(
+        codigo: codigo,
+        nome: _nomeController.text.trim().isEmpty
+            ? null
+            : _nomeController.text.trim(),
+        fornecedor: _fornecedorController.text.trim().isEmpty
+            ? null
+            : _fornecedorController.text.trim(),
+        descricao: _descricaoController.text.trim().isEmpty
+            ? null
+            : _descricaoController.text.trim(),
+        material: _materialController.text.trim().isEmpty
+            ? null
+            : _materialController.text.trim(),
+        preco: preco,
+      ),
+    );
   }
 
   @override
@@ -197,17 +153,8 @@ class _VisionScannerPreviewPageState extends State<VisionScannerPreviewPage> {
             ),
             const SizedBox(height: 24),
             FilledButton(
-              onPressed: _salvando ? null : _salvar,
-              child: _salvando
-                  ? const SizedBox(
-                      height: 20,
-                      width: 20,
-                      child: CircularProgressIndicator(
-                        color: Colors.white,
-                        strokeWidth: 2,
-                      ),
-                    )
-                  : const Text('Confirmar e Salvar'),
+              onPressed: _confirmar,
+              child: const Text('Confirmar leitura'),
             ),
           ],
         ),

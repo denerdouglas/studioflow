@@ -112,11 +112,64 @@ final class MarketplaceClick {
   });
 }
 
+final class MarketplaceOffer {
+  final String id;
+  final String partnerId;
+  final String title;
+  final String seller;
+  final String destinationUrl;
+  final int? priceCents;
+  final bool active;
+  final DateTime verifiedAt;
+  final String? brand;
+  final String? category;
+  final String? gtin;
+  final String? productCode;
+  final List<String> keywords;
+
+  const MarketplaceOffer({
+    required this.id,
+    required this.partnerId,
+    required this.title,
+    required this.seller,
+    required this.destinationUrl,
+    this.priceCents,
+    required this.active,
+    required this.verifiedAt,
+    this.brand,
+    this.category,
+    this.gtin,
+    this.productCode,
+    this.keywords = const [],
+  });
+
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'partnerId': partnerId,
+    'title': title,
+    'seller': seller,
+    'destinationUrl': destinationUrl,
+    'priceCents': priceCents,
+    'active': active,
+    'verifiedAt': verifiedAt.toIso8601String(),
+    'brand': brand,
+    'category': category,
+    'gtin': gtin,
+    'productCode': productCode,
+    'keywords': keywords,
+  };
+}
+
 abstract interface class MarketplaceBackendStore {
   Future<List<MarketplacePartner>> listActivePartners();
   Future<List<MarketplacePartner>> listAllPartners();
   Future<MarketplacePartner?> findPartnerById(String id);
   Future<void> savePartner(MarketplacePartner partner);
+  Future<List<MarketplaceOffer>> searchOffers(String query);
+  Future<List<MarketplaceOffer>> listOffers();
+  Future<void> saveOffer(MarketplaceOffer offer);
+  Future<List<MarketplaceClick>> listClicks();
+  Future<List<Map<String, Object?>>> listSearchDemands();
 
   Future<List<MarketplacePartnerDomain>> listDomainsForPartner(
     String partnerId,
@@ -161,6 +214,14 @@ class MarketplaceService {
   Future<List<MarketplacePartner>> listAllPartners() =>
       _store.listAllPartners();
 
+  Future<List<MarketplaceOffer>> searchOffers(String query) =>
+      _store.searchOffers(query);
+  Future<List<MarketplaceOffer>> listOffers() => _store.listOffers();
+  Future<void> saveOffer(MarketplaceOffer offer) => _store.saveOffer(offer);
+  Future<List<MarketplaceClick>> listClicks() => _store.listClicks();
+  Future<List<Map<String, Object?>>> listSearchDemands() =>
+      _store.listSearchDemands();
+
   Future<void> logSearch({
     required String? businessId,
     required String userId,
@@ -194,16 +255,16 @@ class MarketplaceService {
     // 1. Validate Partner exists and is active
     final partner = await _store.findPartnerById(partnerId);
     if (partner == null || partner.status != 'active') {
-      throw Exception('Parceiro inválido ou inativo.');
+      throw Exception('Parceiro invÃƒÂ¡lido ou inativo.');
     }
 
     // 2. Validate Domain (allowlist)
     final uri = Uri.tryParse(destinationUrl);
     if (uri == null || uri.scheme != 'https') {
-      throw Exception('URL de destino inválida ou esquema não seguro.');
+      throw Exception('URL de destino invÃƒÂ¡lida ou esquema nÃƒÂ£o seguro.');
     }
     if (uri.userInfo.isNotEmpty) {
-      throw Exception('URL com credenciais não é permitida.');
+      throw Exception('URL com credenciais nÃƒÂ£o ÃƒÂ© permitida.');
     }
 
     // Check against allowlist
@@ -221,7 +282,7 @@ class MarketplaceService {
       }
     }
     if (!isAllowed) {
-      throw Exception('Domínio não autorizado para este parceiro.');
+      throw Exception('DomÃƒÂ­nio nÃƒÂ£o autorizado para este parceiro.');
     }
 
     // 3. Create Click UUIDv7 (approximate using timestamp + random for now, or true v7 if available)
@@ -253,10 +314,10 @@ class MarketplaceService {
   Future<String> resolveRedirect(String clickId) async {
     final click = await _store.findClick(clickId);
     if (click == null) {
-      throw Exception('Link não encontrado.');
+      throw Exception('Link nÃƒÂ£o encontrado.');
     }
     if (click.clickStatus != 'created') {
-      throw Exception('Link já utilizado ou inválido.');
+      throw Exception('Link jÃƒÂ¡ utilizado ou invÃƒÂ¡lido.');
     }
     if (click.expiresAt != null &&
         DateTime.now().toUtc().isAfter(click.expiresAt!)) {
@@ -267,7 +328,7 @@ class MarketplaceService {
     final partner = await _store.findPartnerById(click.partnerId);
     if (partner == null || partner.status != 'active') {
       await _store.updateClickStatus(clickId, 'blocked');
-      throw Exception('Parceiro indisponível.');
+      throw Exception('Parceiro indisponÃƒÂ­vel.');
     }
 
     // Apply URL template if available

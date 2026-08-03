@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Agendamento StudioFlow</title>
+<style>
+:root{--primary:#70569a;--surface:#fff;--text:#211b2b}*{box-sizing:border-box}body{margin:0;background:#f5f2f8;color:var(--text);font:16px system-ui,sans-serif}main{max-width:680px;margin:auto;padding:20px}.card{background:var(--surface);border-radius:18px;padding:20px;margin:14px 0;box-shadow:0 4px 24px #0001}header{text-align:center}header img{max-width:110px;max-height:110px;border-radius:22px}label{display:block;margin:14px 0 5px;font-weight:600}select,input,textarea,button{width:100%;padding:13px;border:1px solid #ccc;border-radius:12px;font:inherit}button{margin-top:14px;background:var(--primary);color:#fff;border:0;font-weight:700;cursor:pointer}button.secondary{background:#eee;color:#222}.slots{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.slots button{margin:0}.slots button.active{outline:3px solid #222}.hidden{display:none}.error{color:#a40018}.muted{color:#666;font-size:.9rem}.spinner{width:34px;height:34px;border:4px solid #ddd;border-top-color:var(--primary);border-radius:50%;animation:r 1s linear infinite;margin:30px auto}@keyframes r{to{transform:rotate(360deg)}}@media(max-width:480px){main{padding:12px}.slots{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body><main>
+<div id="loading" class="card"><div class="spinner"></div><p>Carregando o salão…</p></div>
+<div id="error" class="card error hidden"></div>
+<section id="app" class="hidden">
+<header class="card"><img id="logo" class="hidden" alt="Logo"><h1 id="name"></h1><p id="address"></p></header>
+<form id="form" class="card">
+<label for="unit">Unidade</label><select id="unit"></select>
+<label for="service">Serviço</label><select id="service" required></select>
+<label for="professional">Profissional</label><select id="professional"><option value="">Qualquer profissional</option></select>
+<label for="date">Data</label><input id="date" type="date" required>
+<label>Horários disponíveis</label><div id="slots" class="slots"></div><p id="slotHelp" class="muted">Escolha serviço e data.</p>
+<label for="clientName">Seu nome</label><input id="clientName" maxlength="160" required autocomplete="name">
+<label for="phone">WhatsApp</label><input id="phone" inputmode="tel" required autocomplete="tel">
+<label for="notes">Observação (opcional)</label><textarea id="notes" maxlength="500"></textarea>
+<div id="review" class="hidden"></div><button type="submit">Revisar agendamento</button>
+</form>
+<div id="success" class="card hidden"></div>
+</section>
+</main>
+<script>
+const api='https://api.studioflowapp.com.br',slug=location.pathname.split('/').filter(Boolean).pop();
+const $=id=>document.getElementById(id);let chosen=null,business=null,serviceRows=[];
+const showError=m=>{$('loading').classList.add('hidden');$('app').classList.add('hidden');$('error').textContent=m;$('error').classList.remove('hidden')};
+async function get(path,options){const r=await fetch(api+path,options);const j=await r.json().catch(()=>({}));if(!r.ok)throw Error(j.message||'Não foi possível concluir.');return j}
+function options(el,rows,label='nome'){el.innerHTML=rows.map(x=>`<option value="${x.id}">${x[label]||''}</option>`).join('')}
+async function load(){
+ try{business=await get('/v1/public/booking/'+encodeURIComponent(slug));if(!business.enabled)throw Error(business.message||'Agendamento indisponível.');
+ document.documentElement.style.setProperty('--primary',business.color_primary||'#70569a');$('name').textContent=business.name;$('address').textContent=[business.city,business.state].filter(Boolean).join(' — ');
+ if(business.logo_url){$('logo').src=business.logo_url;$('logo').classList.remove('hidden')}
+ const [services,professionals]=await Promise.all([get(`/v1/public/booking/${slug}/services`),get(`/v1/public/booking/${slug}/professionals`)]);
+ serviceRows=services.results;options($('service'),serviceRows);$('service').insertAdjacentHTML('afterbegin','<option value="">Escolha…</option>');
+ $('professional').insertAdjacentHTML('beforeend',professionals.results.map(x=>`<option value="${x.id}">${x.nome}</option>`).join(''));
+ $('unit').innerHTML='<option value="">Unidade principal</option>';const today=new Date();today.setMinutes(today.getMinutes()-today.getTimezoneOffset());$('date').min=today.toISOString().slice(0,10);
+ $('loading').classList.add('hidden');$('app').classList.remove('hidden')
+ }catch(e){showError(e.message)}
+}
+async function availability(){chosen=null;$('slots').innerHTML='';if(!$('service').value||!$('date').value)return;
+ try{const q=new URLSearchParams({date:$('date').value,serviceId:$('service').value});if($('professional').value)q.set('professionalId',$('professional').value);if($('unit').value)q.set('unitId',$('unit').value);
+ const data=await get(`/v1/public/booking/${slug}/availability?${q}`);$('slotHelp').textContent=data.slots.length?'Escolha um horário.':'Nenhum horário disponível.';
+ data.slots.forEach(value=>{const b=document.createElement('button');b.type='button';b.textContent=new Date(value).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});b.onclick=()=>{document.querySelectorAll('.slots button').forEach(x=>x.classList.remove('active'));b.classList.add('active');chosen=value};$('slots').appendChild(b)})
+ }catch(e){$('slotHelp').textContent=e.message}}
+['service','professional','unit','date'].forEach(id=>$(id).addEventListener('change',availability));
+$('form').onsubmit=async e=>{e.preventDefault();if(!chosen)return alert('Escolha um horário.');const service=$('service').selectedOptions[0].textContent;
+ if(!$('review').classList.contains('hidden')){const start=new Date(chosen),duration=Number(serviceRows.find(x=>x.id===$('service').value)?.duracao_minutos||60),end=new Date(start.getTime()+duration*60000),key=crypto.randomUUID();
+ try{const data=await get(`/v1/public/booking/${slug}/appointments`,{method:'POST',headers:{'content-type':'application/json','idempotency-key':key},body:JSON.stringify({serviceId:$('service').value,professionalId:$('professional').value||null,unitId:$('unit').value||null,name:$('clientName').value,phone:$('phone').value,notes:$('notes').value,startsAt:start.toISOString(),endsAt:end.toISOString()})});
+ $('form').classList.add('hidden');$('success').innerHTML=`<h2>Agendamento confirmado</h2><p>${service}<br>${start.toLocaleString('pt-BR')}</p><p class="muted">Guarde seu link seguro para confirmar, cancelar ou reagendar.</p><a href="/agendamento/${encodeURIComponent(data.token)}">Abrir agendamento</a>`;$('success').classList.remove('hidden')}catch(err){alert(err.message)}return}
+ $('review').innerHTML=`<h2>Revise</h2><p><b>${service}</b><br>${new Date(chosen).toLocaleString('pt-BR')}<br>${$('clientName').value} — ${$('phone').value}</p>`;$('review').classList.remove('hidden');e.submitter.textContent='Confirmar agendamento'};
+load();
+</script></body></html>

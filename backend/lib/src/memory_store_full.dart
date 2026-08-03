@@ -13,6 +13,11 @@ final class MemoryBackendStore
   final List<_BusinessChange> _changes = [];
   final List<Map<String, Object?>> audits = [];
   int _cursor = 0;
+  final Map<String, MarketplacePartner> _marketplacePartners = {};
+  final Map<String, MarketplaceOffer> _marketplaceOffers = {};
+  final List<Map<String, Object?>> _marketplaceDemands = [];
+  final Map<String, MarketplaceClick> _marketplaceClicks = {};
+  final Map<String, MarketplacePartnerDomain> _marketplaceDomains = {};
 
   String _accountKey(String userId, String businessId) =>
       '$businessId::$userId';
@@ -264,19 +269,65 @@ final class MemoryBackendStore
   Future<PlatformAdmin?> findPlatformAdminByUserId(String userId) async => null;
 
   @override
-  Future<List<MarketplacePartner>> listActivePartners() async => [];
+  Future<List<MarketplacePartner>> listActivePartners() async =>
+      _marketplacePartners.values
+          .where((partner) => partner.status == 'active')
+          .toList();
   @override
-  Future<List<MarketplacePartner>> listAllPartners() async => [];
+  Future<List<MarketplacePartner>> listAllPartners() async =>
+      _marketplacePartners.values.toList();
   @override
-  Future<MarketplacePartner?> findPartnerById(String id) async => null;
+  Future<MarketplacePartner?> findPartnerById(String id) async =>
+      _marketplacePartners[id];
   @override
-  Future<void> savePartner(MarketplacePartner partner) async {}
+  Future<void> savePartner(MarketplacePartner partner) async =>
+      _marketplacePartners[partner.id] = partner;
+  @override
+  Future<List<MarketplaceOffer>> searchOffers(String query) async {
+    final normalized = query.trim().toLowerCase();
+    return _marketplaceOffers.values
+        .where(
+          (offer) =>
+              offer.active &&
+              _marketplacePartners[offer.partnerId]?.status == 'active' &&
+              [
+                    offer.title,
+                    offer.seller,
+                    offer.brand,
+                    offer.category,
+                    offer.gtin,
+                    offer.productCode,
+                    ...offer.keywords,
+                  ]
+                  .whereType<String>()
+                  .join(' ')
+                  .toLowerCase()
+                  .contains(normalized),
+        )
+        .toList();
+  }
+
+  @override
+  Future<List<MarketplaceOffer>> listOffers() async =>
+      _marketplaceOffers.values.toList();
+  @override
+  Future<void> saveOffer(MarketplaceOffer offer) async =>
+      _marketplaceOffers[offer.id] = offer;
+  @override
+  Future<List<MarketplaceClick>> listClicks() async =>
+      _marketplaceClicks.values.toList();
+  @override
+  Future<List<Map<String, Object?>>> listSearchDemands() async =>
+      List.unmodifiable(_marketplaceDemands);
   @override
   Future<List<MarketplacePartnerDomain>> listDomainsForPartner(
     String partnerId,
-  ) async => [];
+  ) async => _marketplaceDomains.values
+      .where((domain) => domain.partnerId == partnerId)
+      .toList();
   @override
-  Future<void> saveDomain(MarketplacePartnerDomain domain) async {}
+  Future<void> saveDomain(MarketplacePartnerDomain domain) async =>
+      _marketplaceDomains[domain.id] = domain;
   @override
   Future<void> logSearch({
     required String? businessId,
@@ -286,11 +337,34 @@ final class MemoryBackendStore
     required bool cacheHit,
     required int resultsCount,
     required int responseTimeMs,
-  }) async {}
+  }) async {
+    if (resultsCount == 0) {
+      final normalized = query.trim().toLowerCase();
+      final index = _marketplaceDemands.indexWhere(
+        (item) =>
+            item['businessId'] == businessId &&
+            item['normalizedQuery'] == normalized,
+      );
+      if (index < 0) {
+        _marketplaceDemands.add({
+          'businessId': businessId,
+          'query': query,
+          'normalizedQuery': normalized,
+          'searchCount': 1,
+        });
+      } else {
+        _marketplaceDemands[index]['searchCount'] =
+            (_marketplaceDemands[index]['searchCount'] as int) + 1;
+      }
+    }
+  }
+
   @override
-  Future<void> recordClick(MarketplaceClick click) async {}
+  Future<void> recordClick(MarketplaceClick click) async =>
+      _marketplaceClicks[click.id] = click;
   @override
-  Future<MarketplaceClick?> findClick(String id) async => null;
+  Future<MarketplaceClick?> findClick(String id) async =>
+      _marketplaceClicks[id];
   @override
   Future<void> updateClickStatus(
     String id,

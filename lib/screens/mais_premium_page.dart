@@ -10,11 +10,13 @@ import '../repositories/academy_repository.dart';
 import 'aniversarios_page.dart';
 import 'assinaturas_page.dart';
 import 'central_atendimento_page.dart';
+import 'clientes_page.dart';
 import 'commercial_center_page.dart';
 import 'ia_local_page.dart';
 import 'loja_salao_page.dart';
 import 'cardapio_page.dart';
 import 'privacy_page.dart';
+import 'configuracoes_page.dart';
 import 'producao_page.dart';
 
 class MaisPremiumPage extends StatelessWidget {
@@ -51,6 +53,15 @@ class MaisPremiumPage extends StatelessWidget {
           _buildUserProfile(usuario, context),
           const SizedBox(height: 24),
           _buildSectionTitle('Gestão & Vendas'),
+          if (usuario.pode(ModuloPermissao.clientes))
+            _buildMenuItem(
+              context: context,
+              icon: Icons.people_outline,
+              color: const Color(0xFF70569A),
+              title: 'Clientes',
+              subtitle: 'Cadastro, contatos e histórico',
+              destination: const ClientesPage(),
+            ),
           if (usuario.pode(ModuloPermissao.agenda))
             _buildMenuItem(
               context: context,
@@ -140,6 +151,15 @@ class MaisPremiumPage extends StatelessWidget {
 
           const SizedBox(height: 24),
           _buildSectionTitle('Conta e Segurança'),
+          if (usuario.pode(ModuloPermissao.configuracoes))
+            _buildMenuItem(
+              context: context,
+              icon: Icons.settings_outlined,
+              color: const Color(0xFF70569A),
+              title: 'Configurações do Salão',
+              subtitle: 'Dados, aparência e agendamento online',
+              destination: const ConfiguracoesPage(),
+            ),
           _buildMenuItem(
             context: context,
             icon: Icons.privacy_tip_outlined,
@@ -247,32 +267,39 @@ class MaisPremiumPage extends StatelessWidget {
           ),
         ],
       ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-        leading: Container(
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(12),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(16),
+        child: ListTile(
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 4,
           ),
-          child: Icon(icon, color: color, size: 22),
-        ),
-        title: Text(
-          title,
-          style: const TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 15,
-            color: Color(0xFF2D2140),
+          leading: Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, color: color, size: 22),
           ),
-        ),
-        subtitle: Text(
-          subtitle,
-          style: const TextStyle(fontSize: 13, color: Color(0xFF766A85)),
-        ),
-        trailing: const Icon(Icons.chevron_right, color: Color(0xFFDCD5E4)),
-        onTap: () => Navigator.push(
-          context,
-          AppRoutes.material(builder: (_) => destination),
+          title: Text(
+            title,
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 15,
+              color: Color(0xFF2D2140),
+            ),
+          ),
+          subtitle: Text(
+            subtitle,
+            style: const TextStyle(fontSize: 13, color: Color(0xFF766A85)),
+          ),
+          trailing: const Icon(Icons.chevron_right, color: Color(0xFFDCD5E4)),
+          onTap: () => Navigator.push(
+            context,
+            AppRoutes.material(builder: (_) => destination),
+          ),
         ),
       ),
     );

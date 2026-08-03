@@ -2,9 +2,14 @@ import 'models.dart';
 import 'marketplace.dart';
 import 'store.dart';
 import 'admin.dart';
+import 'public_booking.dart';
 
 final class MemoryBackendStore
-    implements BackendStore, MarketplaceBackendStore, AdminBackendStore {
+    implements
+        BackendStore,
+        MarketplaceBackendStore,
+        AdminBackendStore,
+        PublicBookingStore {
   final Map<String, AccountIdentity> _accounts = {};
   final Map<String, SessionRecord> _sessions = {};
   final Map<String, _ResetRecord> _resets = {};
@@ -13,6 +18,15 @@ final class MemoryBackendStore
   final List<_BusinessChange> _changes = [];
   final List<Map<String, Object?>> audits = [];
   int _cursor = 0;
+  final Map<String, PublicBookingBusiness> _publicBookings = {};
+  final Map<String, PublicAppointment> _publicAppointments = {};
+  final Map<String, String> _publicIdempotency = {};
+  final Map<String, String> _publicMainAppointments = {};
+  final Map<String, MarketplacePartner> _marketplacePartners = {};
+  final Map<String, MarketplaceOffer> _marketplaceOffers = {};
+  final List<Map<String, Object?>> _marketplaceDemands = [];
+  final Map<String, MarketplacePartnerDomain> _marketplaceDomains = {};
+  final Map<String, MarketplaceClick> _marketplaceClicks = {};
 
   String _accountKey(String userId, String businessId) =>
       '$businessId::$userId';
@@ -264,19 +278,62 @@ final class MemoryBackendStore
   Future<PlatformAdmin?> findPlatformAdminByUserId(String userId) async => null;
 
   @override
-  Future<List<MarketplacePartner>> listActivePartners() async => [];
+  Future<List<MarketplacePartner>> listActivePartners() async =>
+      _marketplacePartners.values
+          .where((partner) => partner.status == 'active')
+          .toList();
   @override
-  Future<List<MarketplacePartner>> listAllPartners() async => [];
+  Future<List<MarketplacePartner>> listAllPartners() async =>
+      _marketplacePartners.values.toList();
   @override
-  Future<MarketplacePartner?> findPartnerById(String id) async => null;
+  Future<MarketplacePartner?> findPartnerById(String id) async =>
+      _marketplacePartners[id];
   @override
-  Future<void> savePartner(MarketplacePartner partner) async {}
+  Future<void> savePartner(MarketplacePartner partner) async =>
+      _marketplacePartners[partner.id] = partner;
+  @override
+  Future<List<MarketplaceOffer>> searchOffers(String query) async {
+    final normalized = query.trim().toLowerCase();
+    return _marketplaceOffers.values.where((offer) {
+      if (!offer.active ||
+          !_marketplacePartners.containsKey(offer.partnerId) ||
+          _marketplacePartners[offer.partnerId]!.status != 'active') {
+        return false;
+      }
+      final terms = [
+        offer.title,
+        offer.seller,
+        offer.brand,
+        offer.category,
+        offer.gtin,
+        offer.productCode,
+        ...offer.keywords,
+      ].whereType<String>().join(' ').toLowerCase();
+      return normalized.split(RegExp(r'\s+')).every(terms.contains);
+    }).toList();
+  }
+
+  @override
+  Future<List<MarketplaceOffer>> listOffers() async =>
+      _marketplaceOffers.values.toList();
+  @override
+  Future<void> saveOffer(MarketplaceOffer offer) async =>
+      _marketplaceOffers[offer.id] = offer;
+  @override
+  Future<List<MarketplaceClick>> listClicks() async =>
+      _marketplaceClicks.values.toList();
+  @override
+  Future<List<Map<String, Object?>>> listSearchDemands() async =>
+      List.unmodifiable(_marketplaceDemands);
   @override
   Future<List<MarketplacePartnerDomain>> listDomainsForPartner(
     String partnerId,
-  ) async => [];
+  ) async => _marketplaceDomains.values
+      .where((domain) => domain.partnerId == partnerId)
+      .toList();
   @override
-  Future<void> saveDomain(MarketplacePartnerDomain domain) async {}
+  Future<void> saveDomain(MarketplacePartnerDomain domain) async =>
+      _marketplaceDomains[domain.id] = domain;
   @override
   Future<void> logSearch({
     required String? businessId,
@@ -286,11 +343,34 @@ final class MemoryBackendStore
     required bool cacheHit,
     required int resultsCount,
     required int responseTimeMs,
-  }) async {}
+  }) async {
+    if (resultsCount == 0) {
+      final normalized = query.trim().toLowerCase();
+      final index = _marketplaceDemands.indexWhere(
+        (item) =>
+            item['businessId'] == businessId &&
+            item['normalizedQuery'] == normalized,
+      );
+      if (index < 0) {
+        _marketplaceDemands.add({
+          'businessId': businessId,
+          'query': query,
+          'normalizedQuery': normalized,
+          'searchCount': 1,
+        });
+      } else {
+        _marketplaceDemands[index]['searchCount'] =
+            (_marketplaceDemands[index]['searchCount'] as int) + 1;
+      }
+    }
+  }
+
   @override
-  Future<void> recordClick(MarketplaceClick click) async {}
+  Future<void> recordClick(MarketplaceClick click) async =>
+      _marketplaceClicks[click.id] = click;
   @override
-  Future<MarketplaceClick?> findClick(String id) async => null;
+  Future<MarketplaceClick?> findClick(String id) async =>
+      _marketplaceClicks[id];
   @override
   Future<void> updateClickStatus(
     String id,
@@ -308,6 +388,249 @@ final class MemoryBackendStore
     String? reason,
     String? ipAddressHash,
   }) async {}
+  @override
+  Future<PublicBookingBusiness> ensurePublicBooking({
+    required String businessId,
+    required String businessName,
+  }) async {
+    final existing = _publicBookings.values
+        .where((item) => item.businessId == businessId)
+        .firstOrNull;
+    if (existing != null) return existing;
+    var base = PublicBookingSlug.normalize(businessName);
+    if (base.length < 3 || PublicBookingSlug.reserved.contains(base)) {
+      base = 'studio-${businessId.substring(0, businessId.length.clamp(1, 8))}';
+    }
+    var slug = base;
+    var suffix = 2;
+    while (_publicBookings.containsKey(slug)) {
+      slug = '$base-${suffix++}';
+    }
+    final booking = PublicBookingBusiness(
+      businessId: businessId,
+      slug: slug,
+      name: businessName,
+      enabled: true,
+    );
+    _publicBookings[slug] = booking;
+    return booking;
+  }
+
+  @override
+  Future<PublicBookingBusiness?> findPublicBooking(String slug) async =>
+      _publicBookings[slug];
+
+  @override
+  Future<List<Map<String, Object?>>> publicEntities({
+    required String businessId,
+    required String entity,
+  }) async {
+    return _records.entries
+        .where(
+          (entry) =>
+              entry.key.startsWith('$businessId::$entity::') &&
+              entry.value.payload['ativo'] != false &&
+              entry.value.payload['ativo'] != 0,
+        )
+        .map(
+          (entry) =>
+              Map<String, Object?>.from(entry.value.payload)..removeWhere(
+                (key, _) => !const {
+                  'id',
+                  'nome',
+                  'preco',
+                  'duracao_minutos',
+                  'unidade_id',
+                  'profissional_id',
+                  'servico_id',
+                  'horario_abertura',
+                  'horario_fechamento',
+                }.contains(key),
+              ),
+        )
+        .toList();
+  }
+
+  @override
+  Future<List<Map<String, Object?>>> publicSchedulingRecords({
+    required String businessId,
+    required Set<String> entities,
+  }) async {
+    return _records.entries
+        .where(
+          (entry) => entities.any(
+            (entity) => entry.key.startsWith('$businessId::$entity::'),
+          ),
+        )
+        .map((entry) {
+          final parts = entry.key.split('::');
+          return <String, Object?>{
+            ...entry.value.payload,
+            '_entity': parts[1],
+            'id': entry.value.payload['id'] ?? parts[2],
+          };
+        })
+        .toList();
+  }
+
+  @override
+  Future<PublicAppointment> createPublicAppointment({
+    required String businessId,
+    required String idempotencyKey,
+    required String tokenHash,
+    required String publicToken,
+    required String serviceId,
+    String? professionalId,
+    String? unitId,
+    required String clientName,
+    required String clientPhone,
+    String? notes,
+    required DateTime startsAt,
+    required DateTime endsAt,
+  }) async {
+    final idempotent = _publicIdempotency['$businessId::$idempotencyKey'];
+    if (idempotent != null) return _publicAppointments[idempotent]!;
+    final conflict = _publicAppointments.values.any(
+      (item) =>
+          item.businessId == businessId &&
+          item.status != 'cancelado' &&
+          item.professionalId == professionalId &&
+          startsAt.isBefore(item.endsAt) &&
+          endsAt.isAfter(item.startsAt),
+    );
+    if (conflict) {
+      throw StateError(
+        'HorÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡rio indisponÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­vel.',
+      );
+    }
+    final phone = clientPhone.replaceAll(RegExp(r'D'), '');
+    final found = _records.entries.where(
+      (e) =>
+          e.key.startsWith('$businessId::clientes::') &&
+          (e.value.payload['whatsapp']?.toString().replaceAll(
+                    RegExp(r'D'),
+                    '',
+                  ) ==
+                  phone ||
+              e.value.payload['telefone']?.toString().replaceAll(
+                    RegExp(r'D'),
+                    '',
+                  ) ==
+                  phone),
+    );
+    final clientId = found.isEmpty
+        ? 'public_client_${tokenHash.substring(0, 20)}'
+        : found.first.key.split('::').last;
+    if (found.isEmpty) {
+      _savePublicRecord(businessId, 'clientes', clientId, {
+        'id': clientId,
+        'comercio_id': businessId,
+        'nome': clientName,
+        'whatsapp': phone,
+        'telefone': phone,
+        'ativo': true,
+        'data_cadastro': DateTime.now().toUtc().toIso8601String(),
+      });
+    }
+    final mainId = 'public_appointment_${tokenHash.substring(0, 20)}';
+    _savePublicRecord(businessId, 'agendamentos', mainId, {
+      'id': mainId,
+      'comercio_id': businessId,
+      'unidade_id': unitId,
+      'cliente_id': clientId,
+      'profissional_id': professionalId,
+      'servico_id': serviceId,
+      'inicio': startsAt.toIso8601String(),
+      'fim': endsAt.toIso8601String(),
+      'origem': 'agendamento_publico',
+      'status': 'agendado',
+      'observacoes': notes,
+      'excluido': 0,
+    });
+    final appointment = PublicAppointment(
+      token: publicToken,
+      businessId: businessId,
+      serviceId: serviceId,
+      professionalId: professionalId,
+      startsAt: startsAt,
+      endsAt: endsAt,
+      status: 'agendado',
+    );
+    _publicAppointments[tokenHash] = appointment;
+    _publicMainAppointments[tokenHash] = mainId;
+    _publicIdempotency['$businessId::$idempotencyKey'] = tokenHash;
+    return appointment;
+  }
+
+  @override
+  Future<PublicAppointment?> findPublicAppointmentByIdempotency({
+    required String businessId,
+    required String idempotencyKey,
+  }) async {
+    final hash = _publicIdempotency['$businessId::$idempotencyKey'];
+    return hash == null ? null : _publicAppointments[hash];
+  }
+
+  @override
+  Future<PublicAppointment?> findPublicAppointment(String tokenHash) async =>
+      _publicAppointments[tokenHash];
+
+  @override
+  Future<PublicAppointment?> updatePublicAppointment({
+    required String tokenHash,
+    required String status,
+    DateTime? startsAt,
+    DateTime? endsAt,
+  }) async {
+    final current = _publicAppointments[tokenHash];
+    if (current == null) return null;
+    final updated = PublicAppointment(
+      token: current.token,
+      businessId: current.businessId,
+      serviceId: current.serviceId,
+      professionalId: current.professionalId,
+      startsAt: startsAt ?? current.startsAt,
+      endsAt: endsAt ?? current.endsAt,
+      status: status,
+    );
+    _publicAppointments[tokenHash] = updated;
+    final mainId = _publicMainAppointments[tokenHash];
+    if (mainId != null) {
+      final key = _recordKey(current.businessId, 'agendamentos', mainId);
+      final record = _records[key];
+      if (record != null) {
+        _savePublicRecord(current.businessId, 'agendamentos', mainId, {
+          ...record.payload,
+          'status': status,
+          'inicio': updated.startsAt.toIso8601String(),
+          'fim': updated.endsAt.toIso8601String(),
+        });
+      }
+    }
+    return updated;
+  }
+
+  void _savePublicRecord(
+    String businessId,
+    String entity,
+    String id,
+    Map<String, Object?> payload,
+  ) {
+    final key = _recordKey(businessId, entity, id);
+    final version = (_records[key]?.version ?? 0) + 1;
+    _records[key] = _SyncRecord(version, payload);
+    final change = SyncChange(
+      cursor: ++_cursor,
+      entity: entity,
+      entityId: id,
+      serverVersion: version,
+      deleted: false,
+      payload: payload,
+      updatedAt: DateTime.now().toUtc(),
+    );
+    _changes.add(_BusinessChange(businessId, change));
+  }
+
   @override
   Future<void> close() async {}
 }

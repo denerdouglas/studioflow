@@ -1,8 +1,13 @@
 import 'package:flutter/material.dart';
 
-import '../core/helpers/app_formatters.dart';
 import '../services/ia_local_service.dart';
 import '../services/session_controller.dart';
+import '../services/external_action_service.dart';
+import 'agenda_page.dart';
+import 'clientes_page.dart';
+import 'produtos_loja_page.dart';
+import 'comandas_loja_page.dart';
+import 'joias_consignadas_page.dart';
 
 class IaLocalPage extends StatefulWidget {
   const IaLocalPage({super.key});
@@ -12,184 +17,200 @@ class IaLocalPage extends StatefulWidget {
 }
 
 class _IaLocalPageState extends State<IaLocalPage> {
-  final IaStudioFlowProvider _ia = IaLocalService();
-  ResumoIaLocal? _resumo;
-  String? _erro;
+  final _service = IaLocalService();
+  final _controller = TextEditingController();
+  final _messages = <({bool user, String text})>[];
+  bool _sending = false;
 
-  static const _perguntas = [
+  static const _prompts = [
     'Como está minha agenda hoje?',
-    'Quantos clientes estão cadastrados?',
-    'Quais horários estão livres?',
-    'Qual serviço aparece mais?',
-    'Como estão as vendas e recebimentos?',
+    'Quais produtos estão acabando?',
+    'Como estão as contas a receber?',
+    'Quantas comandas tenho?',
+    'Quantas joias consignadas estão disponíveis?',
   ];
 
-  @override
-  void initState() {
-    super.initState();
-    _carregar();
-  }
-
-  Future<void> _carregar() async {
-    setState(() => _erro = null);
+  Future<void> _send([String? prompt]) async {
+    final text = (prompt ?? _controller.text).trim();
+    if (text.isEmpty || _sending) return;
+    setState(() {
+      _sending = true;
+      _messages.add((user: true, text: text));
+      _controller.clear();
+    });
     try {
-      final comercioId = SessionController.instance.usuario!.comercioId;
-      final resumo = await _ia.gerarResumo(comercioId);
-      if (mounted) setState(() => _resumo = resumo);
-    } catch (erro) {
-      if (mounted) {
-        setState(() => _erro = 'Nao foi possivel analisar os dados locais.');
-      }
+      final user = SessionController.instance.usuario!;
+      final answer = await _service.conversar(text, user.comercioId);
+      if (mounted) setState(() => _messages.add((user: false, text: answer)));
+    } catch (error) {
+      if (mounted) setState(() => _messages.add((user: false, text: '$error')));
+    } finally {
+      if (mounted) setState(() => _sending = false);
     }
   }
 
-  void _perguntar(String pergunta) {
-    final resumo = _resumo;
-    if (resumo == null) return;
-    showDialog<void>(
+  Future<void> _open(Widget page) =>
+      Navigator.push(context, MaterialPageRoute(builder: (_) => page));
+
+  Future<void> _prepare(String type) async {
+    final text = type == 'lembrete'
+        ? 'Olá! Este é um lembrete preparado pelo StudioFlow sobre seu próximo atendimento.'
+        : 'Olá! Identificamos um saldo pendente no StudioFlow. Podemos combinar o pagamento?';
+    final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(pergunta),
-        content: Text(_ia.responder(pergunta, resumo)),
+        title: Text('Prévia de $type'),
+        content: SelectableText(text),
         actions: [
           TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Editar'),
+          ),
+          TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Fechar'),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Confirmar'),
           ),
         ],
       ),
     );
+    if (confirmed == true) await const ExternalActionService().copiar(text);
   }
 
   @override
-  Widget build(BuildContext context) {
-    final resumo = _resumo;
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('StudioFlow IA local'),
-        actions: [
-          IconButton(onPressed: _carregar, icon: const Icon(Icons.refresh)),
-        ],
-      ),
-      body: _erro != null
-          ? Center(child: Text(_erro!))
-          : resumo == null
-          ? const Center(child: CircularProgressIndicator())
-          : RefreshIndicator(
-              onRefresh: _carregar,
-              child: ListView(
-                padding: const EdgeInsets.all(18),
-                children: [
-                  const Text(
-                    'Resumo com dados reais deste aparelho',
-                    style: TextStyle(fontSize: 21, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 14),
-                  Wrap(
-                    spacing: 10,
-                    runSpacing: 10,
-                    children: [
-                      _indicador(
-                        'Clientes',
-                        resumo.clientes.toString(),
-                        Icons.people,
-                      ),
-                      _indicador(
-                        'Agenda hoje',
-                        resumo.agendamentosHoje.toString(),
-                        Icons.calendar_today,
-                      ),
-                      _indicador(
-                        'Livres',
-                        resumo.horariosLivres.length.toString(),
-                        Icons.schedule,
-                      ),
-                      _indicador(
-                        'Recebido no mês',
-                        AppFormatters.moeda(resumo.recebidoMes),
-                        Icons.payments,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 18),
-                  _secao('Alertas', resumo.alertas, Icons.warning_amber),
-                  _secao(
-                    'Sugestões',
-                    resumo.sugestoes,
-                    Icons.lightbulb_outline,
-                  ),
-                  const SizedBox(height: 12),
-                  const Text(
-                    'Perguntas rápidas',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                  ..._perguntas.map(
-                    (pergunta) => Card(
-                      child: ListTile(
-                        title: Text(pergunta),
-                        trailing: const Icon(Icons.arrow_forward),
-                        onTap: () => _perguntar(pergunta),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  const Text(
-                    'Esta versão funciona totalmente no aparelho. Uma futura IA online deverá usar backend seguro; nenhuma chave de API está incluída no aplicativo.',
-                    style: TextStyle(color: Colors.grey, fontSize: 12),
-                  ),
-                ],
-              ),
-            ),
-    );
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
   }
 
-  Widget _indicador(String titulo, String valor, IconData icone) {
-    return SizedBox(
-      width: (MediaQuery.sizeOf(context).width - 46) / 2,
-      child: Card(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('IA StudioFlow')),
+    body: Column(
+      children: [
+        SizedBox(
+          height: 48,
+          child: ListView.separated(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            scrollDirection: Axis.horizontal,
+            itemCount: _prompts.length,
+            separatorBuilder: (_, _) => const SizedBox(width: 6),
+            itemBuilder: (_, index) => ActionChip(
+              label: Text(_prompts[index]),
+              onPressed: () => _send(_prompts[index]),
+            ),
+          ),
+        ),
+        SizedBox(
+          height: 48,
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 8),
             children: [
-              Icon(icone, color: const Color(0xFF70569A)),
-              const SizedBox(height: 8),
-              Text(valor, style: const TextStyle(fontWeight: FontWeight.bold)),
-              Text(titulo, textAlign: TextAlign.center),
+              ActionChip(
+                label: const Text('Abrir agenda'),
+                onPressed: () => _open(const AgendaPage()),
+              ),
+              ActionChip(
+                label: const Text('Abrir cliente'),
+                onPressed: () => _open(const ClientesPage()),
+              ),
+              ActionChip(
+                label: const Text('Estoque baixo'),
+                onPressed: () =>
+                    _open(const ProdutosLojaPage(somenteBaixo: true)),
+              ),
+              ActionChip(
+                label: const Text('Abrir comanda'),
+                onPressed: () => _open(const ComandasLojaPage()),
+              ),
+              ActionChip(
+                label: const Text('Lote de joias'),
+                onPressed: () => _open(const JoiasConsignadasPage()),
+              ),
+              ActionChip(
+                label: const Text('Criar/remarcar/confirmar/cancelar'),
+                onPressed: () => _open(const AgendaPage()),
+              ),
+              ActionChip(
+                label: const Text('Preparar lembrete'),
+                onPressed: () => _prepare('lembrete'),
+              ),
+              ActionChip(
+                label: const Text('Preparar cobrança'),
+                onPressed: () => _prepare('cobrança'),
+              ),
+              ActionChip(
+                label: const Text('Comparar preços'),
+                onPressed: () =>
+                    _open(const ProdutosLojaPage(somenteBaixo: true)),
+              ),
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _secao(String titulo, List<String> itens, IconData icone) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+        Expanded(
+          child: _messages.isEmpty
+              ? const Center(
+                  child: Text(
+                    'Pergunte sobre agenda, clientes, estoque, comandas, consignações ou financeiro.',
+                  ),
+                )
+              : ListView.builder(
+                  padding: const EdgeInsets.all(12),
+                  itemCount: _messages.length,
+                  itemBuilder: (_, index) {
+                    final message = _messages[index];
+                    return Align(
+                      alignment: message.user
+                          ? Alignment.centerRight
+                          : Alignment.centerLeft,
+                      child: Card(
+                        color: message.user
+                            ? Theme.of(context).colorScheme.primaryContainer
+                            : null,
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: SelectableText(message.text),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+        ),
+        SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.all(10),
+            child: Row(
               children: [
-                Icon(icone),
-                const SizedBox(width: 8),
-                Text(
-                  titulo,
-                  style: const TextStyle(fontWeight: FontWeight.bold),
+                Expanded(
+                  child: TextField(
+                    controller: _controller,
+                    minLines: 1,
+                    maxLines: 4,
+                    onSubmitted: (_) => _send(),
+                    decoration: const InputDecoration(
+                      hintText: 'Pergunte à IA StudioFlow',
+                    ),
+                  ),
+                ),
+                IconButton(
+                  onPressed: _sending ? null : _send,
+                  icon: _sending
+                      ? const SizedBox.square(
+                          dimension: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.send),
                 ),
               ],
             ),
-            const SizedBox(height: 8),
-            if (itens.isEmpty) const Text('Nenhum item importante agora.'),
-            ...itens.map(
-              (item) => Padding(
-                padding: const EdgeInsets.only(top: 6),
-                child: Text('• $item'),
-              ),
-            ),
-          ],
+          ),
         ),
-      ),
-    );
-  }
+      ],
+    ),
+  );
 }

@@ -4,14 +4,9 @@ import '../core/theme/studioflow_theme.dart';
 import '../models/domain/acesso.dart';
 import '../services/session_controller.dart';
 import 'agenda_page.dart';
-import 'clientes_page.dart';
 import 'home_premium_page.dart';
 import 'mais_premium_page.dart';
-import 'marketplace_page.dart';
-import '../controllers/marketplace_controller.dart';
-import '../repositories/marketplace_repository.dart';
-import '../repositories/recommendation_engine.dart';
-import '../repositories/estoque_repository.dart';
+import 'loja_salao_page.dart';
 
 class DashboardPremiumPage extends StatefulWidget {
   final String nomeResponsavel;
@@ -34,25 +29,6 @@ class DashboardPremiumPage extends StatefulWidget {
 class _DashboardPremiumPageState extends State<DashboardPremiumPage> {
   int _paginaSelecionada = 0;
 
-  late final MarketplaceController _marketplaceController;
-
-  @override
-  void initState() {
-    super.initState();
-    _marketplaceController = MarketplaceController(
-      marketplaceRepository: MarketplaceRepository(),
-      recommendationEngine: RecommendationEngine(
-        estoqueRepository: EstoqueRepository(),
-      ),
-    );
-  }
-
-  @override
-  void dispose() {
-    _marketplaceController.dispose();
-    super.dispose();
-  }
-
   void _mudarPagina(int indice) {
     setState(() {
       _paginaSelecionada = indice;
@@ -70,13 +46,9 @@ class _DashboardPremiumPageState extends State<DashboardPremiumPage> {
       SessionController.instance.usuario!.pode(ModuloPermissao.agenda)
           ? const AgendaPage()
           : const Center(child: Text('Acesso não permitido.')),
-      SessionController.instance.usuario!.pode(ModuloPermissao.clientes)
-          ? const ClientesPage()
+      SessionController.instance.usuario!.pode(ModuloPermissao.lojaSalao)
+          ? const LojaSalaoPage()
           : const Center(child: Text('Acesso não permitido.')),
-      MarketplacePage(
-        controller: _marketplaceController,
-      ), // const MarketplaceStubPage(),
-      // Use MaisSprint2Page until Etapa 3A.2 creates MaisPremiumPage
       MaisPremiumPage(tema: widget.tema),
     ];
 
@@ -98,11 +70,6 @@ class _DashboardPremiumPageState extends State<DashboardPremiumPage> {
             icon: Icon(Icons.calendar_month_outlined),
             selectedIcon: Icon(Icons.calendar_month),
             label: 'Agenda',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.people_outline),
-            selectedIcon: Icon(Icons.people),
-            label: 'Clientes',
           ),
           NavigationDestination(
             icon: Icon(Icons.storefront_outlined),

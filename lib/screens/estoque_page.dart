@@ -4,7 +4,7 @@ import '../core/routes/app_routes.dart';
 
 import '../repositories/estoque_repository.dart';
 import '../repositories/inventory_transfer_repository.dart';
-import 'barcode_scanner_page.dart';
+import 'vision_scanner_page.dart';
 
 class EstoquePage extends StatefulWidget {
   const EstoquePage({super.key});
@@ -94,7 +94,7 @@ class _EstoquePageState extends State<EstoquePage> {
   Future<void> _lerParaPesquisa() async {
     final codigo = await Navigator.push<String>(
       context,
-      MaterialPageRoute(builder: (_) => const BarcodeScannerPage()),
+      MaterialPageRoute(builder: (_) => const VisionScannerPage()),
     );
     if (!mounted || codigo == null) return;
     _pesquisaController.text = codigo;
@@ -1188,7 +1188,7 @@ class _ItemEstoqueFormSheetState extends State<ItemEstoqueFormSheet> {
   Future<void> _lerCodigo() async {
     final codigo = await Navigator.push<String>(
       context,
-      MaterialPageRoute(builder: (_) => const BarcodeScannerPage()),
+      MaterialPageRoute(builder: (_) => const VisionScannerPage()),
     );
     if (!mounted || codigo == null) return;
     setState(() => _codigoBarrasController.text = codigo);

@@ -209,6 +209,326 @@ class ConsignacaoRepository {
     });
   }
 
+  Future<String> receberMaleta({
+    required String fornecedorId,
+    required String nomeLote,
+    String? unidadeId,
+    DateTime? recolhimentoPrevisto,
+    int? prazoCobrancaDias,
+    required List<Map<String, Object?>> pecas,
+  }) async {
+    final user = _usuario;
+    if (nomeLote.trim().isEmpty || pecas.isEmpty) {
+      throw StateError('Informe a maleta e as peças.');
+    }
+    final db = await _databaseProvider();
+    final id = IdGenerator.temporal();
+    await db.transaction((tx) async {
+      final now = DateTime.now().toUtc().toIso8601String();
+      await tx.insert('consignacoes', {
+        'id': id,
+        'comercio_id': user.comercioId,
+        'fornecedor_id': fornecedorId,
+        'lote_colecao': nomeLote.trim(),
+        'nome_lote': nomeLote.trim(),
+        'codigo_referencia': id,
+        'unidade_id': unidadeId,
+        'recebida_em': now,
+        'data_prevista_recolhimento': recolhimentoPrevisto?.toIso8601String(),
+        'prazo_cobranca_dias': prazoCobrancaDias,
+        'status': 'aberta',
+        'criado_em': now,
+        'quantidade_recebida': pecas.length,
+        'quantidade_disponivel': pecas.length,
+      });
+      for (final piece in pecas) {
+        final code = (piece['codigo'] as String?)?.trim();
+        final name = (piece['nome'] as String?)?.trim();
+        final price = (piece['preco'] as num?)?.toDouble();
+        if (code == null ||
+            code.isEmpty ||
+            name == null ||
+            name.isEmpty ||
+            price == null ||
+            price < 0) {
+          throw StateError('Peça consignada inválida.');
+        }
+        final pieceId = IdGenerator.temporal();
+        await tx.insert('pecas_unicas', {
+          'id': pieceId,
+          'comercio_id': user.comercioId,
+          'codigo_exclusivo': code,
+          'nome': name,
+          'descricao': piece['descricao'],
+          'material': piece['material'],
+          'marca': piece['marca'],
+          'fornecedor_id': fornecedorId,
+          'custo': (piece['repasse'] as num?)?.toDouble() ?? 0,
+          'preco': price,
+          'lote_id': id,
+          'unidade_id': unidadeId,
+          'status': 'disponivel',
+          'data_cadastro': now,
+        });
+        await tx.insert('consignacao_eventos', {
+          'id': IdGenerator.temporal(),
+          'comercio_id': user.comercioId,
+          'consignacao_id': id,
+          'peca_id': pieceId,
+          'tipo': 'recebimento',
+          'quantidade': 1,
+          'valor': price,
+          'criado_em': now,
+        });
+      }
+    });
+    return id;
+  }
+
+  Future<void> venderPeca(
+    String pecaId, {
+    required String clienteId,
+    String? profissionalId,
+  }) async {
+    final user = _usuario;
+    final db = await _databaseProvider();
+    await db.transaction((tx) async {
+      final rows = await tx.query(
+        'pecas_unicas',
+        where: "id=? AND comercio_id=? AND status='disponivel'",
+        whereArgs: [pecaId, user.comercioId],
+        limit: 1,
+      );
+      if (rows.isEmpty) throw StateError('Peça indisponível.');
+      final piece = rows.single;
+      final now = DateTime.now().toUtc().toIso8601String();
+      await tx.update(
+        'pecas_unicas',
+        {
+          'status': 'vendida',
+          'cliente_id': clienteId,
+          'profissional_vendedor_id': profissionalId,
+          'data_venda': now,
+        },
+        where: 'id=?',
+        whereArgs: [pecaId],
+      );
+      await tx.insert('consignacao_eventos', {
+        'id': IdGenerator.temporal(),
+        'comercio_id': user.comercioId,
+        'consignacao_id': piece['lote_id'],
+        'peca_id': pecaId,
+        'tipo': 'venda',
+        'quantidade': 1,
+        'valor': piece['preco'],
+        'cliente_id': clienteId,
+        'profissional_id': profissionalId,
+        'criado_em': now,
+      });
+      await tx.rawUpdate(
+        '''UPDATE consignacoes SET quantidade_vendida=quantidade_vendida+1,
+        quantidade_disponivel=quantidade_disponivel-1, valor_vendido=valor_vendido+?
+        WHERE id=? AND comercio_id=?''',
+        [piece['preco'], piece['lote_id'], user.comercioId],
+      );
+    });
+  }
+
+  Future<void> devolverPeca(String pecaId, {String? observacoes}) async {
+    final user = _usuario;
+    final db = await _databaseProvider();
+    await db.transaction((tx) async {
+      final rows = await tx.query(
+        'pecas_unicas',
+        where: "id=? AND comercio_id=? AND status='disponivel'",
+        whereArgs: [pecaId, user.comercioId],
+        limit: 1,
+      );
+      if (rows.isEmpty) {
+        throw StateError('Peça indisponível para devolução.');
+      }
+      final piece = rows.single;
+      final now = DateTime.now().toUtc().toIso8601String();
+      await tx.update(
+        'pecas_unicas',
+        {'status': 'devolvida'},
+        where: 'id=?',
+        whereArgs: [pecaId],
+      );
+      await tx.insert('consignacao_eventos', {
+        'id': IdGenerator.temporal(),
+        'comercio_id': user.comercioId,
+        'consignacao_id': piece['lote_id'],
+        'peca_id': pecaId,
+        'tipo': 'devolucao',
+        'quantidade': 1,
+        'valor': piece['preco'],
+        'observacoes': observacoes,
+        'criado_em': now,
+      });
+      await tx.rawUpdate(
+        '''UPDATE consignacoes SET quantidade_devolvida=quantidade_devolvida+1,
+        quantidade_disponivel=quantidade_disponivel-1, valor_devolvido=valor_devolvido+?
+        WHERE id=? AND comercio_id=?''',
+        [piece['preco'], piece['lote_id'], user.comercioId],
+      );
+    });
+  }
+
+  Future<List<Map<String, Object?>>> historicoMensal(DateTime mes) async {
+    final user = _usuario;
+    final db = await _databaseProvider();
+    final start = DateTime.utc(mes.year, mes.month);
+    final end = DateTime.utc(mes.year, mes.month + 1);
+    return db.rawQuery(
+      '''SELECT e.*, p.codigo_exclusivo, p.nome peca_nome
+      FROM consignacao_eventos e LEFT JOIN pecas_unicas p ON p.id=e.peca_id
+      WHERE e.comercio_id=? AND e.criado_em>=? AND e.criado_em<? ORDER BY e.criado_em DESC''',
+      [user.comercioId, start.toIso8601String(), end.toIso8601String()],
+    );
+  }
+
+  Future<List<Map<String, Object?>>> fornecedores() async {
+    final user = _usuario;
+    final db = await _databaseProvider();
+    return db.query(
+      'fornecedores',
+      columns: ['id', 'nome'],
+      where: 'comercio_id=? AND ativo=1',
+      whereArgs: [user.comercioId],
+      orderBy: 'nome COLLATE NOCASE',
+    );
+  }
+
+  Future<List<Map<String, Object?>>> pecas(String loteId) async {
+    final user = _usuario;
+    final db = await _databaseProvider();
+    return db.query(
+      'pecas_unicas',
+      where: 'lote_id=? AND comercio_id=?',
+      whereArgs: [loteId, user.comercioId],
+      orderBy: 'codigo_exclusivo',
+    );
+  }
+
+  Future<void> editarLote(
+    String loteId, {
+    String? nome,
+    DateTime? trocaPrevista,
+    DateTime? vencimentoPadrao,
+    int? prazoCobrancaDias,
+  }) async {
+    final user = _usuario;
+    final db = await _databaseProvider();
+    final changed = await db.update(
+      'consignacoes',
+      {
+        if (nome != null) 'nome_lote': nome.trim(),
+        if (nome != null) 'lote_colecao': nome.trim(),
+        if (trocaPrevista != null)
+          'data_prevista_recolhimento': trocaPrevista.toUtc().toIso8601String(),
+        if (vencimentoPadrao != null)
+          'data_vencimento_padrao': vencimentoPadrao.toUtc().toIso8601String(),
+        'prazo_cobranca_dias': ?prazoCobrancaDias,
+      },
+      where: "id=? AND comercio_id=? AND status='aberta'",
+      whereArgs: [loteId, user.comercioId],
+    );
+    if (changed == 0) throw StateError('Lote não encontrado ou fechado.');
+  }
+
+  Future<void> alterarStatusPeca(
+    String pecaId,
+    String status, {
+    String? observacoes,
+  }) async {
+    const allowed = {
+      'disponivel',
+      'reservada',
+      'em_comanda',
+      'perdida',
+      'avariada',
+      'transferida',
+    };
+    if (!allowed.contains(status)) throw StateError('Status de peça inválido.');
+    final user = _usuario;
+    final db = await _databaseProvider();
+    await db.transaction((tx) async {
+      final rows = await tx.query(
+        'pecas_unicas',
+        where: 'id=? AND comercio_id=?',
+        whereArgs: [pecaId, user.comercioId],
+        limit: 1,
+      );
+      if (rows.isEmpty) throw StateError('Peça não encontrada.');
+      final piece = rows.single;
+      if (const {
+        'vendida',
+        'devolvida',
+        'perdida',
+        'avariada',
+        'transferida',
+      }.contains(piece['status'])) {
+        throw StateError('Peça encerrada não pode ser alterada.');
+      }
+      final now = DateTime.now().toUtc().toIso8601String();
+      await tx.update(
+        'pecas_unicas',
+        {'status': status},
+        where: 'id=?',
+        whereArgs: [pecaId],
+      );
+      await tx.insert('consignacao_eventos', {
+        'id': IdGenerator.temporal(),
+        'comercio_id': user.comercioId,
+        'consignacao_id': piece['lote_id'],
+        'peca_id': pecaId,
+        'tipo': status,
+        'quantidade': 1,
+        'valor': piece['preco'],
+        'observacoes': observacoes,
+        'criado_em': now,
+      });
+      if (const {'perdida', 'avariada', 'transferida'}.contains(status)) {
+        await tx.rawUpdate(
+          '''UPDATE consignacoes SET quantidade_disponivel=quantidade_disponivel-1,
+          valor_perdido=valor_perdido+? WHERE id=? AND comercio_id=?''',
+          [
+            status == 'perdida' ? piece['preco'] : 0,
+            piece['lote_id'],
+            user.comercioId,
+          ],
+        );
+      }
+    });
+  }
+
+  Future<void> arquivarMaleta(String loteId) async {
+    final user = _usuario;
+    final db = await _databaseProvider();
+    final open =
+        Sqflite.firstIntValue(
+          await db.rawQuery(
+            "SELECT COUNT(*) FROM pecas_unicas WHERE lote_id=? AND comercio_id=? AND status IN ('disponivel','reservada','em_comanda')",
+            [loteId, user.comercioId],
+          ),
+        ) ??
+        0;
+    if (open > 0) {
+      throw StateError('Confira e encerre todas as peças antes de arquivar.');
+    }
+    final changed = await db.update(
+      'consignacoes',
+      {
+        'status': 'arquivada',
+        'data_encerramento': DateTime.now().toUtc().toIso8601String(),
+      },
+      where: "id=? AND comercio_id=? AND status='aberta'",
+      whereArgs: [loteId, user.comercioId],
+    );
+    if (changed == 0) throw StateError('Lote não encontrado ou já arquivado.');
+  }
+
   Future<List<Map<String, Object?>>> listar() async {
     final u = _usuario;
     final db = await _databaseProvider();

@@ -93,6 +93,14 @@ class SessionController extends ChangeNotifier {
     _sincronizarAgora();
   }
 
+  @visibleForTesting
+  void cancelarSincronizacaoEmTeste() {
+    _syncTimer?.cancel();
+    _syncTimer = null;
+    _lifecycleListener?.dispose();
+    _lifecycleListener = null;
+  }
+
   Future<void> _sincronizarAgora() async {
     final comercioId = _usuario?.comercioId;
     if (comercioId != null) {
