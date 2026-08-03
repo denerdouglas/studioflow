@@ -73,7 +73,7 @@ void main() {
       expect(id1, isNot(equals('1234'))); // Obfuscated
       expect(id1, isNot(equals(id3))); // Unique per input
     });
-    
+
     test('hashToken produz hash estavel do token', () {
       final hash1 = service.hashToken('token1');
       final hash2 = service.hashToken('token1');

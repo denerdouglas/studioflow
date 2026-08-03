@@ -18,7 +18,13 @@ class MockMarketplaceRepository extends MarketplaceRepository {
   Future<MarketplaceSearchResult> search(String query) async {
     calls++;
     if (mockError != null) throw mockError!;
-    return mockResult ?? MarketplaceSearchResult(results: [], page: 1, total: 0, fetchedAt: DateTime.now());
+    return mockResult ??
+        MarketplaceSearchResult(
+          results: [],
+          page: 1,
+          total: 0,
+          fetchedAt: DateTime.now(),
+        );
   }
 }
 
@@ -29,7 +35,8 @@ class MockEstoqueRepository extends EstoqueRepository {
 class MockRecommendationEngine extends RecommendationEngine {
   RecommendationMessage? mockRec;
 
-  MockRecommendationEngine() : super(estoqueRepository: MockEstoqueRepository());
+  MockRecommendationEngine()
+    : super(estoqueRepository: MockEstoqueRepository());
 
   @override
   Future<RecommendationMessage?> generateRecommendation() async {
@@ -52,23 +59,29 @@ void main() {
   });
 
   Widget buildPage() {
-    return MaterialApp(
-      home: MarketplacePage(controller: controller),
-    );
+    return MaterialApp(home: MarketplacePage(controller: controller));
   }
 
   group('Marketplace Page Tests', () {
     testWidgets('1. Resposta results: [] e 4. Empty state', (tester) async {
-      mockRepo.mockResult = MarketplaceSearchResult(results: [], page: 1, total: 0, fetchedAt: DateTime.now());
-      
+      mockRepo.mockResult = MarketplaceSearchResult(
+        results: [],
+        page: 1,
+        total: 0,
+        fetchedAt: DateTime.now(),
+      );
+
       await tester.pumpWidget(buildPage());
       expect(find.byType(TextField), findsOneWidget);
-      
+
       await tester.enterText(find.byType(TextField), 'shampoo');
       await tester.testTextInput.receiveAction(TextInputAction.done);
       await tester.pumpAndSettle();
 
-      expect(find.text('Nenhuma oferta disponível para esta pesquisa no momento.'), findsOneWidget);
+      expect(
+        find.text('Nenhuma oferta disponível para esta pesquisa no momento.'),
+        findsOneWidget,
+      );
     });
 
     testWidgets('2. Estado Inicial', (tester) async {
@@ -79,29 +92,32 @@ void main() {
     });
 
     testWidgets('3. Loading', (tester) async {
-      mockRepo.mockResult = MarketplaceSearchResult(results: [], page: 1, total: 0, fetchedAt: DateTime.now());
-      
+      mockRepo.mockResult = MarketplaceSearchResult(
+        results: [],
+        page: 1,
+        total: 0,
+        fetchedAt: DateTime.now(),
+      );
+
       await tester.pumpWidget(buildPage());
-      
+
       final emittedStates = <MarketplaceState>[];
       void listener() {
         emittedStates.add(controller.state);
       }
+
       controller.addListener(listener);
-      
+
       final searchFuture = controller.search('teste');
       await tester.pump();
       await searchFuture;
       await tester.pumpAndSettle();
-      
+
       controller.removeListener(listener);
-      
+
       expect(
         emittedStates,
-        containsAllInOrder([
-          MarketplaceState.loading,
-          MarketplaceState.empty,
-        ]),
+        containsAllInOrder([MarketplaceState.loading, MarketplaceState.empty]),
       );
       expect(controller.state, MarketplaceState.empty);
     });
@@ -117,9 +133,9 @@ void main() {
                 clickId: 'clk1',
                 priceCents: 1000,
                 updatedAt: DateTime.now(),
-              )
-            ]
-          )
+              ),
+            ],
+          ),
         ],
         page: 1,
         total: 1,
@@ -138,31 +154,37 @@ void main() {
 
     testWidgets('6. Erro de API', (tester) async {
       mockRepo.mockError = Exception('Falha na conexão');
-      
+
       await tester.pumpWidget(buildPage());
       await tester.enterText(find.byType(TextField), 'teste');
       await tester.testTextInput.receiveAction(TextInputAction.done);
       await tester.pumpAndSettle();
 
-      expect(find.text('Falha ao buscar ofertas. Tente novamente.'), findsOneWidget);
-    });
-
-    testWidgets('7. Offline com cache válido e 8. Offline sem cache (via repository logic)', (tester) async {
-      mockRepo.mockResult = MarketplaceSearchResult(
-        results: [],
-        page: 1,
-        total: 0,
-        fetchedAt: DateTime.now().subtract(const Duration(minutes: 5)),
+      expect(
+        find.text('Falha ao buscar ofertas. Tente novamente.'),
+        findsOneWidget,
       );
-
-      await tester.pumpWidget(buildPage());
-      await tester.enterText(find.byType(TextField), 'teste');
-      await tester.testTextInput.receiveAction(TextInputAction.done);
-      await tester.pumpAndSettle();
-
-      expect(controller.isOffline, true);
-      expect(find.textContaining('Modo Offline'), findsOneWidget);
     });
+
+    testWidgets(
+      '7. Offline com cache válido e 8. Offline sem cache (via repository logic)',
+      (tester) async {
+        mockRepo.mockResult = MarketplaceSearchResult(
+          results: [],
+          page: 1,
+          total: 0,
+          fetchedAt: DateTime.now().subtract(const Duration(minutes: 5)),
+        );
+
+        await tester.pumpWidget(buildPage());
+        await tester.enterText(find.byType(TextField), 'teste');
+        await tester.testTextInput.receiveAction(TextInputAction.done);
+        await tester.pumpAndSettle();
+
+        expect(controller.isOffline, true);
+        expect(find.textContaining('Modo Offline'), findsOneWidget);
+      },
+    );
 
     testWidgets('13. Recomendação por estoque baixo', (tester) async {
       mockRecEngine.mockRec = RecommendationMessage(
@@ -205,8 +227,8 @@ void main() {
                 priceCents: 1000,
                 updatedAt: DateTime.now(),
               ),
-            ]
-          )
+            ],
+          ),
         ],
         page: 1,
         total: 1,
@@ -239,8 +261,8 @@ void main() {
                 updatedAt: DateTime.now(),
                 badges: ['Frete Grátis', 'Patrocinado'],
               ),
-            ]
-          )
+            ],
+          ),
         ],
         page: 1,
         total: 1,

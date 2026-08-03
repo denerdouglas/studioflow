@@ -47,25 +47,18 @@ class SubscriptionController extends ChangeNotifier {
   }
 
   Future<void> fetchEntitlement() async {
-    _state = _state.copyWith(
-      isLoading: true,
-      errorMessage: null,
-    );
+    _state = _state.copyWith(isLoading: true, errorMessage: null);
     notifyListeners();
 
     try {
       // Simulação da consulta ao backend
       await Future.delayed(const Duration(milliseconds: 500));
 
-      _state = _state.copyWith(
-        isLoading: false,
-        status: 'inactive',
-      );
+      _state = _state.copyWith(isLoading: false, status: 'inactive');
     } catch (e) {
       _state = _state.copyWith(
         isLoading: false,
-        errorMessage:
-            'Erro ao validar assinatura. Verifique sua conexão.',
+        errorMessage: 'Erro ao validar assinatura. Verifique sua conexão.',
       );
     }
 
@@ -73,10 +66,7 @@ class SubscriptionController extends ChangeNotifier {
   }
 
   Future<void> buyPremium() async {
-    _state = _state.copyWith(
-      isLoading: true,
-      errorMessage: null,
-    );
+    _state = _state.copyWith(isLoading: true, errorMessage: null);
     notifyListeners();
 
     try {
@@ -96,12 +86,10 @@ class SubscriptionController extends ChangeNotifier {
 
       final product = products.first;
 
-      final userId =
-          SessionController.instance.usuario?.id ?? 'test_user';
+      final userId = SessionController.instance.usuario?.id ?? 'test_user';
 
       final businessId =
-          SessionController.instance.usuario?.codigoComercio ??
-              'test_business';
+          SessionController.instance.usuario?.codigoComercio ?? 'test_business';
 
       await _billing.buyNonConsumable(
         productDetails: product,
@@ -109,19 +97,13 @@ class SubscriptionController extends ChangeNotifier {
         obfuscatedProfileId: userId,
       );
     } catch (e) {
-      _state = _state.copyWith(
-        isLoading: false,
-        errorMessage: e.toString(),
-      );
+      _state = _state.copyWith(isLoading: false, errorMessage: e.toString());
       notifyListeners();
     }
   }
 
   Future<void> restorePurchases() async {
-    _state = _state.copyWith(
-      isLoading: true,
-      errorMessage: null,
-    );
+    _state = _state.copyWith(isLoading: true, errorMessage: null);
     notifyListeners();
 
     try {
@@ -135,40 +117,27 @@ class SubscriptionController extends ChangeNotifier {
     }
   }
 
-  void _onPurchaseUpdate(
-    List<PurchaseDetails> purchaseDetailsList,
-  ) {
+  void _onPurchaseUpdate(List<PurchaseDetails> purchaseDetailsList) {
     for (final purchaseDetails in purchaseDetailsList) {
       if (purchaseDetails.status == PurchaseStatus.pending) {
-        _state = _state.copyWith(
-          isLoading: true,
-          status: 'pending',
-        );
+        _state = _state.copyWith(isLoading: true, status: 'pending');
         notifyListeners();
-      } else if (purchaseDetails.status ==
-          PurchaseStatus.error) {
+      } else if (purchaseDetails.status == PurchaseStatus.error) {
         _state = _state.copyWith(
           isLoading: false,
-          errorMessage:
-              purchaseDetails.error?.message ??
-                  'Erro na compra.',
+          errorMessage: purchaseDetails.error?.message ?? 'Erro na compra.',
         );
         notifyListeners();
-      } else if (purchaseDetails.status ==
-              PurchaseStatus.purchased ||
-          purchaseDetails.status ==
-              PurchaseStatus.restored) {
+      } else if (purchaseDetails.status == PurchaseStatus.purchased ||
+          purchaseDetails.status == PurchaseStatus.restored) {
         _verifyPurchaseOnBackend(purchaseDetails);
       }
     }
   }
 
-  Future<void> _verifyPurchaseOnBackend(
-    PurchaseDetails purchaseDetails,
-  ) async {
+  Future<void> _verifyPurchaseOnBackend(PurchaseDetails purchaseDetails) async {
     try {
-      final token =
-          purchaseDetails.verificationData.serverVerificationData;
+      final token = purchaseDetails.verificationData.serverVerificationData;
 
       if (token == 'mock_invalid_token') {
         throw Exception('Token inválido');
@@ -184,8 +153,7 @@ class SubscriptionController extends ChangeNotifier {
     } catch (e) {
       _state = _state.copyWith(
         isLoading: false,
-        errorMessage:
-            'Falha ao confirmar assinatura com o servidor.',
+        errorMessage: 'Falha ao confirmar assinatura com o servidor.',
       );
     }
 

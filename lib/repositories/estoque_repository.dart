@@ -102,9 +102,11 @@ class ItemEstoqueRegistro {
       quantidadeAtual: (mapa['quantidade_atual'] as num? ?? 0).toDouble(),
       estoqueMinimo: (mapa['estoque_minimo'] as num? ?? 0).toDouble(),
       unidade: mapa['unidade'] as String? ?? 'unidade',
-      conteudoPorUnidade: (mapa['conteudo_por_unidade'] as num? ?? 1).toDouble(),
+      conteudoPorUnidade: (mapa['conteudo_por_unidade'] as num? ?? 1)
+          .toDouble(),
       unidadeConteudo: mapa['unidade_conteudo'] as String? ?? '',
-      revisaoModelagemEstoque: (mapa['revisao_modelagem_estoque'] as num? ?? 0) == 1,
+      revisaoModelagemEstoque:
+          (mapa['revisao_modelagem_estoque'] as num? ?? 0) == 1,
       custoUnitario: (mapa['custo_unitario'] as num? ?? 0).toDouble(),
       fornecedor: mapa['fornecedor'] as String? ?? '',
       codigoBarras: mapa['codigo_barras'] as String? ?? '',
@@ -148,7 +150,8 @@ class ItemEstoqueRegistro {
       unidade: unidade ?? this.unidade,
       conteudoPorUnidade: conteudoPorUnidade ?? this.conteudoPorUnidade,
       unidadeConteudo: unidadeConteudo ?? this.unidadeConteudo,
-      revisaoModelagemEstoque: revisaoModelagemEstoque ?? this.revisaoModelagemEstoque,
+      revisaoModelagemEstoque:
+          revisaoModelagemEstoque ?? this.revisaoModelagemEstoque,
       custoUnitario: custoUnitario ?? this.custoUnitario,
       fornecedor: fornecedor ?? this.fornecedor,
       codigoBarras: codigoBarras ?? this.codigoBarras,

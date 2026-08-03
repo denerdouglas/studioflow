@@ -26,7 +26,7 @@ class SubscriptionManager {
       expectedObfuscatedAccountId: obfuscatedAccountId,
       expectedObfuscatedProfileId: obfuscatedProfileId,
     );
-    
+
     if (result['state'] == 'pending') {
       throw Exception('Purchase is still pending');
     }

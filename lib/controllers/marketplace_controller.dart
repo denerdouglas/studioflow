@@ -43,7 +43,7 @@ class MarketplaceController extends ChangeNotifier {
     try {
       final result = await marketplaceRepository.search(query);
       currentResult = result;
-      
+
       // Checar se pegamos do cache
       // No repository, se pegou do cache o fetchedAt será no passado, e não atualizado agora.
       // O repositório levanta exceção se o servidor cair e não houver cache.

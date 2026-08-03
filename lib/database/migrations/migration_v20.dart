@@ -13,7 +13,9 @@ abstract final class MigrationV20 {
       await db.execute('ALTER TABLE comercios ADD COLUMN documento TEXT');
     }
     if (!columns.contains('inscricao_estadual')) {
-      await db.execute('ALTER TABLE comercios ADD COLUMN inscricao_estadual TEXT');
+      await db.execute(
+        'ALTER TABLE comercios ADD COLUMN inscricao_estadual TEXT',
+      );
     }
     if (!columns.contains('whatsapp')) {
       await db.execute('ALTER TABLE comercios ADD COLUMN whatsapp TEXT');

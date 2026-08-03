@@ -50,13 +50,17 @@ Future<void> mostrarRevisaoMensagem(
               if (dialogContext.mounted) {
                 Navigator.pop(dialogContext);
                 ScaffoldMessenger.of(dialogContext).showSnackBar(
-                  const SnackBar(content: Text('Mensagem na fila de disparo automático.')),
+                  const SnackBar(
+                    content: Text('Mensagem na fila de disparo automático.'),
+                  ),
                 );
               }
             },
             icon: const Icon(Icons.schedule_send),
             label: const Text('Enfileirar (Automático)'),
-            style: FilledButton.styleFrom(backgroundColor: const Color(0xFF00C853)),
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFF00C853),
+            ),
           ),
         FilledButton.icon(
           onPressed: () async {

@@ -10,15 +10,13 @@ class AcademyController extends ChangeNotifier {
   AcademyState state = AcademyState.initial;
   AcademySearchResult? currentResult;
   List<AcademyCategory>? categories;
-  
+
   String currentQuery = '';
   String? currentCategoryId;
   String? errorMessage;
   bool isOffline = false;
 
-  AcademyController({
-    required this.academyRepository,
-  });
+  AcademyController({required this.academyRepository});
 
   Future<void> init() async {
     await fetchCategories();
@@ -42,7 +40,7 @@ class AcademyController extends ChangeNotifier {
   Future<void> search({String query = '', String? categoryId}) async {
     currentQuery = query;
     currentCategoryId = categoryId;
-    
+
     state = AcademyState.loading;
     errorMessage = null;
     isOffline = false;
@@ -53,9 +51,9 @@ class AcademyController extends ChangeNotifier {
         query: query.isEmpty ? null : query,
         categoryId: categoryId,
       );
-      
+
       currentResult = result;
-      
+
       if (result.courses.isEmpty) {
         state = AcademyState.empty;
       } else {
@@ -63,7 +61,8 @@ class AcademyController extends ChangeNotifier {
       }
     } catch (e) {
       state = AcademyState.error;
-      errorMessage = 'Falha ao buscar cursos. Verifique sua conexão e tente novamente.';
+      errorMessage =
+          'Falha ao buscar cursos. Verifique sua conexão e tente novamente.';
     }
 
     notifyListeners();

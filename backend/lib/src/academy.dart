@@ -15,10 +15,10 @@ final class AcademyCategory {
   });
 
   Map<String, Object?> toJson() => {
-        'id': id,
-        'name': name,
-        'displayOrder': displayOrder,
-      };
+    'id': id,
+    'name': name,
+    'displayOrder': displayOrder,
+  };
 }
 
 final class AcademyCourse {
@@ -33,7 +33,8 @@ final class AcademyCourse {
   final String partnerId;
   final String categoryId;
   final String sourceType; // 'partner', 'studioflow'
-  final String publicationStatus; // 'draft', 'coming_soon', 'published', 'suspended', 'archived'
+  final String
+  publicationStatus; // 'draft', 'coming_soon', 'published', 'suspended', 'archived'
   final double? rating;
   final int? reviewsCount;
   final String? redirectUrl;
@@ -85,7 +86,8 @@ final class AcademyClick {
   final String partnerId;
   final String? campaignId;
   final String destinationUrl;
-  final String status; // 'created', 'redirected', 'expired', 'blocked', 'failed'
+  final String
+  status; // 'created', 'redirected', 'expired', 'blocked', 'failed'
   final String? failureReason;
   final String? origin;
   final String? businessId;
@@ -113,16 +115,16 @@ final class AcademyClick {
 
 abstract class AcademyBackendStore {
   Future<List<AcademyCategory>> getCategories();
-  
+
   Future<List<AcademyCourse>> searchCourses({
     String? query,
     String? categoryId,
     int limit = 20,
     int offset = 0,
   });
-  
+
   Future<int> countCourses({String? query, String? categoryId});
-  
+
   Future<void> logSearch({
     required String query,
     String? categoryId,
@@ -133,8 +135,13 @@ abstract class AcademyBackendStore {
 
   Future<void> createClick(AcademyClick click);
   Future<AcademyClick?> getClick(String clickId);
-  Future<void> updateClickStatus(String clickId, String status, {String? failureReason, DateTime? redirectedAt});
-  
+  Future<void> updateClickStatus(
+    String clickId,
+    String status, {
+    String? failureReason,
+    DateTime? redirectedAt,
+  });
+
   Future<AcademyCourse?> getCourseById(String id);
   Future<String?> getPartnerSlug(String partnerId);
   Future<String?> getCategoryName(String categoryId);
@@ -148,19 +155,28 @@ class AcademyService {
 
   AcademyService(this.store, {Uuid? uuid}) : _uuid = uuid ?? const Uuid();
 
-  Future<Map<String, dynamic>> search(AuthContext auth, String? query, String? categoryId, int page, int pageSize) async {
+  Future<Map<String, dynamic>> search(
+    AuthContext auth,
+    String? query,
+    String? categoryId,
+    int page,
+    int pageSize,
+  ) async {
     final effectivePageSize = pageSize.clamp(1, 100);
     final offset = (page - 1) * effectivePageSize;
-    
+
     final courses = await store.searchCourses(
       query: query,
       categoryId: categoryId,
       limit: effectivePageSize,
       offset: offset,
     );
-    
-    final total = await store.countCourses(query: query, categoryId: categoryId);
-    
+
+    final total = await store.countCourses(
+      query: query,
+      categoryId: categoryId,
+    );
+
     await store.logSearch(
       query: query ?? '',
       categoryId: categoryId,
@@ -168,11 +184,12 @@ class AcademyService {
       businessId: auth.businessId,
       userId: auth.userId,
     );
-    
+
     final results = <Map<String, dynamic>>[];
     for (final course in courses) {
       String? clickId;
-      if (course.publicationStatus == 'published' && course.redirectUrl != null) {
+      if (course.publicationStatus == 'published' &&
+          course.redirectUrl != null) {
         final partnerActive = await store.isPartnerActive(course.partnerId);
         if (partnerActive) {
           clickId = 'ac_${_uuid.v4().replaceAll('-', '')}';
@@ -191,13 +208,15 @@ class AcademyService {
           await store.createClick(click);
         }
       }
-      
+
       final json = course.toPublicJson(clickId: clickId);
-      json['platform'] = await store.getPartnerSlug(course.partnerId) ?? 'unknown';
-      json['category'] = await store.getCategoryName(course.categoryId) ?? 'unknown';
+      json['platform'] =
+          await store.getPartnerSlug(course.partnerId) ?? 'unknown';
+      json['category'] =
+          await store.getCategoryName(course.categoryId) ?? 'unknown';
       results.add(json);
     }
-    
+
     return {
       'query': query,
       'category': categoryId,
@@ -222,55 +241,91 @@ class SecureRedirectService {
     }
 
     if (click.status != 'created') {
-      await store.updateClickStatus(clickId, 'blocked', failureReason: 'Click already used or blocked');
+      await store.updateClickStatus(
+        clickId,
+        'blocked',
+        failureReason: 'Click already used or blocked',
+      );
       throw RedirectException('Link inválido ou já utilizado');
     }
 
     if (click.expiresAt.isBefore(DateTime.now().toUtc())) {
-      await store.updateClickStatus(clickId, 'expired', failureReason: 'Click expired');
+      await store.updateClickStatus(
+        clickId,
+        'expired',
+        failureReason: 'Click expired',
+      );
       throw RedirectException('O link expirou');
     }
 
     final course = await store.getCourseById(click.courseId);
     if (course == null || course.publicationStatus != 'published') {
-      await store.updateClickStatus(clickId, 'blocked', failureReason: 'Course not published or not found');
+      await store.updateClickStatus(
+        clickId,
+        'blocked',
+        failureReason: 'Course not published or not found',
+      );
       throw RedirectException('Curso indisponível');
     }
 
     final partnerActive = await store.isPartnerActive(click.partnerId);
     if (!partnerActive) {
-      await store.updateClickStatus(clickId, 'blocked', failureReason: 'Partner inactive');
+      await store.updateClickStatus(
+        clickId,
+        'blocked',
+        failureReason: 'Partner inactive',
+      );
       throw RedirectException('Parceiro inativo');
     }
 
     if (click.campaignId != null) {
       final campaignActive = await store.isCampaignActive(click.campaignId);
       if (!campaignActive) {
-        await store.updateClickStatus(clickId, 'blocked', failureReason: 'Campaign inactive');
+        await store.updateClickStatus(
+          clickId,
+          'blocked',
+          failureReason: 'Campaign inactive',
+        );
         throw RedirectException('Campanha inativa');
       }
     }
 
     final dest = Uri.tryParse(click.destinationUrl);
     if (dest == null || !dest.hasScheme || dest.scheme != 'https') {
-      await store.updateClickStatus(clickId, 'blocked', failureReason: 'Invalid destination URL (not HTTPS)');
+      await store.updateClickStatus(
+        clickId,
+        'blocked',
+        failureReason: 'Invalid destination URL (not HTTPS)',
+      );
       throw RedirectException('Destino inválido');
     }
 
     if (['localhost', '127.0.0.1', '::1'].contains(dest.host)) {
-      await store.updateClickStatus(clickId, 'blocked', failureReason: 'Localhost blocked');
-      throw RedirectException('Destino inválido');
-    }
-    
-    // IP blocking rules can be extended here
-    // For now, block some basic ones, or leave it to standard DNS checks
-    
-    if (dest.userInfo.isNotEmpty) {
-      await store.updateClickStatus(clickId, 'blocked', failureReason: 'Credentials in URL blocked');
+      await store.updateClickStatus(
+        clickId,
+        'blocked',
+        failureReason: 'Localhost blocked',
+      );
       throw RedirectException('Destino inválido');
     }
 
-    await store.updateClickStatus(clickId, 'redirected', redirectedAt: DateTime.now().toUtc());
+    // IP blocking rules can be extended here
+    // For now, block some basic ones, or leave it to standard DNS checks
+
+    if (dest.userInfo.isNotEmpty) {
+      await store.updateClickStatus(
+        clickId,
+        'blocked',
+        failureReason: 'Credentials in URL blocked',
+      );
+      throw RedirectException('Destino inválido');
+    }
+
+    await store.updateClickStatus(
+      clickId,
+      'redirected',
+      redirectedAt: DateTime.now().toUtc(),
+    );
     return click.destinationUrl;
   }
 }

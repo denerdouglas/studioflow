@@ -468,7 +468,9 @@ final class StudioFlowApi {
     final actor = _authenticate(request);
     final query = (request.url.queryParameters['q'] ?? '').trim();
     if (query.length < 2 || query.length > 120) {
-      throw const FormatException('Informe uma busca entre 2 e 120 caracteres.');
+      throw const FormatException(
+        'Informe uma busca entre 2 e 120 caracteres.',
+      );
     }
     await marketplace.logSearch(
       businessId: actor.businessId!,
@@ -481,7 +483,7 @@ final class StudioFlowApi {
     );
     return _json(200, {
       'results': [],
-      'message': 'Pesquisa de marketplace ainda em homologação na etapa 3B.3'
+      'message': 'Pesquisa de marketplace ainda em homologação na etapa 3B.3',
     });
   }
 
@@ -501,7 +503,10 @@ final class StudioFlowApi {
   }
 
   Future<Response> _adminCreatePartner(Request request) async {
-    final actor = await _authenticatePlatformAdmin(request, requiredRole: 'platform_super_admin');
+    final actor = await _authenticatePlatformAdmin(
+      request,
+      requiredRole: 'platform_super_admin',
+    );
     final body = await _body(request);
     final p = MarketplacePartner(
       id: _uuid.v4(),
@@ -516,7 +521,11 @@ final class StudioFlowApi {
       publicConfig: {},
       createdAt: DateTime.now().toUtc(),
     );
-    await adminService.createPartner(actor.userId, p, ipAddressHash: 'dummy_hash');
+    await adminService.createPartner(
+      actor.userId,
+      p,
+      ipAddressHash: 'dummy_hash',
+    );
     return _json(201, p.toJson());
   }
 
@@ -651,9 +660,9 @@ final class StudioFlowApi {
     try {
       final context = tokens.verifyAccessToken(header.substring(7).trim());
       if (context.isPlatformAdmin) {
-         // Fallback if a platform admin accesses regular endpoints:
-         // Depending on business rules, we might allow it or block it. 
-         // For now, let it pass, but typically platform admins don't use the standard app.
+        // Fallback if a platform admin accesses regular endpoints:
+        // Depending on business rules, we might allow it or block it.
+        // For now, let it pass, but typically platform admins don't use the standard app.
       }
       return context;
     } on Object {
@@ -665,23 +674,42 @@ final class StudioFlowApi {
     }
   }
 
-  Future<AuthContext> _authenticatePlatformAdmin(Request request, {String? requiredRole}) async {
+  Future<AuthContext> _authenticatePlatformAdmin(
+    Request request, {
+    String? requiredRole,
+  }) async {
     final context = _authenticate(request);
-    
+
     if (!context.isPlatformAdmin) {
-      throw const ApiException(403, 'forbidden', 'Acesso negado: Requer elevação administrativa.');
+      throw const ApiException(
+        403,
+        'forbidden',
+        'Acesso negado: Requer elevação administrativa.',
+      );
     }
-    
+
     // Validate against database for active status and existence
-    final admin = await (store as AdminBackendStore).findPlatformAdminByUserId(context.userId);
+    final admin = await (store as AdminBackendStore).findPlatformAdminByUserId(
+      context.userId,
+    );
     if (admin == null || !admin.active) {
-      throw const ApiException(403, 'forbidden', 'Conta administrativa inativa ou inexistente.');
+      throw const ApiException(
+        403,
+        'forbidden',
+        'Conta administrativa inativa ou inexistente.',
+      );
     }
-    
-    if (requiredRole != null && admin.role != requiredRole && admin.role != 'platform_super_admin') {
-      throw const ApiException(403, 'forbidden', 'Acesso negado: Papel insuficiente.');
+
+    if (requiredRole != null &&
+        admin.role != requiredRole &&
+        admin.role != 'platform_super_admin') {
+      throw const ApiException(
+        403,
+        'forbidden',
+        'Acesso negado: Papel insuficiente.',
+      );
     }
-    
+
     return context;
   }
 
@@ -724,12 +752,18 @@ final class StudioFlowApi {
       final category = request.url.queryParameters['category'];
       final pageStr = request.url.queryParameters['page'] ?? '1';
       final pageSizeStr = request.url.queryParameters['pageSize'] ?? '20';
-      
+
       int page = int.tryParse(pageStr) ?? 1;
       int pageSize = int.tryParse(pageSizeStr) ?? 20;
       if (page < 1) page = 1;
 
-      final results = await academy.search(auth, query, category, page, pageSize);
+      final results = await academy.search(
+        auth,
+        query,
+        category,
+        page,
+        pageSize,
+      );
       return _json(200, results);
     } catch (e) {
       return _error(500, 'internal_error', 'Erro ao buscar cursos: $e');
@@ -755,7 +789,11 @@ final class StudioFlowApi {
     } on RedirectException catch (e) {
       return _error(400, 'invalid_link', e.message);
     } catch (e) {
-      return _error(500, 'internal_error', 'Erro ao processar redirecionamento.');
+      return _error(
+        500,
+        'internal_error',
+        'Erro ao processar redirecionamento.',
+      );
     }
   }
 
@@ -764,7 +802,10 @@ final class StudioFlowApi {
     return _json(200, {
       'status': 'active',
       'plan': 'premium_homologation',
-      'expiresAt': DateTime.now().add(const Duration(days: 365)).toUtc().toIso8601String(),
+      'expiresAt': DateTime.now()
+          .add(const Duration(days: 365))
+          .toUtc()
+          .toIso8601String(),
     });
   }
 

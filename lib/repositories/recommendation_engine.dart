@@ -15,9 +15,7 @@ class RecommendationMessage {
 class RecommendationEngine {
   final EstoqueRepository estoqueRepository;
 
-  RecommendationEngine({
-    required this.estoqueRepository,
-  });
+  RecommendationEngine({required this.estoqueRepository});
 
   Future<RecommendationMessage?> generateRecommendation() async {
     try {
@@ -25,9 +23,11 @@ class RecommendationEngine {
       if (estoqueBaixo.isNotEmpty) {
         // Find one that makes sense
         for (final item in estoqueBaixo) {
-          if (item.estoqueMinimo > 0 && item.quantidadeAtual <= item.estoqueMinimo) {
+          if (item.estoqueMinimo > 0 &&
+              item.quantidadeAtual <= item.estoqueMinimo) {
             return RecommendationMessage(
-              text: 'Só restam ${item.quantidadeAtual.toInt()} unidades de ${item.nome}.',
+              text:
+                  'Só restam ${item.quantidadeAtual.toInt()} unidades de ${item.nome}.',
               actionLabel: 'Ver ofertas',
               suggestedQuery: item.nome,
             );
@@ -37,7 +37,6 @@ class RecommendationEngine {
 
       // Future: add Equipment check (requires real dates as per user requirement)
       // Future: add Reposição recorrente (requires purchase history)
-      
     } catch (e) {
       // Ignora erro no motor de recomendação
     }

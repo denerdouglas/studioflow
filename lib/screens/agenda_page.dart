@@ -213,16 +213,28 @@ class _AgendaPageState extends State<AgendaPage> {
     } on ConflitoAgendaException catch (erro) {
       if (!mounted) return;
       await _mostrarResolucaoConflito(erro, (novoInicio, novoFim) async {
-        final agendamentoCorrigido = novo.copiarCom(inicio: novoInicio, fim: novoFim);
+        final agendamentoCorrigido = novo.copiarCom(
+          inicio: novoInicio,
+          fim: novoFim,
+        );
         try {
           await _agendaRepository.inserir(agendamentoCorrigido);
           if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Agendamento salvo com sucesso no novo horário.')));
-          setState(() { _dataSelecionada = novoInicio; _carregando = true; });
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Agendamento salvo com sucesso no novo horário.'),
+            ),
+          );
+          setState(() {
+            _dataSelecionada = novoInicio;
+            _carregando = true;
+          });
           _carregarTudo();
         } catch (e) {
           if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro: $e')));
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('Erro: $e')));
         }
       });
     } catch (erro) {
@@ -530,12 +542,21 @@ class _AgendaPageState extends State<AgendaPage> {
               novoFim: novoFim,
             );
             if (!mounted) return;
-            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Agendamento reagendado com sucesso.')));
-            setState(() { _dataSelecionada = novoInicio; _carregando = true; });
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Agendamento reagendado com sucesso.'),
+              ),
+            );
+            setState(() {
+              _dataSelecionada = novoInicio;
+              _carregando = true;
+            });
             _carregarTudo();
           } catch (e) {
             if (!mounted) return;
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao reagendar: $e')));
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(SnackBar(content: Text('Erro ao reagendar: $e')));
           }
         });
       }
@@ -682,7 +703,7 @@ class _AgendaPageState extends State<AgendaPage> {
   Future<void> _mostrarOpcoesLembrete(AgendamentoRegistro agendamento) async {
     final comercioId = SessionController.instance.usuario!.comercioId;
     final modelos = await ModelosMensagensRepository().listar(comercioId);
-    
+
     if (!mounted) return;
 
     if (modelos.isEmpty) {
@@ -725,15 +746,19 @@ class _AgendaPageState extends State<AgendaPage> {
     if (modeloSelecionado == null) return;
 
     final configuracao = await ConfiguracoesRepository().carregar(comercioId);
-    final cliente = await ClienteRepository().buscarPorId(agendamento.clienteId);
-    
+    final cliente = await ClienteRepository().buscarPorId(
+      agendamento.clienteId,
+    );
+
     final dados = DadosMensagem(
       cliente: agendamento.clienteNome,
       salao: configuracao.nomeExibicao,
       profissional: agendamento.profissionalNome,
       servico: agendamento.servicoNome,
-      data: '${agendamento.inicio.day.toString().padLeft(2, '0')}/${agendamento.inicio.month.toString().padLeft(2, '0')}/${agendamento.inicio.year}',
-      hora: '${agendamento.inicio.hour.toString().padLeft(2, '0')}:${agendamento.inicio.minute.toString().padLeft(2, '0')}',
+      data:
+          '${agendamento.inicio.day.toString().padLeft(2, '0')}/${agendamento.inicio.month.toString().padLeft(2, '0')}/${agendamento.inicio.year}',
+      hora:
+          '${agendamento.inicio.hour.toString().padLeft(2, '0')}:${agendamento.inicio.minute.toString().padLeft(2, '0')}',
       formaPagamento: 'Conforme configurado',
       valorPago: 0.0,
       servicos: [
@@ -746,7 +771,10 @@ class _AgendaPageState extends State<AgendaPage> {
       ],
     );
 
-    final mensagem = const MensagemService().montar(modeloSelecionado.texto, dados);
+    final mensagem = const MensagemService().montar(
+      modeloSelecionado.texto,
+      dados,
+    );
 
     if (!mounted) return;
 
@@ -798,8 +826,8 @@ class _AgendaPageState extends State<AgendaPage> {
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
-      heroTag: null,
-      onPressed: () {
+        heroTag: null,
+        onPressed: () {
           _novoAgendamento();
         },
         backgroundColor: _corPrincipal,
@@ -813,7 +841,10 @@ class _AgendaPageState extends State<AgendaPage> {
     );
   }
 
-  Future<void> _mostrarResolucaoConflito(ConflitoAgendaException erro, Function(DateTime, DateTime) onResolvido) async {
+  Future<void> _mostrarResolucaoConflito(
+    ConflitoAgendaException erro,
+    Function(DateTime, DateTime) onResolvido,
+  ) async {
     return showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -826,24 +857,35 @@ class _AgendaPageState extends State<AgendaPage> {
               Text(erro.mensagem),
               const SizedBox(height: 16),
               if (erro.sugestoes.isNotEmpty) ...[
-                const Text('Sugestões de horários livres:', style: TextStyle(fontWeight: FontWeight.bold)),
+                const Text(
+                  'Sugestões de horários livres:',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
                 const SizedBox(height: 8),
                 ...erro.sugestoes.take(5).map((alt) {
-                  final dataStr = '${alt.day.toString().padLeft(2, '0')}/${alt.month.toString().padLeft(2, '0')}';
-                  final horaStr = '${alt.hour.toString().padLeft(2, '0')}:${alt.minute.toString().padLeft(2, '0')}';
+                  final dataStr =
+                      '${alt.day.toString().padLeft(2, '0')}/${alt.month.toString().padLeft(2, '0')}';
+                  final horaStr =
+                      '${alt.hour.toString().padLeft(2, '0')}:${alt.minute.toString().padLeft(2, '0')}';
                   return ListTile(
                     contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.check_circle_outline, color: _corPrincipal),
+                    leading: const Icon(
+                      Icons.check_circle_outline,
+                      color: _corPrincipal,
+                    ),
                     title: Text('$dataStr às $horaStr'),
                     onTap: () {
                       Navigator.of(context).pop();
-                      // ConflitoAgendaException sugestoes are DateTime, but we need start and end. 
+                      // ConflitoAgendaException sugestoes are DateTime, but we need start and end.
                       // We can just assume duration was kept, so we re-add duration.
-                      onResolvido(alt, alt.add(Duration(minutes: 30))); // We need to calculate duration from agendamento
+                      onResolvido(
+                        alt,
+                        alt.add(Duration(minutes: 30)),
+                      ); // We need to calculate duration from agendamento
                     },
                   );
                 }),
-              ]
+              ],
             ],
           ),
         ),
@@ -1203,98 +1245,98 @@ class OpcoesAgendamentoSheet extends StatelessWidget {
                   child: Container(
                     width: 48,
                     height: 5,
-              decoration: BoxDecoration(
-                color: const Color(0xFFD6CDDD),
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-          ),
-          const SizedBox(height: 20),
-          Text(
-            agendamento.clienteNome,
-            style: const TextStyle(
-              fontSize: 23,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF2D2140),
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            '${agendamento.servicoNome} • '
-            '${_formatarHora(agendamento.inicio)}',
-            style: const TextStyle(color: Color(0xFF766A85)),
-          ),
-          const SizedBox(height: 22),
-          _OpcaoAgendamento(
-            titulo: 'Confirmar',
-            icone: Icons.check_circle_outline,
-            cor: const Color(0xFF2EA779),
-            onTap: () {
-              Navigator.pop(context, 'confirmar');
-            },
-          ),
-          _OpcaoAgendamento(
-            titulo: 'Concluir atendimento',
-            icone: Icons.done_all,
-            cor: const Color(0xFF2B83C6),
-            onTap: () {
-              Navigator.pop(context, 'concluir');
-            },
-          ),
-          _OpcaoAgendamento(
-            titulo: 'Reagendar',
-            icone: Icons.edit_calendar_outlined,
-            cor: const Color(0xFF70569A),
-            onTap: () {
-              Navigator.pop(context, 'reagendar');
-            },
-          ),
-          _OpcaoAgendamento(
-            titulo: 'Registrar falta',
-            icone: Icons.person_off_outlined,
-            cor: const Color(0xFF8D6E63),
-            onTap: () {
-              Navigator.pop(context, 'faltou');
-            },
-          ),
-          _OpcaoAgendamento(
-            titulo: 'Histórico',
-            icone: Icons.history,
-            cor: const Color(0xFF546E7A),
-            onTap: () {
-              Navigator.pop(context, 'historico');
-            },
-          ),
-          _OpcaoAgendamento(
-            titulo: 'Cancelar',
-            icone: Icons.cancel_outlined,
-            cor: const Color(0xFFE58A25),
-            onTap: () {
-              Navigator.pop(context, 'cancelar');
-            },
-          ),
-          _OpcaoAgendamento(
-            titulo: 'Enviar lembrete',
-            icone: Icons.chat_bubble_outline,
-            cor: const Color(0xFF00C853),
-            onTap: () {
-              Navigator.pop(context, 'lembrete');
-            },
-          ),
-              if (podeExcluir)
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFD6CDDD),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Text(
+                  agendamento.clienteNome,
+                  style: const TextStyle(
+                    fontSize: 23,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF2D2140),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${agendamento.servicoNome} • '
+                  '${_formatarHora(agendamento.inicio)}',
+                  style: const TextStyle(color: Color(0xFF766A85)),
+                ),
+                const SizedBox(height: 22),
                 _OpcaoAgendamento(
-                  titulo: 'Excluir agendamento',
-                  icone: Icons.delete_outline,
-                  cor: const Color(0xFFD64D64),
+                  titulo: 'Confirmar',
+                  icone: Icons.check_circle_outline,
+                  cor: const Color(0xFF2EA779),
                   onTap: () {
-                    Navigator.pop(context, 'excluir');
+                    Navigator.pop(context, 'confirmar');
                   },
                 ),
-            ],
+                _OpcaoAgendamento(
+                  titulo: 'Concluir atendimento',
+                  icone: Icons.done_all,
+                  cor: const Color(0xFF2B83C6),
+                  onTap: () {
+                    Navigator.pop(context, 'concluir');
+                  },
+                ),
+                _OpcaoAgendamento(
+                  titulo: 'Reagendar',
+                  icone: Icons.edit_calendar_outlined,
+                  cor: const Color(0xFF70569A),
+                  onTap: () {
+                    Navigator.pop(context, 'reagendar');
+                  },
+                ),
+                _OpcaoAgendamento(
+                  titulo: 'Registrar falta',
+                  icone: Icons.person_off_outlined,
+                  cor: const Color(0xFF8D6E63),
+                  onTap: () {
+                    Navigator.pop(context, 'faltou');
+                  },
+                ),
+                _OpcaoAgendamento(
+                  titulo: 'Histórico',
+                  icone: Icons.history,
+                  cor: const Color(0xFF546E7A),
+                  onTap: () {
+                    Navigator.pop(context, 'historico');
+                  },
+                ),
+                _OpcaoAgendamento(
+                  titulo: 'Cancelar',
+                  icone: Icons.cancel_outlined,
+                  cor: const Color(0xFFE58A25),
+                  onTap: () {
+                    Navigator.pop(context, 'cancelar');
+                  },
+                ),
+                _OpcaoAgendamento(
+                  titulo: 'Enviar lembrete',
+                  icone: Icons.chat_bubble_outline,
+                  cor: const Color(0xFF00C853),
+                  onTap: () {
+                    Navigator.pop(context, 'lembrete');
+                  },
+                ),
+                if (podeExcluir)
+                  _OpcaoAgendamento(
+                    titulo: 'Excluir agendamento',
+                    icone: Icons.delete_outline,
+                    cor: const Color(0xFFD64D64),
+                    onTap: () {
+                      Navigator.pop(context, 'excluir');
+                    },
+                  ),
+              ],
+            ),
           ),
         ),
       ),
-    ),
     );
   }
 

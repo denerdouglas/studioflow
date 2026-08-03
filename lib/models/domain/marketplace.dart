@@ -15,7 +15,8 @@ class MarketplaceSearchResult {
 
   factory MarketplaceSearchResult.fromJson(Map<String, dynamic> json) {
     return MarketplaceSearchResult(
-      results: (json['results'] as List?)
+      results:
+          (json['results'] as List?)
               ?.map((e) => MarketplaceProductGroup.fromJson(e))
               .toList() ??
           [],
@@ -63,7 +64,8 @@ class MarketplaceProductGroup {
       normalizedProductId: json['normalized_product_id'] as String?,
       title: json['title'] as String? ?? 'Produto Desconhecido',
       imageUrl: json['image_url'] as String?,
-      offers: (json['offers'] as List?)
+      offers:
+          (json['offers'] as List?)
               ?.map((e) => MarketplaceOffer.fromJson(e))
               .toList() ??
           [],
@@ -120,7 +122,8 @@ class MarketplaceOffer {
       updatedAt: json['updated_at'] != null
           ? DateTime.parse(json['updated_at'] as String)
           : DateTime.now(),
-      badges: (json['badges'] as List?)?.map((e) => e.toString()).toList() ?? [],
+      badges:
+          (json['badges'] as List?)?.map((e) => e.toString()).toList() ?? [],
     );
   }
 
@@ -144,10 +147,7 @@ class MarketplacePartner {
   final String slug;
   final String name;
 
-  MarketplacePartner({
-    required this.slug,
-    required this.name,
-  });
+  MarketplacePartner({required this.slug, required this.name});
 
   factory MarketplacePartner.fromJson(Map<String, dynamic> json) {
     return MarketplacePartner(
@@ -157,9 +157,6 @@ class MarketplacePartner {
   }
 
   Map<String, dynamic> toJson() {
-    return {
-      'slug': slug,
-      'name': name,
-    };
+    return {'slug': slug, 'name': name};
   }
 }

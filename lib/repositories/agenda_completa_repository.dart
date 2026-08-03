@@ -577,7 +577,7 @@ class AgendaCompletaRepository {
         where: 'id = ? AND comercio_id = ?',
         whereArgs: [agendamentoId, _comercioId],
       );
-      
+
       if (status == 'concluido' && anterior != 'concluido') {
         await _consumirMateriaisEstoque(txn, agendamentoId: agendamentoId);
       } else if (anterior == 'concluido' && status != 'concluido') {
@@ -693,17 +693,26 @@ class AgendaCompletaRepository {
     );
   }
 
-  double _calcularFatorConversao(String unidadeMedida, String unidadeEstoque, String unidadeConteudo, double conteudoPorUnidade) {
+  double _calcularFatorConversao(
+    String unidadeMedida,
+    String unidadeEstoque,
+    String unidadeConteudo,
+    double conteudoPorUnidade,
+  ) {
     if (unidadeMedida == unidadeEstoque || unidadeMedida.isEmpty) return 1.0;
-    
+
     if (unidadeMedida == unidadeConteudo && conteudoPorUnidade > 0) {
       return 1.0 / conteudoPorUnidade;
     }
-    
+
     if (unidadeMedida == 'ml' || unidadeMedida == 'mililitro') {
-      if (unidadeEstoque == 'litro' || unidadeEstoque == 'l') return 1.0 / 1000.0;
+      if (unidadeEstoque == 'litro' || unidadeEstoque == 'l') {
+        return 1.0 / 1000.0;
+      }
     } else if (unidadeMedida == 'g' || unidadeMedida == 'grama') {
-      if (unidadeEstoque == 'kg' || unidadeEstoque == 'quilograma') return 1.0 / 1000.0;
+      if (unidadeEstoque == 'kg' || unidadeEstoque == 'quilograma') {
+        return 1.0 / 1000.0;
+      }
     }
 
     return 1.0;
@@ -759,10 +768,17 @@ class AgendaCompletaRepository {
       if (estoqueItem.isEmpty) continue;
 
       final unidadeEstoque = estoqueItem.first['unidade'] as String? ?? '';
-      final unidadeConteudo = estoqueItem.first['unidade_conteudo'] as String? ?? '';
-      final conteudoPorUnidade = (estoqueItem.first['conteudo_por_unidade'] as num? ?? 1).toDouble();
+      final unidadeConteudo =
+          estoqueItem.first['unidade_conteudo'] as String? ?? '';
+      final conteudoPorUnidade =
+          (estoqueItem.first['conteudo_por_unidade'] as num? ?? 1).toDouble();
 
-      final fator = _calcularFatorConversao(unidadeMedida, unidadeEstoque, unidadeConteudo, conteudoPorUnidade);
+      final fator = _calcularFatorConversao(
+        unidadeMedida,
+        unidadeEstoque,
+        unidadeConteudo,
+        conteudoPorUnidade,
+      );
       final quantidadeCalculada = quantidadeOriginal * fator;
 
       await txn.execute(
@@ -801,7 +817,14 @@ class AgendaCompletaRepository {
 
     final consumos = await txn.query(
       'auditoria_estoque_consumo',
-      columns: ['id', 'estoque_id', 'quantidade', 'profissional_id', 'cliente_id', 'servico_id'],
+      columns: [
+        'id',
+        'estoque_id',
+        'quantidade',
+        'profissional_id',
+        'cliente_id',
+        'servico_id',
+      ],
       where: 'agendamento_id = ? AND comercio_id = ? AND tipo_movimento = ?',
       whereArgs: [agendamentoId, _comercioId, 'baixa'],
     );

@@ -38,20 +38,46 @@ class AcademyMemoryStore implements AcademyBackendStore {
     int limit = 20,
     int offset = 0,
   }) async {
-    return _academyCourses.where((c) {
-      if (c.publicationStatus != 'published' && c.publicationStatus != 'coming_soon') return false;
-      if (categoryId != null && categoryId.isNotEmpty && c.categoryId != categoryId) return false;
-      if (query != null && query.trim().isNotEmpty && !c.title.toLowerCase().contains(query.trim().toLowerCase())) return false;
-      return true;
-    }).skip(offset).take(limit).toList();
+    return _academyCourses
+        .where((c) {
+          if (c.publicationStatus != 'published' &&
+              c.publicationStatus != 'coming_soon') {
+            return false;
+          }
+          if (categoryId != null &&
+              categoryId.isNotEmpty &&
+              c.categoryId != categoryId) {
+            return false;
+          }
+          if (query != null &&
+              query.trim().isNotEmpty &&
+              !c.title.toLowerCase().contains(query.trim().toLowerCase())) {
+            return false;
+          }
+          return true;
+        })
+        .skip(offset)
+        .take(limit)
+        .toList();
   }
 
   @override
   Future<int> countCourses({String? query, String? categoryId}) async {
     return _academyCourses.where((c) {
-      if (c.publicationStatus != 'published' && c.publicationStatus != 'coming_soon') return false;
-      if (categoryId != null && categoryId.isNotEmpty && c.categoryId != categoryId) return false;
-      if (query != null && query.trim().isNotEmpty && !c.title.toLowerCase().contains(query.trim().toLowerCase())) return false;
+      if (c.publicationStatus != 'published' &&
+          c.publicationStatus != 'coming_soon') {
+        return false;
+      }
+      if (categoryId != null &&
+          categoryId.isNotEmpty &&
+          c.categoryId != categoryId) {
+        return false;
+      }
+      if (query != null &&
+          query.trim().isNotEmpty &&
+          !c.title.toLowerCase().contains(query.trim().toLowerCase())) {
+        return false;
+      }
       return true;
     }).length;
   }
@@ -84,7 +110,12 @@ class AcademyMemoryStore implements AcademyBackendStore {
   }
 
   @override
-  Future<void> updateClickStatus(String clickId, String status, {String? failureReason, DateTime? redirectedAt}) async {
+  Future<void> updateClickStatus(
+    String clickId,
+    String status, {
+    String? failureReason,
+    DateTime? redirectedAt,
+  }) async {
     final click = _academyClicks[clickId];
     if (click != null) {
       _academyClicks[clickId] = AcademyClick(

@@ -392,8 +392,8 @@ class _EstoquePageState extends State<EstoquePage> {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
-      heroTag: null,
-      onPressed: _novoItem,
+        heroTag: null,
+        onPressed: _novoItem,
         backgroundColor: _roxo,
         foregroundColor: Colors.white,
         icon: const Icon(Icons.add),
@@ -1230,9 +1230,7 @@ class _ItemEstoqueFormSheetState extends State<ItemEstoqueFormSheet> {
         0;
 
     final conteudo =
-        double.tryParse(
-          _conteudoController.text.trim().replaceAll(',', '.'),
-        ) ??
+        double.tryParse(_conteudoController.text.trim().replaceAll(',', '.')) ??
         1;
 
     final estoqueMinimo =
@@ -1347,7 +1345,10 @@ class _ItemEstoqueFormSheetState extends State<ItemEstoqueFormSheet> {
                     Expanded(
                       child: Text(
                         'Revisão necessária: Separe a quantidade física (potes, frascos) do conteúdo (g, ml). O cálculo financeiro usará apenas a quantidade física.',
-                        style: TextStyle(color: Color(0xFF856404), fontSize: 13),
+                        style: TextStyle(
+                          color: Color(0xFF856404),
+                          fontSize: 13,
+                        ),
                       ),
                     ),
                   ],
@@ -1428,7 +1429,9 @@ class _ItemEstoqueFormSheetState extends State<ItemEstoqueFormSheet> {
                   child: DropdownButtonFormField<String>(
                     initialValue: _unidade,
                     isExpanded: true,
-                    decoration: const InputDecoration(labelText: 'Unidade física (pote, caixa)'),
+                    decoration: const InputDecoration(
+                      labelText: 'Unidade física (pote, caixa)',
+                    ),
                     items: _unidades.map((unidade) {
                       return DropdownMenuItem(
                         value: unidade,
@@ -1468,7 +1471,9 @@ class _ItemEstoqueFormSheetState extends State<ItemEstoqueFormSheet> {
                   child: DropdownButtonFormField<String>(
                     initialValue: _unidadeConteudo,
                     isExpanded: true,
-                    decoration: const InputDecoration(labelText: 'Unidade (g, ml)'),
+                    decoration: const InputDecoration(
+                      labelText: 'Unidade (g, ml)',
+                    ),
                     items: _unidadesConteudo.map((unidade) {
                       return DropdownMenuItem(
                         value: unidade,

@@ -16,7 +16,7 @@ As variáveis podem ser passadas pelo comando de build do Flutter, permitindo a 
 2. Caso opte por CI/CD, as variáveis de ambiente `STUDIOFLOW_KEYSTORE_PATH`, etc., já estão configuradas no `build.gradle.kts`.
 3. Gere o App Bundle de produção injetando a URL do backend:
    ```bash
-   flutter build appbundle --release --dart-define=STUDIOFLOW_PUBLIC_BACKEND_URL=https://api.studioflow.com.br
+   flutter build appbundle --release --dart-define=STUDIOFLOW_PUBLIC_BACKEND_URL=https://api.studioflowapp.com.br
    ```
 
 ### Build iOS
@@ -24,7 +24,7 @@ As variáveis podem ser passadas pelo comando de build do Flutter, permitindo a 
 2. Certifique-se de estar com a conta Apple vinculada e com o perfil de provisionamento assinado.
 3. Gere o Archive injetando a variável:
    ```bash
-   flutter build ipa --release --dart-define=STUDIOFLOW_PUBLIC_BACKEND_URL=https://api.studioflow.com.br
+   flutter build ipa --release --dart-define=STUDIOFLOW_PUBLIC_BACKEND_URL=https://api.studioflowapp.com.br
    ```
 
 ## 2. Implantação do Backend (Dart Shelf)

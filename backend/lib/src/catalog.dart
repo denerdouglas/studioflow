@@ -61,7 +61,8 @@ final class CatalogProductData {
         description: value['description'] as String?,
         imageUrl: value['imageUrl'] as String?,
         quantity: value['quantity'] as String?,
-        physicalUnit: value['physical_unit'] as String? ?? value['unit'] as String?,
+        physicalUnit:
+            value['physical_unit'] as String? ?? value['unit'] as String?,
         contentPerUnit: (value['content_per_unit'] as num? ?? 1).toDouble(),
         contentUnit: value['content_unit'] as String?,
         source: value['source'] as String? ?? 'external',
@@ -222,7 +223,8 @@ final class PostgresCatalogStore implements CatalogStore {
         description: _text(payload['descricao']),
         imageUrl: _https(_text(payload['imagem'])),
         physicalUnit: _text(payload['unidade']),
-        contentPerUnit: (payload['conteudo_por_unidade'] as num? ?? 1).toDouble(),
+        contentPerUnit: (payload['conteudo_por_unidade'] as num? ?? 1)
+            .toDouble(),
         contentUnit: _text(payload['unidade_conteudo']),
         source: 'business',
       );
@@ -553,41 +555,41 @@ final class CatalogLookupService {
         source: 'external',
       );
       await store.save(
-  gtin: gtin,
-  status: 'found',
-  product: result,
-  expiresAt: now.add(positiveCache),
-);
+        gtin: gtin,
+        status: 'found',
+        product: result,
+        expiresAt: now.add(positiveCache),
+      );
 
-// Alimenta automaticamente a base compartilhada do StudioFlow.
-// Se o produto já existir, o método contribute faz o merge/atualização.
-await store.contribute(
-  product: CatalogProductData(
-    gtin: result.gtin,
-    name: result.name,
-    brand: result.brand,
-    category: result.category,
-    description: result.description,
-    imageUrl: result.imageUrl,
-    quantity: result.quantity,
-    physicalUnit: result.physicalUnit,
-    contentPerUnit: result.contentPerUnit,
-    contentUnit: result.contentUnit,
-    source: 'studioflow',
-  ),
-  businessId: businessId,
-  userId: userId,
-);
+      // Alimenta automaticamente a base compartilhada do StudioFlow.
+      // Se o produto já existir, o método contribute faz o merge/atualização.
+      await store.contribute(
+        product: CatalogProductData(
+          gtin: result.gtin,
+          name: result.name,
+          brand: result.brand,
+          category: result.category,
+          description: result.description,
+          imageUrl: result.imageUrl,
+          quantity: result.quantity,
+          physicalUnit: result.physicalUnit,
+          contentPerUnit: result.contentPerUnit,
+          contentUnit: result.contentUnit,
+          source: 'studioflow',
+        ),
+        businessId: businessId,
+        userId: userId,
+      );
 
-await store.log(
-  businessId: businessId,
-  userId: userId,
-  gtin: gtin,
-  result: 'found',
-  durationMs: watch.elapsedMilliseconds,
-);
+      await store.log(
+        businessId: businessId,
+        userId: userId,
+        gtin: gtin,
+        result: 'found',
+        durationMs: watch.elapsedMilliseconds,
+      );
 
-return result;
+      return result;
     } on Object catch (error) {
       await store.log(
         businessId: businessId,

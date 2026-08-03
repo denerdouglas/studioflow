@@ -32,8 +32,7 @@ class ClienteDetalhesPremiumPage extends StatefulWidget {
       _ClienteDetalhesPremiumPageState();
 }
 
-class _ClienteDetalhesPremiumPageState
-    extends State<ClienteDetalhesPremiumPage>
+class _ClienteDetalhesPremiumPageState extends State<ClienteDetalhesPremiumPage>
     with SingleTickerProviderStateMixin {
   late ClienteRegistro _cliente;
   late TabController _tabController;
@@ -147,7 +146,8 @@ class _ClienteDetalhesPremiumPageState
     final dir = Directory(dirPath);
     if (!await dir.exists()) await dir.create(recursive: true);
 
-    final fileName = '${_cliente.id}_avatar_${DateTime.now().millisecondsSinceEpoch}.jpg';
+    final fileName =
+        '${_cliente.id}_avatar_${DateTime.now().millisecondsSinceEpoch}.jpg';
     final savedPath = path.join(dirPath, fileName);
     await File(image.path).copy(savedPath);
 
@@ -162,16 +162,16 @@ class _ClienteDetalhesPremiumPageState
       setState(() => _cliente = clienteAtualizado);
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Erro ao atualizar foto.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Erro ao atualizar foto.')));
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final corPrincipal = Theme.of(context).colorScheme.primary;
-    
+
     return Scaffold(
       backgroundColor: const Color(0xFFF9F6FC),
       body: NestedScrollView(
@@ -180,8 +180,8 @@ class _ClienteDetalhesPremiumPageState
             SliverAppBar(
               expandedHeight: 320,
               pinned: true,
-              backgroundColor: _cliente.avatarPathLocal != null 
-                  ? Colors.black 
+              backgroundColor: _cliente.avatarPathLocal != null
+                  ? Colors.black
                   : corPrincipal,
               foregroundColor: Colors.white,
               flexibleSpace: FlexibleSpaceBar(
@@ -272,7 +272,8 @@ class _ClienteDetalhesPremiumPageState
                   onPressed: () => Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => Cliente360DetalhePage(clienteId: _cliente.id),
+                      builder: (_) =>
+                          Cliente360DetalhePage(clienteId: _cliente.id),
                     ),
                   ),
                 ),
@@ -306,10 +307,7 @@ class _ClienteDetalhesPremiumPageState
                 children: [
                   _ResumoTab(cliente: _cliente, resumo: _resumo360),
                   _HistoricoTab(historico: _resumo360?.historicoAgenda ?? []),
-                  _FotosTab(
-                    fotos: _fotos,
-                    onAdicionar: _adicionarFoto,
-                  ),
+                  _FotosTab(fotos: _fotos, onAdicionar: _adicionarFoto),
                   _ProdutosTab(compras: _resumo360?.historicoCompras ?? []),
                   _AnotacoesTab(
                     cliente: _cliente,
@@ -370,7 +368,13 @@ class _ClienteDetalhesPremiumPageState
 
     final appDir = await getApplicationDocumentsDirectory();
     final comercioId = SessionController.instance.usuario!.comercioId;
-    final dirPath = path.join(appDir.path, comercioId, 'clientes', _cliente.id, 'fotos');
+    final dirPath = path.join(
+      appDir.path,
+      comercioId,
+      'clientes',
+      _cliente.id,
+      'fotos',
+    );
     final dir = Directory(dirPath);
     if (!await dir.exists()) await dir.create(recursive: true);
 
@@ -396,14 +400,14 @@ class _ClienteDetalhesPremiumPageState
       setState(() {
         _fotos.insert(0, novaFoto);
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Foto adicionada.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Foto adicionada.')));
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Erro ao salvar foto.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Erro ao salvar foto.')));
     }
   }
 
@@ -425,11 +429,12 @@ class _SliverAppBarDelegate extends SliverPersistentHeaderDelegate {
   double get maxExtent => _tabBar.preferredSize.height;
 
   @override
-  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
-    return Container(
-      color: Colors.white,
-      child: _tabBar,
-    );
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
+    return Container(color: Colors.white, child: _tabBar);
   }
 
   @override
@@ -453,19 +458,23 @@ class _ResumoTab extends StatelessWidget {
       final Map<String, int> counts = {};
       for (int i = 5; i >= 0; i--) {
         final date = DateTime(now.year, now.month - i, 1);
-        final monthStr = '${date.month.toString().padLeft(2, '0')}/${date.year.toString().substring(2)}';
+        final monthStr =
+            '${date.month.toString().padLeft(2, '0')}/${date.year.toString().substring(2)}';
         counts[monthStr] = 0;
       }
       for (var a in resumo!.historicoAgenda) {
         if (a['status'] == 'concluido' || a['status'] == 'agendado') {
           final dt = DateTime.parse(a['inicio'] as String);
-          final monthStr = '${dt.month.toString().padLeft(2, '0')}/${dt.year.toString().substring(2)}';
+          final monthStr =
+              '${dt.month.toString().padLeft(2, '0')}/${dt.year.toString().substring(2)}';
           if (counts.containsKey(monthStr)) {
             counts[monthStr] = counts[monthStr]! + 1;
           }
         }
       }
-      chartData = counts.entries.map((e) => BarChartData(e.key, e.value.toDouble())).toList();
+      chartData = counts.entries
+          .map((e) => BarChartData(e.key, e.value.toDouble()))
+          .toList();
     }
 
     return ListView(
@@ -476,7 +485,11 @@ class _ResumoTab extends StatelessWidget {
           children: [
             _AcaoRapida(icone: Icons.chat, label: 'WhatsApp', onTap: () {}),
             _AcaoRapida(icone: Icons.phone, label: 'Ligar', onTap: () {}),
-            _AcaoRapida(icone: Icons.camera_alt, label: 'Instagram', onTap: () {}),
+            _AcaoRapida(
+              icone: Icons.camera_alt,
+              label: 'Instagram',
+              onTap: () {},
+            ),
           ],
         ),
         const SizedBox(height: 24),
@@ -497,9 +510,11 @@ class _ResumoTab extends StatelessWidget {
               ListTile(
                 leading: const Icon(Icons.cake),
                 title: const Text('Aniversário'),
-                subtitle: Text(cliente.dataNascimento != null
-                    ? '${cliente.dataNascimento!.day}/${cliente.dataNascimento!.month}'
-                    : 'Não informado'),
+                subtitle: Text(
+                  cliente.dataNascimento != null
+                      ? '${cliente.dataNascimento!.day}/${cliente.dataNascimento!.month}'
+                      : 'Não informado',
+                ),
               ),
             ],
           ),
@@ -512,14 +527,23 @@ class _ResumoTab extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Métricas', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  const Text(
+                    'Métricas',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  ),
                   const SizedBox(height: 16),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      _Metrica(valor: '${resumo!.agendamentos}', label: 'Agendamentos'),
+                      _Metrica(
+                        valor: '${resumo!.agendamentos}',
+                        label: 'Agendamentos',
+                      ),
                       _Metrica(valor: '${resumo!.faltas}', label: 'Faltas'),
-                      _Metrica(valor: AppFormatters.moeda(resumo!.comprasProdutos), label: 'Produtos'),
+                      _Metrica(
+                        valor: AppFormatters.moeda(resumo!.comprasProdutos),
+                        label: 'Produtos',
+                      ),
                     ],
                   ),
                 ],
@@ -534,7 +558,10 @@ class _ResumoTab extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Frequência (Últimos 6 meses)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  const Text(
+                    'Frequência (Últimos 6 meses)',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  ),
                   const SizedBox(height: 16),
                   SimpleBarChart(data: chartData),
                 ],
@@ -551,7 +578,11 @@ class _AcaoRapida extends StatelessWidget {
   final String label;
   final VoidCallback onTap;
 
-  const _AcaoRapida({required this.icone, required this.label, required this.onTap});
+  const _AcaoRapida({
+    required this.icone,
+    required this.label,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -586,7 +617,10 @@ class _Metrica extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        Text(valor, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        Text(
+          valor,
+          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
         Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
       ],
     );
@@ -616,7 +650,9 @@ class _HistoricoTab extends StatelessWidget {
             child: ListTile(
               leading: const Icon(Icons.calendar_month),
               title: Text(a['servico_nome'] as String? ?? 'Serviço'),
-              subtitle: Text('${data.day}/${data.month}/${data.year} • ${a['profissional_nome']}'),
+              subtitle: Text(
+                '${data.day}/${data.month}/${data.year} • ${a['profissional_nome']}',
+              ),
               trailing: Text(a['status'] as String),
             ),
           ),
@@ -651,7 +687,11 @@ class _FotosTab extends StatelessWidget {
                 return ClipRRect(
                   borderRadius: BorderRadius.circular(8),
                   child: Image.file(
-                    File(foto.thumbnailPath.isNotEmpty ? foto.thumbnailPath : foto.filePathLocal),
+                    File(
+                      foto.thumbnailPath.isNotEmpty
+                          ? foto.thumbnailPath
+                          : foto.filePathLocal,
+                    ),
                     fit: BoxFit.cover,
                   ),
                 );
@@ -687,8 +727,12 @@ class _ProdutosTab extends StatelessWidget {
             padding: EdgeInsets.zero,
             child: ListTile(
               leading: const Icon(Icons.shopping_bag_outlined),
-              title: Text('Venda ${v['numero']} • ${AppFormatters.moeda((v['total'] as num).toDouble())}'),
-              subtitle: Text('${data.day}/${data.month}/${data.year}\n${v['itens'] ?? ''}'),
+              title: Text(
+                'Venda ${v['numero']} • ${AppFormatters.moeda((v['total'] as num).toDouble())}',
+              ),
+              subtitle: Text(
+                '${data.day}/${data.month}/${data.year}\n${v['itens'] ?? ''}',
+              ),
               trailing: Text(v['status'] as String),
               isThreeLine: true,
             ),
@@ -732,13 +776,23 @@ class _AnotacoesTabState extends State<_AnotacoesTab> {
 
   Future<void> _salvar() async {
     setState(() => _salvando = true);
-    final atualizado = widget.cliente.copiarCom(observacoes: _controller.text.trim());
+    final atualizado = widget.cliente.copiarCom(
+      observacoes: _controller.text.trim(),
+    );
     try {
       await widget.repository.atualizar(atualizado);
       widget.onAtualizado(atualizado);
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Salvo com sucesso')));
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Salvo com sucesso')));
+      }
     } catch (_) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Erro ao salvar')));
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Erro ao salvar')));
+      }
     } finally {
       if (mounted) setState(() => _salvando = false);
     }
@@ -758,7 +812,9 @@ class _AnotacoesTabState extends State<_AnotacoesTab> {
               textAlignVertical: TextAlignVertical.top,
               decoration: InputDecoration(
                 hintText: 'Anotações livres sobre a cliente...',
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
                 filled: true,
                 fillColor: Colors.white,
               ),
@@ -767,9 +823,16 @@ class _AnotacoesTabState extends State<_AnotacoesTab> {
           const SizedBox(height: 16),
           FilledButton.icon(
             onPressed: _salvando ? null : _salvar,
-            icon: _salvando ? const SizedBox.square(dimension: 20, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.save),
+            icon: _salvando
+                ? const SizedBox.square(
+                    dimension: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.save),
             label: const Text('Salvar Anotações'),
-            style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(50)),
+            style: FilledButton.styleFrom(
+              minimumSize: const Size.fromHeight(50),
+            ),
           ),
         ],
       ),

@@ -104,4 +104,3 @@ class SessionController extends ChangeNotifier {
     }
   }
 }
-

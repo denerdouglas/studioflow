@@ -65,8 +65,12 @@ class CatalogProduct {
     description: json['description'] as String?,
     imageUrl: json['imageUrl'] as String?,
     quantity: json['quantity'] as String?,
-    physicalUnit: (json['physical_unit'] ?? json['physicalUnit'] ?? json['unit']) as String?,
-    contentPerUnit: ((json['content_per_unit'] ?? json['contentPerUnit'] ?? 1) as num).toDouble(),
+    physicalUnit:
+        (json['physical_unit'] ?? json['physicalUnit'] ?? json['unit'])
+            as String?,
+    contentPerUnit:
+        ((json['content_per_unit'] ?? json['contentPerUnit'] ?? 1) as num)
+            .toDouble(),
     contentUnit: (json['content_unit'] ?? json['contentUnit']) as String?,
     localProductId: json['localProductId'] as String?,
     localDestination: json['localDestination'] as String?,
@@ -144,7 +148,8 @@ class StudioFlowCatalogProvider implements ProductCatalogProvider {
       category: row['categoria'] as String?,
       description: row['descricao'] as String?,
       imageUrl: row['imagem_url'] as String?,
-      physicalUnit: row['unidade_fisica'] as String? ?? row['unidade'] as String?,
+      physicalUnit:
+          row['unidade_fisica'] as String? ?? row['unidade'] as String?,
       contentPerUnit: (row['conteudo_por_unidade'] as num? ?? 1).toDouble(),
       contentUnit: row['unidade_conteudo'] as String?,
       source: 'studioflow',
@@ -193,7 +198,8 @@ class OfficialProductCatalogProvider implements ProductCatalogProvider {
         description: product['description'] as String?,
         imageUrl: product['imageUrl'] as String?,
         quantity: product['quantity'] as String?,
-        physicalUnit: product['physical_unit'] as String? ?? product['unit'] as String?,
+        physicalUnit:
+            product['physical_unit'] as String? ?? product['unit'] as String?,
         contentPerUnit: (product['content_per_unit'] as num? ?? 1).toDouble(),
         contentUnit: product['content_unit'] as String?,
         source: response['source'] as String? ?? 'external',

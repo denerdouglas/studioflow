@@ -26,21 +26,27 @@ class MaisPremiumPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final usuario = SessionController.instance.usuario;
     if (usuario == null) {
-      return Scaffold(
-        body: Center(child: Text('Sessão expirada')),
-      );
+      return Scaffold(body: Center(child: Text('Sessão expirada')));
     }
 
     return Scaffold(
       backgroundColor: const Color(0xFFF9F6FC),
       appBar: AppBar(
         automaticallyImplyLeading: false,
-        title: const Text('Menu StudioFlow', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text(
+          'Menu StudioFlow',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
         backgroundColor: Colors.transparent,
         surfaceTintColor: Colors.transparent,
       ),
       body: ListView(
-        padding: const EdgeInsets.only(left: 16, right: 16, top: 8, bottom: 110),
+        padding: const EdgeInsets.only(
+          left: 16,
+          right: 16,
+          top: 8,
+          bottom: 110,
+        ),
         children: [
           _buildUserProfile(usuario, context),
           const SizedBox(height: 24),
@@ -81,7 +87,7 @@ class MaisPremiumPage extends StatelessWidget {
               subtitle: 'Ações de relacionamento',
               destination: const AniversariosPage(),
             ),
-            
+
           const SizedBox(height: 24),
           _buildSectionTitle('StudioFlow Hub'),
           _buildMenuItem(
@@ -253,7 +259,11 @@ class MaisPremiumPage extends StatelessWidget {
         ),
         title: Text(
           title,
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF2D2140)),
+          style: const TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 15,
+            color: Color(0xFF2D2140),
+          ),
         ),
         subtitle: Text(
           subtitle,
@@ -285,7 +295,9 @@ class MaisPremiumPage extends StatelessWidget {
               ),
               FilledButton(
                 onPressed: () => Navigator.pop(context, true),
-                style: FilledButton.styleFrom(backgroundColor: const Color(0xFFD64D64)),
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFFD64D64),
+                ),
                 child: const Text('Sair'),
               ),
             ],
@@ -296,7 +308,10 @@ class MaisPremiumPage extends StatelessWidget {
         }
       },
       icon: const Icon(Icons.logout, color: Color(0xFFD64D64)),
-      label: const Text('Sair da conta', style: TextStyle(color: Color(0xFFD64D64))),
+      label: const Text(
+        'Sair da conta',
+        style: TextStyle(color: Color(0xFFD64D64)),
+      ),
       style: OutlinedButton.styleFrom(
         side: const BorderSide(color: Color(0xFFD64D64)),
         padding: const EdgeInsets.symmetric(vertical: 16),

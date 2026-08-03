@@ -84,7 +84,7 @@ Future<void> main() async {
     await automationEngine.stop();
     await automations.close();
     await catalogStore.close();
-    
+
     await store.close();
   }
 

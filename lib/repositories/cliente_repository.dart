@@ -1,6 +1,7 @@
 import 'package:sqflite/sqflite.dart';
 
 import '../database/database_service.dart';
+import '../models/domain/acesso.dart';
 import '../services/session_controller.dart';
 
 class ClienteRegistro {
@@ -138,13 +139,26 @@ class ClienteRegistro {
 }
 
 class ClienteRepository {
-  final DatabaseService _databaseService;
-  ClienteRepository({DatabaseService? databaseService})
-    : _databaseService = databaseService ?? DatabaseService.instance;
+  final Future<Database> Function() _databaseProvider;
+
+  ClienteRepository({
+    DatabaseService? databaseService,
+    Future<Database> Function()? databaseProvider,
+  }) : _databaseProvider =
+           databaseProvider ??
+           (() => (databaseService ?? DatabaseService.instance).database);
+
   String get _comercioId => SessionController.instance.usuario!.comercioId;
 
+  void _exigirPermissao() {
+    final usuario = SessionController.instance.usuario;
+    if (usuario == null || !usuario.pode(ModuloPermissao.clientes)) {
+      throw StateError('Usuário sem permissão para gerenciar clientes.');
+    }
+  }
+
   Future<List<ClienteRegistro>> listar() async {
-    final db = await _databaseService.database;
+    final db = await _databaseProvider();
     final registros = await db.query(
       'clientes',
       where: 'ativo = ? AND comercio_id = ?',
@@ -155,7 +169,7 @@ class ClienteRepository {
   }
 
   Future<ClienteRegistro?> buscarPorId(String clienteId) async {
-    final db = await _databaseService.database;
+    final db = await _databaseProvider();
     final registros = await db.query(
       'clientes',
       where: 'id = ? AND ativo = ? AND comercio_id = ?',
@@ -166,7 +180,8 @@ class ClienteRepository {
   }
 
   Future<void> inserir(ClienteRegistro cliente) async {
-    final db = await _databaseService.database;
+    _exigirPermissao();
+    final db = await _databaseProvider();
     if (await existeWhatsapp(cliente.whatsapp)) {
       throw StateError('Já existe um cliente com este WhatsApp.');
     }
@@ -177,7 +192,8 @@ class ClienteRepository {
   }
 
   Future<void> atualizar(ClienteRegistro cliente) async {
-    final db = await _databaseService.database;
+    _exigirPermissao();
+    final db = await _databaseProvider();
     final duplicado = await db.query(
       'clientes',
       columns: ['id'],
@@ -198,17 +214,19 @@ class ClienteRepository {
   }
 
   Future<void> excluir(String clienteId) async {
-    final db = await _databaseService.database;
-    await db.update(
+    _exigirPermissao();
+    final db = await _databaseProvider();
+    final alterados = await db.update(
       'clientes',
       {'ativo': 0, 'atualizado_em': DateTime.now().toUtc().toIso8601String()},
-      where: 'id = ? AND comercio_id = ?',
+      where: 'id = ? AND ativo = 1 AND comercio_id = ?',
       whereArgs: [clienteId, _comercioId],
     );
+    if (alterados == 0) throw StateError('Cliente não encontrado.');
   }
 
   Future<bool> existeWhatsapp(String whatsapp) async {
-    final db = await _databaseService.database;
+    final db = await _databaseProvider();
     final resultado = await db.query(
       'clientes',
       columns: ['id'],
@@ -220,7 +238,7 @@ class ClienteRepository {
   }
 
   Future<int> quantidadeClientes() async {
-    final db = await _databaseService.database;
+    final db = await _databaseProvider();
     final resultado = await db.rawQuery(
       'SELECT COUNT(*) AS total FROM clientes WHERE ativo = 1 AND comercio_id = ?',
       [_comercioId],
@@ -229,7 +247,7 @@ class ClienteRepository {
   }
 
   Future<double> faturamentoTotal() async {
-    final db = await _databaseService.database;
+    final db = await _databaseProvider();
     final resultado = await db.rawQuery(
       'SELECT SUM(total_gasto) AS total FROM clientes WHERE ativo = 1 AND comercio_id = ?',
       [_comercioId],

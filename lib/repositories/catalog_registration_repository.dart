@@ -91,7 +91,8 @@ class CatalogRegistrationRepository {
         final duplicate = await txn.query(
           'estoque',
           columns: ['id'],
-          where: 'comercio_id = ? AND estoque_destino = ? AND codigo_barras = ?',
+          where:
+              'comercio_id = ? AND estoque_destino = ? AND codigo_barras = ?',
           whereArgs: [user.comercioId, destination, normalized],
           limit: 1,
         );

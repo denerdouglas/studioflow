@@ -34,9 +34,11 @@ abstract final class MigrationV15 {
     for (final item in colunasAnamnese.entries) {
       await _adicionarColuna(db, 'anamneses', item.key, item.value);
     }
-    
+
     // Invalidate old active anamneses logic if needed, but defaults will handle them.
-    await db.execute('CREATE INDEX IF NOT EXISTS idx_anamneses_ativa ON anamneses(comercio_id, cliente_id, ativa, versao DESC)');
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_anamneses_ativa ON anamneses(comercio_id, cliente_id, ativa, versao DESC)',
+    );
   }
 
   static Future<void> _adicionarColuna(

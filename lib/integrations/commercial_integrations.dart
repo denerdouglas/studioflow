@@ -21,7 +21,7 @@ abstract final class EnvironmentConfig {
   /// Apenas endpoint público. Segredos pertencem exclusivamente ao backend.
   static const publicBackendUrl = String.fromEnvironment(
     'STUDIOFLOW_PUBLIC_BACKEND_URL',
-    defaultValue: '',
+    defaultValue: 'https://api.studioflowapp.com.br',
   );
 }
 

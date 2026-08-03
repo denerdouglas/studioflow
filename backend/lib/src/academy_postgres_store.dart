@@ -5,8 +5,9 @@ import 'academy.dart';
 final class AcademyPostgresStore implements AcademyBackendStore {
   final Pool _pool;
 
-  AcademyPostgresStore(PostgresBackendStore backendStore) : _pool = backendStore.pool;
-  
+  AcademyPostgresStore(PostgresBackendStore backendStore)
+    : _pool = backendStore.pool;
+
   AcademyPostgresStore.fromPool(this._pool);
 
   @override
@@ -16,14 +17,18 @@ final class AcademyPostgresStore implements AcademyBackendStore {
       FROM academy_categories
       ORDER BY display_order ASC, name ASC
     ''');
-    return result.map((r) => AcademyCategory(
-      id: r[0] as String,
-      name: r[1] as String,
-      displayOrder: r[2] as int,
-      createdAt: r[3] as DateTime,
-    )).toList();
+    return result
+        .map(
+          (r) => AcademyCategory(
+            id: r[0] as String,
+            name: r[1] as String,
+            displayOrder: r[2] as int,
+            createdAt: r[3] as DateTime,
+          ),
+        )
+        .toList();
   }
-  
+
   @override
   Future<List<AcademyCourse>> searchCourses({
     String? query,
@@ -31,11 +36,10 @@ final class AcademyPostgresStore implements AcademyBackendStore {
     int limit = 20,
     int offset = 0,
   }) async {
-    final conditions = <String>["publication_status IN ('published', 'coming_soon')"];
-    final parameters = <String, Object?>{
-      'limit': limit,
-      'offset': offset,
-    };
+    final conditions = <String>[
+      "publication_status IN ('published', 'coming_soon')",
+    ];
+    final parameters = <String, Object?>{'limit': limit, 'offset': offset};
 
     if (query != null && query.trim().isNotEmpty) {
       conditions.add("title ILIKE @query");
@@ -62,28 +66,36 @@ final class AcademyPostgresStore implements AcademyBackendStore {
       parameters: parameters,
     );
 
-    return result.map((r) => AcademyCourse(
-      id: r[0] as String,
-      externalId: r[1] as String?,
-      title: r[2] as String,
-      shortDescription: r[3] as String?,
-      instructor: r[4] as String?,
-      imageUrl: r[5] as String?,
-      priceCents: r[6] as int?,
-      currency: r[7] as String?,
-      partnerId: r[8] as String,
-      categoryId: r[9] as String,
-      sourceType: r[10] as String,
-      publicationStatus: r[11] as String,
-      rating: r[12] is num ? (r[12] as num).toDouble() : (r[12] is String ? double.parse(r[12] as String) : null),
-      reviewsCount: r[13] as int?,
-      redirectUrl: r[14] as String?,
-    )).toList();
+    return result
+        .map(
+          (r) => AcademyCourse(
+            id: r[0] as String,
+            externalId: r[1] as String?,
+            title: r[2] as String,
+            shortDescription: r[3] as String?,
+            instructor: r[4] as String?,
+            imageUrl: r[5] as String?,
+            priceCents: r[6] as int?,
+            currency: r[7] as String?,
+            partnerId: r[8] as String,
+            categoryId: r[9] as String,
+            sourceType: r[10] as String,
+            publicationStatus: r[11] as String,
+            rating: r[12] is num
+                ? (r[12] as num).toDouble()
+                : (r[12] is String ? double.parse(r[12] as String) : null),
+            reviewsCount: r[13] as int?,
+            redirectUrl: r[14] as String?,
+          ),
+        )
+        .toList();
   }
-  
+
   @override
   Future<int> countCourses({String? query, String? categoryId}) async {
-    final conditions = <String>["publication_status IN ('published', 'coming_soon')"];
+    final conditions = <String>[
+      "publication_status IN ('published', 'coming_soon')",
+    ];
     final parameters = <String, Object?>{};
 
     if (query != null && query.trim().isNotEmpty) {
@@ -109,7 +121,7 @@ final class AcademyPostgresStore implements AcademyBackendStore {
 
     return (result.first[0] as int?) ?? 0;
   }
-  
+
   @override
   Future<void> logSearch({
     required String query,
@@ -160,7 +172,7 @@ final class AcademyPostgresStore implements AcademyBackendStore {
       },
     );
   }
-  
+
   @override
   Future<AcademyClick?> getClick(String clickId) async {
     final result = await _pool.execute(
@@ -191,9 +203,14 @@ final class AcademyPostgresStore implements AcademyBackendStore {
       redirectedAt: r[12] as DateTime?,
     );
   }
-  
+
   @override
-  Future<void> updateClickStatus(String clickId, String status, {String? failureReason, DateTime? redirectedAt}) async {
+  Future<void> updateClickStatus(
+    String clickId,
+    String status, {
+    String? failureReason,
+    DateTime? redirectedAt,
+  }) async {
     await _pool.execute(
       Sql.named('''
         UPDATE academy_clicks
@@ -210,7 +227,7 @@ final class AcademyPostgresStore implements AcademyBackendStore {
       },
     );
   }
-  
+
   @override
   Future<AcademyCourse?> getCourseById(String id) async {
     final result = await _pool.execute(
@@ -238,12 +255,14 @@ final class AcademyPostgresStore implements AcademyBackendStore {
       categoryId: r[9] as String,
       sourceType: r[10] as String,
       publicationStatus: r[11] as String,
-      rating: r[12] is num ? (r[12] as num).toDouble() : (r[12] is String ? double.parse(r[12] as String) : null),
+      rating: r[12] is num
+          ? (r[12] as num).toDouble()
+          : (r[12] is String ? double.parse(r[12] as String) : null),
       reviewsCount: r[13] as int?,
       redirectUrl: r[14] as String?,
     );
   }
-  
+
   @override
   Future<String?> getPartnerSlug(String partnerId) async {
     final result = await _pool.execute(
@@ -253,7 +272,7 @@ final class AcademyPostgresStore implements AcademyBackendStore {
     if (result.isEmpty) return null;
     return result.first[0] as String;
   }
-  
+
   @override
   Future<String?> getCategoryName(String categoryId) async {
     final result = await _pool.execute(
@@ -263,21 +282,25 @@ final class AcademyPostgresStore implements AcademyBackendStore {
     if (result.isEmpty) return null;
     return result.first[0] as String;
   }
-  
+
   @override
   Future<bool> isPartnerActive(String partnerId) async {
     final result = await _pool.execute(
-      Sql.named("SELECT status FROM academy_partners WHERE id = @id AND status = 'active'"),
+      Sql.named(
+        "SELECT status FROM academy_partners WHERE id = @id AND status = 'active'",
+      ),
       parameters: {'id': partnerId},
     );
     return result.isNotEmpty;
   }
-  
+
   @override
   Future<bool> isCampaignActive(String? campaignId) async {
     if (campaignId == null) return false;
     final result = await _pool.execute(
-      Sql.named("SELECT status FROM academy_campaigns WHERE id = @id AND status = 'active' AND (expires_at IS NULL OR expires_at > NOW())"),
+      Sql.named(
+        "SELECT status FROM academy_campaigns WHERE id = @id AND status = 'active' AND (expires_at IS NULL OR expires_at > NOW())",
+      ),
       parameters: {'id': campaignId},
     );
     return result.isNotEmpty;

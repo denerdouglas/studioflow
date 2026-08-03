@@ -161,8 +161,10 @@ class _ClientesPageState extends State<ClientesPage> {
     final resultado = await Navigator.push<String>(
       context,
       AppRoutes.material(
-        builder: (_) =>
-            ClienteDetalhesPremiumPage(cliente: cliente, repository: _repository),
+        builder: (_) => ClienteDetalhesPremiumPage(
+          cliente: cliente,
+          repository: _repository,
+        ),
       ),
     );
 
@@ -186,8 +188,8 @@ class _ClientesPageState extends State<ClientesPage> {
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
-      heroTag: null,
-      onPressed: _abrirCadastroCliente,
+        heroTag: null,
+        onPressed: _abrirCadastroCliente,
         backgroundColor: _corPrincipal,
         foregroundColor: Colors.white,
         icon: const Icon(Icons.person_add_alt_1),

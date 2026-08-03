@@ -8,7 +8,8 @@ class PecasUnicasRepository {
   final Future<Database> Function() _databaseProvider;
 
   PecasUnicasRepository({Future<Database> Function()? databaseProvider})
-      : _databaseProvider = databaseProvider ?? (() => DatabaseService.instance.database);
+    : _databaseProvider =
+          databaseProvider ?? (() => DatabaseService.instance.database);
 
   UsuarioAcesso get _usuario {
     final u = SessionController.instance.usuario;
@@ -28,7 +29,7 @@ class PecasUnicasRepository {
   }) async {
     final db = await _databaseProvider();
     final u = _usuario;
-    
+
     final existente = await db.query(
       'pecas_unicas',
       where: 'comercio_id = ? AND codigo_exclusivo = ?',

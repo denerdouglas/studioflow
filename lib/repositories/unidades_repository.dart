@@ -15,7 +15,9 @@ class UnidadesRepository {
 
     final resultado = await db.query(
       'unidades',
-      where: incluirInativas ? 'comercio_id = ?' : 'comercio_id = ? AND ativo = ?',
+      where: incluirInativas
+          ? 'comercio_id = ?'
+          : 'comercio_id = ? AND ativo = ?',
       whereArgs: incluirInativas ? [_comercioId] : [_comercioId, 1],
       orderBy: 'principal DESC, nome COLLATE NOCASE ASC',
     );
@@ -38,7 +40,7 @@ class UnidadesRepository {
 
   Future<void> inserir(Unidade unidade) async {
     final db = await _databaseService.database;
-    
+
     await db.transaction((txn) async {
       if (unidade.principal) {
         await txn.update(
@@ -48,16 +50,13 @@ class UnidadesRepository {
           whereArgs: [_comercioId],
         );
       }
-      
-      await txn.insert(
-        'unidades',
-        {
-          ...unidade.paraMapa(),
-          'comercio_id': _comercioId,
-          'criado_em': DateTime.now().toUtc().toIso8601String(),
-          'atualizado_em': DateTime.now().toUtc().toIso8601String(),
-        },
-      );
+
+      await txn.insert('unidades', {
+        ...unidade.paraMapa(),
+        'comercio_id': _comercioId,
+        'criado_em': DateTime.now().toUtc().toIso8601String(),
+        'atualizado_em': DateTime.now().toUtc().toIso8601String(),
+      });
     });
   }
 
@@ -73,7 +72,7 @@ class UnidadesRepository {
           whereArgs: [_comercioId],
         );
       }
-      
+
       await txn.update(
         'unidades',
         {

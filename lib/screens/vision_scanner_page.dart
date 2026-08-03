@@ -15,7 +15,7 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
   final MobileScannerController _controller = MobileScannerController(
     detectionSpeed: DetectionSpeed.noDuplicates,
   );
-  
+
   bool _processando = false;
   String? _erro;
 
@@ -27,7 +27,7 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
 
   Future<void> _processarCodigo(String codigo) async {
     if (_processando) return;
-    
+
     setState(() {
       _processando = true;
       _erro = null;
@@ -48,7 +48,7 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
     );
 
     if (!mounted) return;
-    
+
     if (result != null) {
       // Saved successfully
       Navigator.pop(context, result);
@@ -65,7 +65,7 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
         .map((barcode) => barcode.rawValue)
         .whereType<String>()
         .firstOrNull;
-    
+
     if (raw == null) return;
     await _processarCodigo(raw.trim());
   }
@@ -104,19 +104,19 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
     });
 
     try {
-      final ExtractedTagData data = await VisionOcrService.processImage(xfile.path);
-      
+      final ExtractedTagData data = await VisionOcrService.processImage(
+        xfile.path,
+      );
+
       if (!mounted) return;
-      
+
       final result = await Navigator.push(
         context,
-        MaterialPageRoute(
-          builder: (_) => VisionScannerPreviewPage(data: data),
-        ),
+        MaterialPageRoute(builder: (_) => VisionScannerPreviewPage(data: data)),
       );
-      
+
       if (!mounted) return;
-      
+
       if (result != null) {
         Navigator.pop(context, result);
       } else {
@@ -159,7 +159,11 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.no_photography, color: Colors.white, size: 56),
+                    const Icon(
+                      Icons.no_photography,
+                      color: Colors.white,
+                      size: 56,
+                    ),
                     const SizedBox(height: 16),
                     const Text(
                       'Não foi possível acessar a câmera para o código de barras.',
@@ -177,7 +181,7 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
             ),
           ),
           if (!_processando)
-             Center(
+            Center(
               child: Container(
                 width: 290,
                 height: 150,

@@ -53,30 +53,21 @@ class _MarketplacePageState extends State<MarketplacePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Marketplace StudioFlow'),
-        elevation: 0,
-      ),
+      appBar: AppBar(title: const Text('Marketplace StudioFlow'), elevation: 0),
       body: RefreshIndicator(
         onRefresh: _refresh,
         child: CustomScrollView(
           key: const PageStorageKey('marketplace_scroll'),
           controller: _scrollController,
           slivers: [
-            SliverToBoxAdapter(
-              child: _buildSearchBar(),
-            ),
-            SliverToBoxAdapter(
-              child: _buildCategories(),
-            ),
+            SliverToBoxAdapter(child: _buildSearchBar()),
+            SliverToBoxAdapter(child: _buildCategories()),
             if (widget.controller.recommendation != null)
               SliverToBoxAdapter(
                 child: _buildRecommendation(widget.controller.recommendation!),
               ),
             if (widget.controller.isOffline)
-              SliverToBoxAdapter(
-                child: _buildOfflineWarning(),
-              ),
+              SliverToBoxAdapter(child: _buildOfflineWarning()),
             _buildContent(),
           ],
         ),
@@ -92,9 +83,7 @@ class _MarketplacePageState extends State<MarketplacePage> {
         decoration: InputDecoration(
           hintText: 'O que você procura? Ex: Shampoo',
           prefixIcon: const Icon(Icons.search),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
           filled: true,
           fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
         ),
@@ -106,7 +95,14 @@ class _MarketplacePageState extends State<MarketplacePage> {
   }
 
   Widget _buildCategories() {
-    final categories = ['Cosméticos', 'Equipamentos', 'Tecnologia', 'Cursos', 'Máquinas', 'Promoções'];
+    final categories = [
+      'Cosméticos',
+      'Equipamentos',
+      'Tecnologia',
+      'Cursos',
+      'Máquinas',
+      'Promoções',
+    ];
     return SizedBox(
       height: 50,
       child: ListView.separated(
@@ -139,15 +135,18 @@ class _MarketplacePageState extends State<MarketplacePage> {
             children: [
               Row(
                 children: [
-                  Icon(Icons.auto_awesome, color: Theme.of(context).colorScheme.primary),
+                  Icon(
+                    Icons.auto_awesome,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       'Sugestão Inteligente',
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            color: Theme.of(context).colorScheme.primary,
-                            fontWeight: FontWeight.bold,
-                          ),
+                        color: Theme.of(context).colorScheme.primary,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                 ],
@@ -164,7 +163,7 @@ class _MarketplacePageState extends State<MarketplacePage> {
                   },
                   child: Text(rec.actionLabel),
                 ),
-              )
+              ),
             ],
           ),
         ),
@@ -174,8 +173,10 @@ class _MarketplacePageState extends State<MarketplacePage> {
 
   Widget _buildOfflineWarning() {
     final dt = widget.controller.currentResult?.fetchedAt;
-    final timeStr = dt != null ? '${dt.day}/${dt.month}/${dt.year} ${dt.hour}:${dt.minute}' : '';
-    
+    final timeStr = dt != null
+        ? '${dt.day}/${dt.month}/${dt.year} ${dt.hour}:${dt.minute}'
+        : '';
+
     return Container(
       color: Colors.amber.shade100,
       padding: const EdgeInsets.all(12),
@@ -245,75 +246,69 @@ class _MarketplacePageState extends State<MarketplacePage> {
 
   Widget _buildLoading() {
     return SliverList(
-      delegate: SliverChildBuilderDelegate(
-        (context, index) {
-          return Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Container(
-              height: 120,
-              decoration: BoxDecoration(
-                color: Colors.grey.withValues(alpha: 0.2),
-                borderRadius: BorderRadius.circular(12),
-              ),
+      delegate: SliverChildBuilderDelegate((context, index) {
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Container(
+            height: 120,
+            decoration: BoxDecoration(
+              color: Colors.grey.withValues(alpha: 0.2),
+              borderRadius: BorderRadius.circular(12),
             ),
-          );
-        },
-        childCount: 5,
-      ),
+          ),
+        );
+      }, childCount: 5),
     );
   }
 
   Widget _buildResults(List<MarketplaceProductGroup> groups) {
     return SliverList(
-      delegate: SliverChildBuilderDelegate(
-        (context, index) {
-          final group = groups[index];
-          return Card(
-            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Container(
-                        width: 80,
-                        height: 80,
-                        color: Colors.grey.shade200,
-                        child: group.imageUrl != null
-                            ? Image.network(group.imageUrl!, fit: BoxFit.cover)
-                            : const Icon(Icons.image, color: Colors.grey),
+      delegate: SliverChildBuilderDelegate((context, index) {
+        final group = groups[index];
+        return Card(
+          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 80,
+                      height: 80,
+                      color: Colors.grey.shade200,
+                      child: group.imageUrl != null
+                          ? Image.network(group.imageUrl!, fit: BoxFit.cover)
+                          : const Icon(Icons.image, color: Colors.grey),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            group.title,
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '${group.offers.length} oferta(s) encontrada(s)',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              group.title,
-                              style: Theme.of(context).textTheme.titleMedium,
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              '${group.offers.length} oferta(s) encontrada(s)',
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const Divider(),
-                  ...group.offers.map((offer) => _buildOffer(group, offer)),
-                ],
-              ),
+                    ),
+                  ],
+                ),
+                const Divider(),
+                ...group.offers.map((offer) => _buildOffer(group, offer)),
+              ],
             ),
-          );
-        },
-        childCount: groups.length,
-      ),
+          ),
+        );
+      }, childCount: groups.length),
     );
   }
 
@@ -339,15 +334,24 @@ class _MarketplacePageState extends State<MarketplacePage> {
                   ),
                 ),
                 if (offer.shippingCents != null)
-                  Text('Frete: R\$ ${(offer.shippingCents! / 100).toStringAsFixed(2)}'),
+                  Text(
+                    'Frete: R\$ ${(offer.shippingCents! / 100).toStringAsFixed(2)}',
+                  ),
                 if (offer.badges.isNotEmpty)
                   Wrap(
                     spacing: 4,
-                    children: offer.badges.map((b) => Chip(
-                      label: Text(b, style: const TextStyle(fontSize: 10)),
-                      padding: EdgeInsets.zero,
-                    )).toList(),
-                  )
+                    children: offer.badges
+                        .map(
+                          (b) => Chip(
+                            label: Text(
+                              b,
+                              style: const TextStyle(fontSize: 10),
+                            ),
+                            padding: EdgeInsets.zero,
+                          ),
+                        )
+                        .toList(),
+                  ),
               ],
             ),
           ),
@@ -356,16 +360,35 @@ class _MarketplacePageState extends State<MarketplacePage> {
               FilledButton(
                 onPressed: () async {
                   if (widget.controller.isOffline) {
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Não é possível comprar no modo offline.')));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'Não é possível comprar no modo offline.',
+                        ),
+                      ),
+                    );
                     return;
                   }
                   if (offer.clickId.isEmpty) {
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Oferta indisponível para compra.')));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Oferta indisponível para compra.'),
+                      ),
+                    );
                     return;
                   }
-                  final uri = Uri.tryParse('https://api.studioflowapp.com.br/r/${offer.clickId}');
-                  if (uri == null || uri.scheme != 'https' || uri.host != 'api.studioflowapp.com.br' || !uri.path.startsWith('/r/')) {
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Link de compra inválido ou inseguro.')));
+                  final uri = Uri.tryParse(
+                    'https://api.studioflowapp.com.br/r/${offer.clickId}',
+                  );
+                  if (uri == null ||
+                      uri.scheme != 'https' ||
+                      uri.host != 'api.studioflowapp.com.br' ||
+                      !uri.path.startsWith('/r/')) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Link de compra inválido ou inseguro.'),
+                      ),
+                    );
                     return;
                   }
                   if (await canLaunchUrl(uri)) {
@@ -385,13 +408,18 @@ class _MarketplacePageState extends State<MarketplacePage> {
                   IconButton(
                     icon: const Icon(Icons.share),
                     onPressed: () {
-                      SharePlus.instance.share(ShareParams(text: 'Oferta de ${group.title} por ${offer.partner.name} encontrada no Marketplace StudioFlow!'));
+                      SharePlus.instance.share(
+                        ShareParams(
+                          text:
+                              'Oferta de ${group.title} por ${offer.partner.name} encontrada no Marketplace StudioFlow!',
+                        ),
+                      );
                     },
                   ),
                 ],
-              )
+              ),
             ],
-          )
+          ),
         ],
       ),
     );

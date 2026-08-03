@@ -160,8 +160,15 @@ class _Cliente360DetalhePageState extends State<Cliente360DetalhePage> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(r.nome, style: Theme.of(context).textTheme.titleLarge),
-                                  Text('Preferência: ${r.profissionalPreferido}'),
+                                  Text(
+                                    r.nome,
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.titleLarge,
+                                  ),
+                                  Text(
+                                    'Preferência: ${r.profissionalPreferido}',
+                                  ),
                                 ],
                               ),
                             ),

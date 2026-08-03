@@ -34,7 +34,8 @@ final class AccountIdentity {
 
 final class AuthContext {
   final String userId;
-  final String? businessId; // Can be null for platform_admins if they are global
+  final String?
+  businessId; // Can be null for platform_admins if they are global
   final String role;
   final String sessionId;
   final String actorType; // e.g. 'tenant_user', 'platform_admin'
@@ -200,7 +201,8 @@ final class SubscriptionRecord {
     'platform': platform,
     'state': state,
     if (trialEndAt != null) 'trialEndAt': trialEndAt!.toIso8601String(),
-    if (currentPeriodEndAt != null) 'currentPeriodEndAt': currentPeriodEndAt!.toIso8601String(),
+    if (currentPeriodEndAt != null)
+      'currentPeriodEndAt': currentPeriodEndAt!.toIso8601String(),
     'autoRenewEnabled': autoRenewEnabled,
     'founderPriceLocked': founderPriceLocked,
   };
@@ -228,7 +230,8 @@ final class Entitlement {
     'state': state,
     'isFounder': isFounder,
     'issuedAt': issuedAt.toIso8601String(),
-    if (currentPeriodEndAt != null) 'currentPeriodEndAt': currentPeriodEndAt!.toIso8601String(),
+    if (currentPeriodEndAt != null)
+      'currentPeriodEndAt': currentPeriodEndAt!.toIso8601String(),
     'version': version,
   };
 }

@@ -6,7 +6,9 @@ import 'package:studioflow/widgets/shared/simple_bar_chart.dart';
 
 void main() {
   group('Sprint 3A.2 - Menus e Stubs', () {
-    testWidgets('AcademicoStubPage exibe estado de Em breve e sem cursos', (tester) async {
+    testWidgets('AcademicoStubPage exibe estado de Em breve e sem cursos', (
+      tester,
+    ) async {
       await tester.pumpWidget(const MaterialApp(home: AcademicoStubPage()));
       expect(find.text('Em breve!'), findsOneWidget);
       expect(find.text('Cursos Indisponíveis'), findsOneWidget);
@@ -16,21 +18,32 @@ void main() {
       await tester.pumpWidget(const MaterialApp(home: MarketplaceStubPage()));
       expect(find.text('Em breve!'), findsOneWidget);
       expect(find.text('Pesquisa Indisponível'), findsOneWidget);
-      final disabledButton = tester.widget<FilledButton>(find.byType(FilledButton));
+      final disabledButton = tester.widget<FilledButton>(
+        find.byType(FilledButton),
+      );
       expect(disabledButton.onPressed, isNull);
     });
 
-    testWidgets('SimpleBarChart exibe mensagem quando sem dados', (tester) async {
-      await tester.pumpWidget(const MaterialApp(home: Scaffold(body: SimpleBarChart(data: []))));
+    testWidgets('SimpleBarChart exibe mensagem quando sem dados', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(body: SimpleBarChart(data: [])),
+        ),
+      );
       expect(find.text('Sem dados suficientes para o gráfico'), findsOneWidget);
     });
 
-    testWidgets('SimpleBarChart exibe gráficos com dados reais', (tester) async {
-      final data = [
-        BarChartData('Jan', 10),
-        BarChartData('Fev', 20),
-      ];
-      await tester.pumpWidget(MaterialApp(home: Scaffold(body: SimpleBarChart(data: data))));
+    testWidgets('SimpleBarChart exibe gráficos com dados reais', (
+      tester,
+    ) async {
+      final data = [BarChartData('Jan', 10), BarChartData('Fev', 20)];
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(body: SimpleBarChart(data: data)),
+        ),
+      );
       expect(find.text('Jan'), findsOneWidget);
       expect(find.text('Fev'), findsOneWidget);
       expect(find.text('10'), findsOneWidget);

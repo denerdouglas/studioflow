@@ -14,8 +14,12 @@ abstract final class MigrationV14 {
       );
     }
 
-    await db.execute('DROP TRIGGER IF EXISTS trg_estoque_barcode_unique_insert');
-    await db.execute('DROP TRIGGER IF EXISTS trg_estoque_barcode_unique_update');
+    await db.execute(
+      'DROP TRIGGER IF EXISTS trg_estoque_barcode_unique_insert',
+    );
+    await db.execute(
+      'DROP TRIGGER IF EXISTS trg_estoque_barcode_unique_update',
+    );
     await db.execute('''CREATE TRIGGER trg_estoque_barcode_unique_insert
       BEFORE INSERT ON estoque
       WHEN NEW.codigo_barras IS NOT NULL AND TRIM(NEW.codigo_barras) <> ''
@@ -49,7 +53,11 @@ abstract final class MigrationV14 {
 
   static Future<void> _backup(Database db) async {
     final now = DateTime.now().toUtc().toIso8601String();
-    for (final table in ['estoque', 'catalogo_produtos', 'catalogo_sugestoes']) {
+    for (final table in [
+      'estoque',
+      'catalogo_produtos',
+      'catalogo_sugestoes',
+    ]) {
       final data = await db.query(table);
       final structure = await db.rawQuery(
         "SELECT sql FROM sqlite_master WHERE type='table' AND name=?",

@@ -53,27 +53,19 @@ class _AcademyPageState extends State<AcademyPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('StudioFlow Acadêmico'),
-        elevation: 0,
-      ),
+      appBar: AppBar(title: const Text('StudioFlow Acadêmico'), elevation: 0),
       body: RefreshIndicator(
         onRefresh: _refresh,
         child: CustomScrollView(
           key: const PageStorageKey('academy_scroll'),
           controller: _scrollController,
           slivers: [
-            SliverToBoxAdapter(
-              child: _buildSearchBar(),
-            ),
-            if (widget.controller.categories != null && widget.controller.categories!.isNotEmpty)
-              SliverToBoxAdapter(
-                child: _buildCategories(),
-              ),
+            SliverToBoxAdapter(child: _buildSearchBar()),
+            if (widget.controller.categories != null &&
+                widget.controller.categories!.isNotEmpty)
+              SliverToBoxAdapter(child: _buildCategories()),
             if (widget.controller.isOffline)
-              SliverToBoxAdapter(
-                child: _buildOfflineWarning(),
-              ),
+              SliverToBoxAdapter(child: _buildOfflineWarning()),
             _buildContent(),
           ],
         ),
@@ -89,9 +81,7 @@ class _AcademyPageState extends State<AcademyPage> {
         decoration: InputDecoration(
           hintText: 'O que você quer aprender? Ex: Gestão',
           prefixIcon: const Icon(Icons.search),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
           filled: true,
           fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
         ),
@@ -206,7 +196,10 @@ class _AcademyPageState extends State<AcademyPage> {
               children: [
                 const Icon(Icons.error_outline, size: 64, color: Colors.red),
                 const SizedBox(height: 16),
-                Text(widget.controller.errorMessage ?? 'Erro desconhecido', textAlign: TextAlign.center),
+                Text(
+                  widget.controller.errorMessage ?? 'Erro desconhecido',
+                  textAlign: TextAlign.center,
+                ),
               ],
             ),
           ),
@@ -220,150 +213,166 @@ class _AcademyPageState extends State<AcademyPage> {
 
   Widget _buildLoading() {
     return SliverList(
-      delegate: SliverChildBuilderDelegate(
-        (context, index) {
-          return Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Container(
-              height: 120,
-              decoration: BoxDecoration(
-                color: Colors.grey.withValues(alpha: 0.2),
-                borderRadius: BorderRadius.circular(12),
-              ),
+      delegate: SliverChildBuilderDelegate((context, index) {
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Container(
+            height: 120,
+            decoration: BoxDecoration(
+              color: Colors.grey.withValues(alpha: 0.2),
+              borderRadius: BorderRadius.circular(12),
             ),
-          );
-        },
-        childCount: 5,
-      ),
+          ),
+        );
+      }, childCount: 5),
     );
   }
 
   Widget _buildResults(List<AcademyCourse> courses) {
     return SliverList(
-      delegate: SliverChildBuilderDelegate(
-        (context, index) {
-          final course = courses[index];
-          return Card(
-            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Container(
-                        width: 100,
-                        height: 100,
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade200,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: course.coverImageUrl != null
-                            ? ClipRRect(
-                                borderRadius: BorderRadius.circular(8),
-                                child: Image.network(course.coverImageUrl!, fit: BoxFit.cover),
-                              )
-                            : const Icon(Icons.menu_book, color: Colors.grey, size: 40),
+      delegate: SliverChildBuilderDelegate((context, index) {
+        final course = courses[index];
+        return Card(
+          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 100,
+                      height: 100,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade200,
+                        borderRadius: BorderRadius.circular(8),
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              course.title,
-                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.bold,
+                      child: course.coverImageUrl != null
+                          ? ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: Image.network(
+                                course.coverImageUrl!,
+                                fit: BoxFit.cover,
                               ),
+                            )
+                          : const Icon(
+                              Icons.menu_book,
+                              color: Colors.grey,
+                              size: 40,
+                            ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            course.title,
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(fontWeight: FontWeight.bold),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          if (course.subtitle != null) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              course.subtitle!,
+                              style: Theme.of(context).textTheme.bodySmall,
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                             ),
-                            if (course.subtitle != null) ...[
-                              const SizedBox(height: 4),
+                          ],
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              const Icon(
+                                Icons.timer_outlined,
+                                size: 14,
+                                color: Colors.grey,
+                              ),
+                              const SizedBox(width: 4),
                               Text(
-                                course.subtitle!,
-                                style: Theme.of(context).textTheme.bodySmall,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
+                                '${course.durationMinutes} min',
+                                style: Theme.of(context).textTheme.bodySmall
+                                    ?.copyWith(color: Colors.grey),
+                              ),
+                              const SizedBox(width: 12),
+                              const Icon(
+                                Icons.signal_cellular_alt,
+                                size: 14,
+                                color: Colors.grey,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                course.difficultyLevel.toUpperCase(),
+                                style: Theme.of(context).textTheme.bodySmall
+                                    ?.copyWith(color: Colors.grey),
                               ),
                             ],
-                            const SizedBox(height: 8),
+                          ),
+                          if (course.rating != null) ...[
+                            const SizedBox(height: 4),
                             Row(
                               children: [
-                                const Icon(Icons.timer_outlined, size: 14, color: Colors.grey),
-                                const SizedBox(width: 4),
-                                Text(
-                                  '${course.durationMinutes} min',
-                                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey),
+                                const Icon(
+                                  Icons.star,
+                                  size: 14,
+                                  color: Colors.amber,
                                 ),
-                                const SizedBox(width: 12),
-                                const Icon(Icons.signal_cellular_alt, size: 14, color: Colors.grey),
                                 const SizedBox(width: 4),
                                 Text(
-                                  course.difficultyLevel.toUpperCase(),
-                                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey),
+                                  course.rating!.toStringAsFixed(1),
+                                  style: Theme.of(context).textTheme.bodySmall
+                                      ?.copyWith(fontWeight: FontWeight.bold),
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  '(${course.totalReviews})',
+                                  style: Theme.of(context).textTheme.bodySmall
+                                      ?.copyWith(color: Colors.grey),
                                 ),
                               ],
                             ),
-                            if (course.rating != null) ...[
-                              const SizedBox(height: 4),
-                              Row(
-                                children: [
-                                  const Icon(Icons.star, size: 14, color: Colors.amber),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    course.rating!.toStringAsFixed(1),
-                                    style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.bold),
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    '(${course.totalReviews})',
-                                    style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey),
-                                  ),
-                                ],
-                              ),
-                            ]
                           ],
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                const Divider(height: 1),
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    if (course.price != null && course.price! > 0)
+                      Text(
+                        '${course.currency} ${course.price!.toStringAsFixed(2)}',
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.primary,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 18,
+                        ),
+                      )
+                    else
+                      Text(
+                        'GRÁTIS',
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.primary,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 18,
                         ),
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  const Divider(height: 1),
-                  const SizedBox(height: 8),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      if (course.price != null && course.price! > 0)
-                        Text(
-                          '${course.currency} ${course.price!.toStringAsFixed(2)}',
-                          style: TextStyle(
-                            color: Theme.of(context).colorScheme.primary,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 18,
-                          ),
-                        )
-                      else
-                        Text(
-                          'GRÁTIS',
-                          style: TextStyle(
-                            color: Theme.of(context).colorScheme.primary,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 18,
-                          ),
-                        ),
-                      _buildActionButtons(course),
-                    ],
-                  )
-                ],
-              ),
+                    _buildActionButtons(course),
+                  ],
+                ),
+              ],
             ),
-          );
-        },
-        childCount: courses.length,
-      ),
+          ),
+        );
+      }, childCount: courses.length),
     );
   }
 
@@ -375,28 +384,50 @@ class _AcademyPageState extends State<AcademyPage> {
         label: const Text('Em breve'),
       );
     }
-    
+
     return Row(
       children: [
         IconButton(
           icon: const Icon(Icons.share_outlined),
           onPressed: () {
-            SharePlus.instance.share(ShareParams(text: 'Confira o curso ${course.title} no StudioFlow Acadêmico!'));
+            SharePlus.instance.share(
+              ShareParams(
+                text:
+                    'Confira o curso ${course.title} no StudioFlow Acadêmico!',
+              ),
+            );
           },
         ),
         FilledButton(
           onPressed: () async {
             if (widget.controller.isOffline) {
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Não é possível matricular no modo offline.')));
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Não é possível matricular no modo offline.'),
+                ),
+              );
               return;
             }
             if (course.clickId == null || course.clickId!.isEmpty) {
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Matrícula indisponível no momento.')));
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Matrícula indisponível no momento.'),
+                ),
+              );
               return;
             }
-            final uri = Uri.tryParse('https://api.studioflowapp.com.br/academy/r/${course.clickId}');
-            if (uri == null || uri.scheme != 'https' || uri.host != 'api.studioflowapp.com.br' || !uri.path.startsWith('/academy/r/')) {
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Link de matrícula inválido ou inseguro.')));
+            final uri = Uri.tryParse(
+              'https://api.studioflowapp.com.br/academy/r/${course.clickId}',
+            );
+            if (uri == null ||
+                uri.scheme != 'https' ||
+                uri.host != 'api.studioflowapp.com.br' ||
+                !uri.path.startsWith('/academy/r/')) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Link de matrícula inválido ou inseguro.'),
+                ),
+              );
               return;
             }
             if (await canLaunchUrl(uri)) {

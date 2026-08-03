@@ -55,7 +55,8 @@ class _CatalogRegistrationPageState extends State<CatalogRegistrationPage> {
     _category = TextEditingController(text: widget.product?.category ?? '');
     _image = TextEditingController(text: widget.product?.imageUrl ?? '');
     _unit.text =
-        widget.product?.physicalUnit ?? _unitFromQuantity(widget.product?.quantity);
+        widget.product?.physicalUnit ??
+        _unitFromQuantity(widget.product?.quantity);
     final rawQuantity = widget.product?.quantity ?? '';
     final numericQuantity =
         RegExp(r'[\d.,]+').stringMatch(rawQuantity)?.replaceAll(',', '.') ??

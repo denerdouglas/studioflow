@@ -3,7 +3,6 @@ import 'marketplace.dart';
 import 'store.dart';
 import 'admin.dart';
 
-
 final class MemoryBackendStore
     implements BackendStore, MarketplaceBackendStore, AdminBackendStore {
   final Map<String, AccountIdentity> _accounts = {};
@@ -273,23 +272,45 @@ final class MemoryBackendStore
   @override
   Future<void> savePartner(MarketplacePartner partner) async {}
   @override
-  Future<List<MarketplacePartnerDomain>> listDomainsForPartner(String partnerId) async => [];
+  Future<List<MarketplacePartnerDomain>> listDomainsForPartner(
+    String partnerId,
+  ) async => [];
   @override
   Future<void> saveDomain(MarketplacePartnerDomain domain) async {}
   @override
-  Future<void> logSearch({required String? businessId, required String userId, required String query, required String source, required bool cacheHit, required int resultsCount, required int responseTimeMs}) async {}
+  Future<void> logSearch({
+    required String? businessId,
+    required String userId,
+    required String query,
+    required String source,
+    required bool cacheHit,
+    required int resultsCount,
+    required int responseTimeMs,
+  }) async {}
   @override
   Future<void> recordClick(MarketplaceClick click) async {}
   @override
   Future<MarketplaceClick?> findClick(String id) async => null;
   @override
-  Future<void> updateClickStatus(String id, String status, {DateTime? redirectedAt}) async {}
+  Future<void> updateClickStatus(
+    String id,
+    String status, {
+    DateTime? redirectedAt,
+  }) async {}
   @override
-  Future<void> auditAdminAction({required String platformAdminId, required String action, required String entity, required String entityId, Map<String, dynamic>? beforeState, Map<String, dynamic>? afterState, String? reason, String? ipAddressHash}) async {}
+  Future<void> auditAdminAction({
+    required String platformAdminId,
+    required String action,
+    required String entity,
+    required String entityId,
+    Map<String, dynamic>? beforeState,
+    Map<String, dynamic>? afterState,
+    String? reason,
+    String? ipAddressHash,
+  }) async {}
   @override
   Future<void> close() async {}
 }
-
 
 final class _SyncRecord {
   final int version;

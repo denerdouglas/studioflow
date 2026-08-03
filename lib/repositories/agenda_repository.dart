@@ -253,7 +253,9 @@ class AgendaRepository {
         databaseProvider: () => _databaseService.database,
         comercioId: _comercioId,
       );
-      final duracaoMinutos = agendamento.fim.difference(agendamento.inicio).inMinutes;
+      final duracaoMinutos = agendamento.fim
+          .difference(agendamento.inicio)
+          .inMinutes;
       final alternativas = await agendaCompleta.horariosDisponiveis(
         profissionalId: agendamento.profissionalId,
         data: agendamento.inicio,
@@ -309,7 +311,9 @@ class AgendaRepository {
         databaseProvider: () => _databaseService.database,
         comercioId: _comercioId,
       );
-      final duracaoMinutos = agendamento.fim.difference(agendamento.inicio).inMinutes;
+      final duracaoMinutos = agendamento.fim
+          .difference(agendamento.inicio)
+          .inMinutes;
       final alternativas = await agendaCompleta.horariosDisponiveis(
         profissionalId: agendamento.profissionalId,
         data: agendamento.inicio,

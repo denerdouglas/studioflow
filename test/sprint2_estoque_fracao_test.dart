@@ -52,7 +52,7 @@ void main() {
       'preco': 50.0,
       'categoria': 'Cabelo',
       'ativo': 1,
-      'data_cadastro': DateTime.now().toIso8601String()
+      'data_cadastro': DateTime.now().toIso8601String(),
     });
 
     await db.insert('servico_materiais', {
@@ -68,8 +68,21 @@ void main() {
     // 3. Cadastra Profissional e Cliente
     final profId = 'prof_1';
     final cliId = 'cli_1';
-    await db.insert('profissionais', {'id': profId, 'comercio_id': comercioId, 'nome': 'Prof', 'whatsapp': '123', 'cargo': 'Barbeiro', 'data_cadastro': DateTime.now().toIso8601String()});
-    await db.insert('clientes', {'id': cliId, 'comercio_id': comercioId, 'nome': 'Cli', 'whatsapp': '123', 'data_cadastro': DateTime.now().toIso8601String()});
+    await db.insert('profissionais', {
+      'id': profId,
+      'comercio_id': comercioId,
+      'nome': 'Prof',
+      'whatsapp': '123',
+      'cargo': 'Barbeiro',
+      'data_cadastro': DateTime.now().toIso8601String(),
+    });
+    await db.insert('clientes', {
+      'id': cliId,
+      'comercio_id': comercioId,
+      'nome': 'Cli',
+      'whatsapp': '123',
+      'data_cadastro': DateTime.now().toIso8601String(),
+    });
 
     // 4. Cadastra Agendamento
     final agId = 'ag_1';
@@ -85,7 +98,7 @@ void main() {
       'status': 'pendente',
       'confirmado': 0,
       'compareceu': 0,
-      'data_criacao': DateTime.now().toIso8601String()
+      'data_criacao': DateTime.now().toIso8601String(),
     });
 
     // 5. Injeta _comercioId num ambiente falso para simular execução
@@ -93,22 +106,28 @@ void main() {
     // que foi adicionado no AgendaCompletaRepository.
     // Como a lógica foi embedada no repositório com SessionController, faremos a chamada
     // direta se possível, ou replicamos para testar o SQL puro.
-    
+
     // Teste do Fator:
     final double quantidadeRequisitada = 2.0;
-    final double fator = 1.0 / 100.0; // _calcularFatorConversao('unidade', 'caixa', 'unidade', 100)
+    final double fator =
+        1.0 /
+        100.0; // _calcularFatorConversao('unidade', 'caixa', 'unidade', 100)
     final double quantidadeCalculada = quantidadeRequisitada * fator;
 
     await db.transaction((txn) async {
-       await txn.execute(
+      await txn.execute(
         'UPDATE estoque SET quantidade_atual = quantidade_atual - ? WHERE id = ? AND comercio_id = ?',
         [quantidadeCalculada, estoqueId, comercioId],
       );
     });
 
-    final estoqueResult = await db.query('estoque', where: 'id = ?', whereArgs: [estoqueId]);
+    final estoqueResult = await db.query(
+      'estoque',
+      where: 'id = ?',
+      whereArgs: [estoqueId],
+    );
     final qtdFinal = estoqueResult.first['quantidade_atual'] as num;
-    
+
     // Esperado: 1.0 - (2 * 0.01) = 0.98
     expect(qtdFinal, closeTo(0.98, 0.0001));
 

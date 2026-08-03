@@ -14,7 +14,10 @@ class MockAcademyRepository extends AcademyRepository {
   int categoriesCalls = 0;
 
   @override
-  Future<AcademySearchResult> search({String? query, String? categoryId}) async {
+  Future<AcademySearchResult> search({
+    String? query,
+    String? categoryId,
+  }) async {
     searchCalls++;
     if (mockError != null) throw mockError!;
     return mockResult ?? AcademySearchResult(courses: [], total: 0);
@@ -34,25 +37,21 @@ void main() {
 
   setUp(() {
     mockRepo = MockAcademyRepository();
-    controller = AcademyController(
-      academyRepository: mockRepo,
-    );
+    controller = AcademyController(academyRepository: mockRepo);
   });
 
   Widget buildPage() {
-    return MaterialApp(
-      home: AcademyPage(controller: controller),
-    );
+    return MaterialApp(home: AcademyPage(controller: controller));
   }
 
   group('Academy Page Tests', () {
     testWidgets('1. Resposta courses: [] e Empty state', (tester) async {
       mockRepo.mockResult = AcademySearchResult(courses: [], total: 0);
       mockRepo.mockCategories = [];
-      
+
       await tester.pumpWidget(buildPage());
       expect(find.byType(TextField), findsOneWidget);
-      
+
       await tester.enterText(find.byType(TextField), 'gestão');
       await tester.testTextInput.receiveAction(TextInputAction.done);
       await tester.pumpAndSettle();
@@ -60,7 +59,9 @@ void main() {
       expect(find.text('Nenhum curso encontrado no momento.'), findsOneWidget);
     });
 
-    testWidgets('2. Estado Inicial (antes do Future completar)', (tester) async {
+    testWidgets('2. Estado Inicial (antes do Future completar)', (
+      tester,
+    ) async {
       await tester.pumpWidget(buildPage());
       expect(find.byType(TextField), findsOneWidget);
       expect(find.text('O que você quer aprender? Ex: Gestão'), findsOneWidget);
@@ -69,28 +70,26 @@ void main() {
     testWidgets('3. Loading', (tester) async {
       mockRepo.mockResult = AcademySearchResult(courses: [], total: 0);
       mockRepo.mockCategories = [];
-      
+
       await tester.pumpWidget(buildPage());
-      
+
       final emittedStates = <AcademyState>[];
       void listener() {
         emittedStates.add(controller.state);
       }
+
       controller.addListener(listener);
-      
+
       final searchFuture = controller.search(query: 'teste');
       await tester.pump();
       await searchFuture;
       await tester.pumpAndSettle();
-      
+
       controller.removeListener(listener);
-      
+
       expect(
         emittedStates,
-        containsAllInOrder([
-          AcademyState.loading,
-          AcademyState.empty,
-        ]),
+        containsAllInOrder([AcademyState.loading, AcademyState.empty]),
       );
       expect(controller.state, AcademyState.empty);
     });
@@ -114,12 +113,12 @@ void main() {
             publishedAt: DateTime.now(),
             updatedAt: DateTime.now(),
             clickId: 'clk1',
-          )
+          ),
         ],
         total: 1,
       );
       mockRepo.mockCategories = [
-        const AcademyCategory(id: 'cat1', name: 'Categoria 1')
+        const AcademyCategory(id: 'cat1', name: 'Categoria 1'),
       ];
 
       await tester.pumpWidget(buildPage());
@@ -134,13 +133,18 @@ void main() {
 
     testWidgets('6. Erro de API', (tester) async {
       mockRepo.mockError = Exception('Falha na conexão');
-      
+
       await tester.pumpWidget(buildPage());
       await tester.enterText(find.byType(TextField), 'teste');
       await tester.testTextInput.receiveAction(TextInputAction.done);
       await tester.pumpAndSettle();
 
-      expect(find.text('Falha ao buscar cursos. Verifique sua conexão e tente novamente.'), findsOneWidget);
+      expect(
+        find.text(
+          'Falha ao buscar cursos. Verifique sua conexão e tente novamente.',
+        ),
+        findsOneWidget,
+      );
     });
 
     testWidgets('7. Categorias exibidas e clicáveis', (tester) async {
@@ -181,7 +185,7 @@ void main() {
             publishedAt: DateTime.now(),
             updatedAt: DateTime.now(),
             clickId: '',
-          )
+          ),
         ],
         total: 1,
       );
@@ -193,12 +197,15 @@ void main() {
       expect(find.text('Matricular'), findsOneWidget);
 
       await tester.tap(find.text('Matricular'));
-      await tester.pump(); // Não usar pumpAndSettle porque o SnackBar desaparece
+      await tester
+          .pump(); // Não usar pumpAndSettle porque o SnackBar desaparece
 
       expect(find.text('Matrícula indisponível no momento.'), findsOneWidget);
     });
-    
-    testWidgets('9. Curso Coming Soon não tem botão Matricular', (tester) async {
+
+    testWidgets('9. Curso Coming Soon não tem botão Matricular', (
+      tester,
+    ) async {
       mockRepo.mockResult = AcademySearchResult(
         courses: [
           AcademyCourse(
@@ -216,7 +223,7 @@ void main() {
             publishedAt: DateTime.now(),
             updatedAt: DateTime.now(),
             clickId: null,
-          )
+          ),
         ],
         total: 1,
       );

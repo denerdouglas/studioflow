@@ -348,8 +348,8 @@ class _ServicosPageState extends State<ServicosPage> {
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
-      heroTag: null,
-      onPressed: _novoServico,
+        heroTag: null,
+        onPressed: _novoServico,
         backgroundColor: _corPrincipal,
         foregroundColor: Colors.white,
         icon: const Icon(Icons.add),
@@ -891,18 +891,30 @@ class _ServicoFormSheetState extends State<ServicoFormSheet> {
   ];
 
   final List<String> _coresHex = const [
-    '#70569A', '#D64D64', '#E58A25', '#15996B', '#2D2140', '#0000FF', '#008000', '#FF00FF', '#FF0000', '#FFFF00', '#00FFFF'
+    '#70569A',
+    '#D64D64',
+    '#E58A25',
+    '#15996B',
+    '#2D2140',
+    '#0000FF',
+    '#008000',
+    '#FF00FF',
+    '#FF0000',
+    '#FFFF00',
+    '#00FFFF',
   ];
 
   final UnidadesRepository _unidadesRepository = UnidadesRepository();
-  final FuncionariosRepository _funcionariosRepository = FuncionariosRepository();
+  final FuncionariosRepository _funcionariosRepository =
+      FuncionariosRepository();
 
   List<Unidade> _unidades = [];
   List<ProfissionalRegistro> _profissionais = [];
-  
+
   String? _unidadeId;
   String? _corIdentificacao;
-  final TextEditingController _comissaoPercentualController = TextEditingController();
+  final TextEditingController _comissaoPercentualController =
+      TextEditingController();
   List<String> _profissionaisAutorizados = [];
 
   bool _carregandoDependencias = true;
@@ -926,24 +938,27 @@ class _ServicoFormSheetState extends State<ServicoFormSheet> {
 
       _categoria = servico.categoria;
       _ativo = servico.ativo;
-      
+
       _unidadeId = servico.unidadeId;
       _corIdentificacao = servico.corIdentificacao;
-      _comissaoPercentualController.text = servico.comissaoPercentual?.toStringAsFixed(2) ?? '';
+      _comissaoPercentualController.text =
+          servico.comissaoPercentual?.toStringAsFixed(2) ?? '';
       _profissionaisAutorizados = List.from(servico.profissionaisAutorizados);
 
       if (!_categorias.contains(_categoria)) {
         _categoria = 'Outros';
       }
     }
-    
+
     _carregarDependencias();
   }
-  
+
   Future<void> _carregarDependencias() async {
     try {
       final unidades = await _unidadesRepository.listar();
-      final profissionais = await _funcionariosRepository.listar(incluirInativos: false);
+      final profissionais = await _funcionariosRepository.listar(
+        incluirInativos: false,
+      );
       if (mounted) {
         setState(() {
           _unidades = unidades;
@@ -980,9 +995,10 @@ class _ServicoFormSheetState extends State<ServicoFormSheet> {
 
     final custo =
         double.tryParse(_custoController.text.trim().replaceAll(',', '.')) ?? 0;
-        
-    final comissaoPercentual =
-        double.tryParse(_comissaoPercentualController.text.trim().replaceAll(',', '.'));
+
+    final comissaoPercentual = double.tryParse(
+      _comissaoPercentualController.text.trim().replaceAll(',', '.'),
+    );
 
     if (nome.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1211,7 +1227,13 @@ class _ServicoFormSheetState extends State<ServicoFormSheet> {
               ),
             ),
             const SizedBox(height: 14),
-            const Text('Cor de Identificação', style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF2D2140))),
+            const Text(
+              'Cor de Identificação',
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF2D2140),
+              ),
+            ),
             const SizedBox(height: 8),
             SizedBox(
               height: 40,
@@ -1231,15 +1253,23 @@ class _ServicoFormSheetState extends State<ServicoFormSheet> {
                       decoration: BoxDecoration(
                         color: color,
                         shape: BoxShape.circle,
-                        border: selected ? Border.all(color: Colors.black, width: 3) : null,
+                        border: selected
+                            ? Border.all(color: Colors.black, width: 3)
+                            : null,
                       ),
                     ),
                   );
-                }
+                },
               ),
             ),
             const SizedBox(height: 14),
-            const Text('Profissionais Autorizados', style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF2D2140))),
+            const Text(
+              'Profissionais Autorizados',
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF2D2140),
+              ),
+            ),
             const SizedBox(height: 8),
             if (_carregandoDependencias)
               const CircularProgressIndicator()
@@ -1414,7 +1444,8 @@ class FichaConsumoSheet extends StatefulWidget {
 }
 
 class _FichaConsumoSheetState extends State<FichaConsumoSheet> {
-  final ServicoMateriaisRepository _repoMateriais = ServicoMateriaisRepository();
+  final ServicoMateriaisRepository _repoMateriais =
+      ServicoMateriaisRepository();
   final EstoqueRepository _repoEstoque = EstoqueRepository();
 
   List<ServicoMaterialRegistro> _materiais = [];
@@ -1525,10 +1556,7 @@ class _FichaConsumoSheetState extends State<FichaConsumoSheet> {
             isExpanded: true,
             decoration: const InputDecoration(labelText: 'Item de Estoque'),
             items: _estoque.map((item) {
-              return DropdownMenuItem(
-                value: item.id,
-                child: Text(item.nome),
-              );
+              return DropdownMenuItem(value: item.id, child: Text(item.nome));
             }).toList(),
             onChanged: (v) => setState(() => _itemSelecionado = v),
           ),
@@ -1538,7 +1566,9 @@ class _FichaConsumoSheetState extends State<FichaConsumoSheet> {
               Expanded(
                 child: TextField(
                   controller: _qtdController,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
                   decoration: const InputDecoration(labelText: 'Quantidade'),
                 ),
               ),
@@ -1546,14 +1576,20 @@ class _FichaConsumoSheetState extends State<FichaConsumoSheet> {
               Expanded(
                 child: TextField(
                   controller: _unidadeController,
-                  decoration: const InputDecoration(labelText: 'Unidade de medida'),
+                  decoration: const InputDecoration(
+                    labelText: 'Unidade de medida',
+                  ),
                 ),
               ),
               const SizedBox(width: 14),
               IconButton(
-                icon: const Icon(Icons.add_circle, color: Color(0xFF70569A), size: 36),
+                icon: const Icon(
+                  Icons.add_circle,
+                  color: Color(0xFF70569A),
+                  size: 36,
+                ),
                 onPressed: _adicionarItem,
-              )
+              ),
             ],
           ),
           const SizedBox(height: 22),
@@ -1564,10 +1600,18 @@ class _FichaConsumoSheetState extends State<FichaConsumoSheet> {
                     itemCount: _materiais.length,
                     itemBuilder: (context, index) {
                       final material = _materiais[index];
-                      final itemEstoque = _estoque.firstWhere((e) => e.id == material.itemEstoqueId, orElse: () => ItemEstoqueRegistro.doMapa({'id':'','nome':'Desconhecido'}));
+                      final itemEstoque = _estoque.firstWhere(
+                        (e) => e.id == material.itemEstoqueId,
+                        orElse: () => ItemEstoqueRegistro.doMapa({
+                          'id': '',
+                          'nome': 'Desconhecido',
+                        }),
+                      );
                       return ListTile(
                         title: Text(itemEstoque.nome),
-                        subtitle: Text('${material.quantidade} ${material.unidadeMedida ?? ''}'),
+                        subtitle: Text(
+                          '${material.quantidade} ${material.unidadeMedida ?? ''}',
+                        ),
                         trailing: IconButton(
                           icon: const Icon(Icons.delete, color: Colors.red),
                           onPressed: () => _removerItem(material.id),
@@ -1575,7 +1619,7 @@ class _FichaConsumoSheetState extends State<FichaConsumoSheet> {
                       );
                     },
                   ),
-          )
+          ),
         ],
       ),
     );

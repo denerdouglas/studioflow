@@ -14,10 +14,10 @@ class MarketplaceAdminService {
     if (partner.slug.isEmpty || partner.name.isEmpty) {
       throw Exception('Nome e slug são obrigatórios.');
     }
-    
+
     // Save
     await _store.savePartner(partner);
-    
+
     // Audit
     await _store.auditAdminAction(
       platformAdminId: platformAdminId,
@@ -35,9 +35,9 @@ class MarketplaceAdminService {
     String? ipAddressHash,
   }) async {
     if (domain.hostname.isEmpty) throw Exception('Hostname inválido.');
-    
+
     await _store.saveDomain(domain);
-    
+
     await _store.auditAdminAction(
       platformAdminId: platformAdminId,
       action: 'add_domain',

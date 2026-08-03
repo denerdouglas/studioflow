@@ -66,14 +66,20 @@ class ServicoRegistro {
           DateTime.now(),
       unidadeId: mapa['unidade_id'] as String?,
       corIdentificacao: mapa['cor_identificacao'] as String?,
-      comissaoPercentual: mapa['comissao_percentual'] != null ? (mapa['comissao_percentual'] as num).toDouble() : null,
-      profissionaisAutorizados: _parseProfissionais(mapa['profissionais_autorizados']),
+      comissaoPercentual: mapa['comissao_percentual'] != null
+          ? (mapa['comissao_percentual'] as num).toDouble()
+          : null,
+      profissionaisAutorizados: _parseProfissionais(
+        mapa['profissionais_autorizados'],
+      ),
     );
   }
 
   static List<String> _parseProfissionais(dynamic dado) {
     if (dado == null) return const [];
-    if (dado is String) return dado.split(',').where((e) => e.isNotEmpty).toList();
+    if (dado is String) {
+      return dado.split(',').where((e) => e.isNotEmpty).toList();
+    }
     if (dado is List) return List<String>.from(dado);
     return const [];
   }
@@ -104,7 +110,8 @@ class ServicoRegistro {
       unidadeId: unidadeId ?? this.unidadeId,
       corIdentificacao: corIdentificacao ?? this.corIdentificacao,
       comissaoPercentual: comissaoPercentual ?? this.comissaoPercentual,
-      profissionaisAutorizados: profissionaisAutorizados ?? this.profissionaisAutorizados,
+      profissionaisAutorizados:
+          profissionaisAutorizados ?? this.profissionaisAutorizados,
     );
   }
 }
@@ -126,8 +133,8 @@ class ServicosRepository {
       LEFT JOIN profissional_servicos ps ON ps.servico_id = s.id
       WHERE s.comercio_id = ?
     ''';
-    
-    final query = incluirInativos 
+
+    final query = incluirInativos
         ? '$baseQuery GROUP BY s.id ORDER BY s.nome COLLATE NOCASE ASC'
         : '$baseQuery AND s.ativo = 1 GROUP BY s.id ORDER BY s.nome COLLATE NOCASE ASC';
 
@@ -150,8 +157,8 @@ class ServicosRepository {
       LEFT JOIN profissional_servicos ps ON ps.servico_id = s.id
       WHERE s.comercio_id = ? AND LOWER(s.nome) LIKE ?
     ''';
-    
-    final query = incluirInativos 
+
+    final query = incluirInativos
         ? '$baseQuery GROUP BY s.id ORDER BY s.nome COLLATE NOCASE ASC'
         : '$baseQuery AND s.ativo = 1 GROUP BY s.id ORDER BY s.nome COLLATE NOCASE ASC';
 

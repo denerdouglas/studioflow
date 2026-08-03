@@ -82,9 +82,7 @@ class _HomePremiumPageState extends State<HomePremiumPage> {
                 child: Center(child: CircularProgressIndicator()),
               )
             else if (_error != null)
-              SliverFillRemaining(
-                child: _buildErrorState(),
-              )
+              SliverFillRemaining(child: _buildErrorState())
             else
               _buildContent(),
           ],
@@ -119,10 +117,7 @@ class _HomePremiumPageState extends State<HomePremiumPage> {
             widget.nomeNegocio,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontSize: 13,
-              color: Color(0xFF766A85),
-            ),
+            style: const TextStyle(fontSize: 13, color: Color(0xFF766A85)),
           ),
         ],
       ),
@@ -131,7 +126,9 @@ class _HomePremiumPageState extends State<HomePremiumPage> {
           tooltip: 'Pesquisa Global (Em breve)',
           onPressed: () {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Pesquisa Global estará disponível em breve!')),
+              const SnackBar(
+                content: Text('Pesquisa Global estará disponível em breve!'),
+              ),
             );
           },
           icon: Icon(Icons.search, color: widget.tema.corPrincipal),
@@ -149,7 +146,10 @@ class _HomePremiumPageState extends State<HomePremiumPage> {
               MaterialPageRoute(builder: (_) => const IaLocalPage()),
             );
           },
-          icon: Icon(Icons.auto_awesome_outlined, color: widget.tema.corPrincipal),
+          icon: Icon(
+            Icons.auto_awesome_outlined,
+            color: widget.tema.corPrincipal,
+          ),
         ),
         IconButton(
           tooltip: 'Notificações',
@@ -246,13 +246,16 @@ class _HomePremiumPageState extends State<HomePremiumPage> {
 
     String mensagem = 'Bom dia! ';
     if (agendamentos > 0) {
-      mensagem += 'Você tem $agendamentos atendimento(s) planejado(s) para hoje, com receita prevista de $receita. ';
+      mensagem +=
+          'Você tem $agendamentos atendimento(s) planejado(s) para hoje, com receita prevista de $receita. ';
     } else {
-      mensagem += 'Sua agenda está livre hoje. Que tal aproveitar para engajar seus clientes? ';
+      mensagem +=
+          'Sua agenda está livre hoje. Que tal aproveitar para engajar seus clientes? ';
     }
 
     if (estoqueCount > 0) {
-      mensagem += 'Atenção: $estoqueCount produto(s) no estoque estão abaixo do limite mínimo.';
+      mensagem +=
+          'Atenção: $estoqueCount produto(s) no estoque estão abaixo do limite mínimo.';
     }
 
     return PremiumCard(
@@ -266,7 +269,11 @@ class _HomePremiumPageState extends State<HomePremiumPage> {
               color: widget.tema.corPrincipal,
               borderRadius: BorderRadius.circular(16),
             ),
-            child: const Icon(Icons.auto_awesome, color: Colors.white, size: 28),
+            child: const Icon(
+              Icons.auto_awesome,
+              color: Colors.white,
+              size: 28,
+            ),
           ),
           const SizedBox(width: 16),
           Expanded(
@@ -310,7 +317,9 @@ class _HomePremiumPageState extends State<HomePremiumPage> {
               gradient: LinearGradient(
                 colors: [widget.tema.corPrincipal, widget.tema.corSecundaria],
               ),
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(24),
+              ),
             ),
             child: Row(
               children: [
@@ -411,44 +420,62 @@ class _HomePremiumPageState extends State<HomePremiumPage> {
     }
 
     return Column(
-      children: validos.take(3).map((a) => Padding(
-        padding: const EdgeInsets.only(bottom: 12.0),
-        child: PremiumCard(
-          child: Row(
-            children: [
-              CircleAvatar(
-                backgroundColor: widget.tema.corPrincipal.withValues(alpha: 0.1),
-                child: Text(
-                  a.clienteNome.isNotEmpty ? a.clienteNome[0].toUpperCase() : '?',
-                  style: TextStyle(color: widget.tema.corPrincipal, fontWeight: FontWeight.bold),
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+      children: validos
+          .take(3)
+          .map(
+            (a) => Padding(
+              padding: const EdgeInsets.only(bottom: 12.0),
+              child: PremiumCard(
+                child: Row(
                   children: [
-                    Text(
-                      a.clienteNome,
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    CircleAvatar(
+                      backgroundColor: widget.tema.corPrincipal.withValues(
+                        alpha: 0.1,
+                      ),
+                      child: Text(
+                        a.clienteNome.isNotEmpty
+                            ? a.clienteNome[0].toUpperCase()
+                            : '?',
+                        style: TextStyle(
+                          color: widget.tema.corPrincipal,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '${AppFormatters.hora(a.inicio)} - ${a.servicoNome}',
-                      style: const TextStyle(color: Color(0xFF766A85), fontSize: 13),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            a.clienteNome,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '${AppFormatters.hora(a.inicio)} - ${a.servicoNome}',
+                            style: const TextStyle(
+                              color: Color(0xFF766A85),
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () {},
+                      icon: const Icon(Icons.chat, color: Color(0xFF15996B)),
+                      tooltip: 'WhatsApp',
                     ),
                   ],
                 ),
               ),
-              IconButton(
-                onPressed: () {},
-                icon: const Icon(Icons.chat, color: Color(0xFF15996B)),
-                tooltip: 'WhatsApp',
-              ),
-            ],
-          ),
-        ),
-      )).toList(),
+            ),
+          )
+          .toList(),
     );
   }
 
@@ -467,40 +494,55 @@ class _HomePremiumPageState extends State<HomePremiumPage> {
     }
 
     return Column(
-      children: baixos.take(3).map((p) => Padding(
-        padding: const EdgeInsets.only(bottom: 12.0),
-        child: PremiumCard(
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFD64D64).withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(Icons.warning_amber_rounded, color: Color(0xFFD64D64)),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+      children: baixos
+          .take(3)
+          .map(
+            (p) => Padding(
+              padding: const EdgeInsets.only(bottom: 12.0),
+              child: PremiumCard(
+                child: Row(
                   children: [
-                    Text(
-                      p.nome,
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFD64D64).withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(
+                        Icons.warning_amber_rounded,
+                        color: Color(0xFFD64D64),
+                      ),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Apenas ${p.quantidadeAtual} ${p.unidade} (Mín: ${p.estoqueMinimo})',
-                      style: const TextStyle(color: Color(0xFFD64D64), fontSize: 13, fontWeight: FontWeight.w500),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            p.nome,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 15,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Apenas ${p.quantidadeAtual} ${p.unidade} (Mín: ${p.estoqueMinimo})',
+                            style: const TextStyle(
+                              color: Color(0xFFD64D64),
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),
               ),
-            ],
-          ),
-        ),
-      )).toList(),
+            ),
+          )
+          .toList(),
     );
   }
 
@@ -541,7 +583,12 @@ class _HomePremiumPageState extends State<HomePremiumPage> {
     );
   }
 
-  Widget _buildIndicadorCard(String title, String value, IconData icon, Color color) {
+  Widget _buildIndicadorCard(
+    String title,
+    String value,
+    IconData icon,
+    Color color,
+  ) {
     return PremiumCard(
       padding: const EdgeInsets.all(16),
       child: Column(

@@ -89,7 +89,7 @@ class LojaRepository {
     final valor = codigo.trim();
     if (valor.length < 4) throw StateError('Código de barras inválido.');
     final db = await _databaseProvider();
-    
+
     final pecas = await db.query(
       'pecas_unicas',
       where: 'comercio_id = ? AND codigo_exclusivo = ?',
@@ -99,7 +99,9 @@ class LojaRepository {
     if (pecas.isNotEmpty) {
       final p = pecas.first;
       if (p['status'] != 'disponivel') {
-         throw StateError('Peça única não está disponível (status: ${p['status']}).');
+        throw StateError(
+          'Peça única não está disponível (status: ${p['status']}).',
+        );
       }
       return ProdutoLoja(
         id: p['id'] as String,
@@ -420,9 +422,13 @@ class LojaRepository {
           'quantidade': item.quantidade,
           'valor_unitario': item.produto.precoVenda,
         });
-        
+
         if (item.produto.id.startsWith('peca_')) {
-          if (item.quantidade > 1) throw StateError('Peça única não pode ser vendida mais de uma vez na mesma venda.');
+          if (item.quantidade > 1) {
+            throw StateError(
+              'Peça única não pode ser vendida mais de uma vez na mesma venda.',
+            );
+          }
           final changed = await txn.update(
             'pecas_unicas',
             {
@@ -433,7 +439,9 @@ class LojaRepository {
             where: 'id = ? AND comercio_id = ? AND status = ?',
             whereArgs: [item.produto.id, u.comercioId, 'disponivel'],
           );
-          if (changed == 0) throw StateError('Peça única já vendida ou indisponível.');
+          if (changed == 0) {
+            throw StateError('Peça única já vendida ou indisponível.');
+          }
         } else {
           await _movimentarTxn(
             txn,
@@ -474,11 +482,18 @@ class LojaRepository {
           'observacoes': observacoes,
         });
       }
-      final profs = await txn.query('profissionais', where: 'id = ?', whereArgs: [profissionalId], limit: 1);
+      final profs = await txn.query(
+        'profissionais',
+        where: 'id = ?',
+        whereArgs: [profissionalId],
+        limit: 1,
+      );
       if (profs.isNotEmpty) {
         final prof = profs.first;
-        final comissaoProdutos = (prof['comissao_produtos'] as num?)?.toDouble() ?? 
-                                 (prof['percentual_comissao'] as num?)?.toDouble() ?? 0.0;
+        final comissaoProdutos =
+            (prof['comissao_produtos'] as num?)?.toDouble() ??
+            (prof['percentual_comissao'] as num?)?.toDouble() ??
+            0.0;
         if (comissaoProdutos > 0) {
           final valorComissao = total * (comissaoProdutos / 100);
           final tableInfo = await txn.rawQuery("PRAGMA table_info(comissoes)");
@@ -492,10 +507,18 @@ class LojaRepository {
             'status': 'pendente',
             'observacoes': 'Comissão PDV',
           };
-          if (tableInfo.any((c) => c['name'] == 'pdv_venda_id')) comissaoMap['pdv_venda_id'] = vendaId;
-          if (tableInfo.any((c) => c['name'] == 'agendamento_id')) comissaoMap['agendamento_id'] = vendaId;
-          if (tableInfo.any((c) => c['name'] == 'servico_id')) comissaoMap['servico_id'] = 'pdv';
-          try { await txn.insert('comissoes', comissaoMap); } catch (_) {}
+          if (tableInfo.any((c) => c['name'] == 'pdv_venda_id')) {
+            comissaoMap['pdv_venda_id'] = vendaId;
+          }
+          if (tableInfo.any((c) => c['name'] == 'agendamento_id')) {
+            comissaoMap['agendamento_id'] = vendaId;
+          }
+          if (tableInfo.any((c) => c['name'] == 'servico_id')) {
+            comissaoMap['servico_id'] = 'pdv';
+          }
+          try {
+            await txn.insert('comissoes', comissaoMap);
+          } catch (_) {}
         }
       }
     });
@@ -527,7 +550,13 @@ class LojaRepository {
         if ((item['produto_id'] as String).startsWith('peca_')) {
           await txn.update(
             'pecas_unicas',
-            {'status': 'disponivel', 'cliente_id': null, 'profissional_vendedor_id': null, 'data_venda': null, 'comissao': null},
+            {
+              'status': 'disponivel',
+              'cliente_id': null,
+              'profissional_vendedor_id': null,
+              'data_venda': null,
+              'comissao': null,
+            },
             where: 'id = ? AND comercio_id = ?',
             whereArgs: [item['produto_id'], u.comercioId],
           );
@@ -545,27 +574,36 @@ class LojaRepository {
       }
       await txn.update(
         'pdv_vendas',
-        {
-          'status': 'cancelada',
-        },
+        {'status': 'cancelada'},
         where: "id = ? AND comercio_id = ?",
         whereArgs: [vendaId, u.comercioId],
       );
       // Removendo as movimentações financeiras relacionadas
-      await txn.delete('movimentacoes_financeiras', where: 'descricao = ? OR id LIKE ?', whereArgs: ['Venda PDV', '${vendaId}_p%']);
-      await txn.delete('comissoes', where: 'id LIKE ?', whereArgs: ['${vendaId}_com%']);
+      await txn.delete(
+        'movimentacoes_financeiras',
+        where: 'descricao = ? OR id LIKE ?',
+        whereArgs: ['Venda PDV', '${vendaId}_p%'],
+      );
+      await txn.delete(
+        'comissoes',
+        where: 'id LIKE ?',
+        whereArgs: ['${vendaId}_com%'],
+      );
     });
   }
 
   Future<List<Map<String, Object?>>> listarVendas() async {
     final u = _usuario;
     final db = await _databaseProvider();
-    return db.rawQuery('''
+    return db.rawQuery(
+      '''
       SELECT id, substr(id, 1, 8) as numero, valor_total as total, status, data_venda as criada_em
       FROM pdv_vendas
       WHERE comercio_id = ?
       ORDER BY data_venda DESC
-    ''', [u.comercioId]);
+    ''',
+      [u.comercioId],
+    );
   }
 
   Future<void> _sincronizarReposicaoTxn(

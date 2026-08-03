@@ -16,9 +16,10 @@ class MarketplaceRepository {
     BackendApiClient? api,
     Future<Database> Function()? databaseProvider,
     BackendTokenVault? vault,
-  })  : _api = api ?? BackendApiClient(),
-        _databaseProvider = databaseProvider ?? (() => DatabaseService.instance.database),
-        _vault = vault ?? const SecureBackendTokenVault();
+  }) : _api = api ?? BackendApiClient(),
+       _databaseProvider =
+           databaseProvider ?? (() => DatabaseService.instance.database),
+       _vault = vault ?? const SecureBackendTokenVault();
 
   String get _comercioId {
     final usuario = SessionController.instance.usuario;
@@ -38,25 +39,26 @@ class MarketplaceRepository {
         whereArgs: [comercioId],
         limit: 1,
       );
-      
+
       String endpointText = 'https://api.studioflowapp.com.br';
-      if (configRows.isNotEmpty && configRows.single['endpoint_publico'] != null) {
+      if (configRows.isNotEmpty &&
+          configRows.single['endpoint_publico'] != null) {
         endpointText = configRows.single['endpoint_publico'] as String;
       }
-      
+
       final endpoint = _api.normalizeEndpoint(endpointText);
       final session = await _vault.read(comercioId);
-      
+
       if (session == null) {
         throw StateError('Sessão online indisponível. Conecte o backend.');
       }
 
       final response = await _api.marketplaceSearch(
-        endpoint: endpoint, 
-        accessToken: session.accessToken, 
-        query: query
+        endpoint: endpoint,
+        accessToken: session.accessToken,
+        query: query,
       );
-      
+
       final result = MarketplaceSearchResult.fromJson(response);
       await _saveSearchHistory(db, comercioId, query);
       await _saveCache(db, comercioId, query, response);
@@ -71,7 +73,11 @@ class MarketplaceRepository {
     }
   }
 
-  Future<void> _saveSearchHistory(Database db, String comercioId, String query) async {
+  Future<void> _saveSearchHistory(
+    Database db,
+    String comercioId,
+    String query,
+  ) async {
     await db.insert('marketplace_search_history', {
       'id': IdGenerator.temporal(),
       'comercio_id': comercioId,
@@ -80,24 +86,31 @@ class MarketplaceRepository {
     });
   }
 
-  Future<void> _saveCache(Database db, String comercioId, String query, Map<String, dynamic> responseJson) async {
+  Future<void> _saveCache(
+    Database db,
+    String comercioId,
+    String query,
+    Map<String, dynamic> responseJson,
+  ) async {
     final queryNormalizada = query.trim().toLowerCase();
-    await db.insert(
-      'marketplace_search_cache',
-      {
-        'id': IdGenerator.temporal(),
-        'comercio_id': comercioId,
-        'query_normalizada': queryNormalizada,
-        'response_json': jsonEncode(responseJson),
-        'fetched_at': DateTime.now().toIso8601String(),
-        'expires_at': DateTime.now().add(const Duration(hours: 24)).toIso8601String(),
-        'backend_version': 'v1',
-      },
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+    await db.insert('marketplace_search_cache', {
+      'id': IdGenerator.temporal(),
+      'comercio_id': comercioId,
+      'query_normalizada': queryNormalizada,
+      'response_json': jsonEncode(responseJson),
+      'fetched_at': DateTime.now().toIso8601String(),
+      'expires_at': DateTime.now()
+          .add(const Duration(hours: 24))
+          .toIso8601String(),
+      'backend_version': 'v1',
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
-  Future<MarketplaceSearchResult?> _getCache(Database db, String comercioId, String query) async {
+  Future<MarketplaceSearchResult?> _getCache(
+    Database db,
+    String comercioId,
+    String query,
+  ) async {
     final queryNormalizada = query.trim().toLowerCase();
     final result = await db.query(
       'marketplace_search_cache',

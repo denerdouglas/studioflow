@@ -31,7 +31,9 @@ class _VendasLojaPageState extends State<VendasLojaPage> {
     if (p.id.startsWith('peca_')) {
       if (itens.any((x) => x.produto.id == p.id)) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Peça única já adicionada ao carrinho.'))
+          const SnackBar(
+            content: Text('Peça única já adicionada ao carrinho.'),
+          ),
         );
         return;
       }
@@ -41,15 +43,22 @@ class _VendasLojaPageState extends State<VendasLojaPage> {
       if (i < 0) {
         if (!p.id.startsWith('peca_') && p.quantidadeAtual < 1) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Estoque insuficiente para este produto.'))
+            const SnackBar(
+              content: Text('Estoque insuficiente para este produto.'),
+            ),
           );
           return;
         }
         itens.add(ItemCarrinho(p, 1));
       } else {
-        if (!p.id.startsWith('peca_') && p.quantidadeAtual < itens[i].quantidade + 1) {
+        if (!p.id.startsWith('peca_') &&
+            p.quantidadeAtual < itens[i].quantidade + 1) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Estoque insuficiente para adicionar mais deste produto.'))
+            const SnackBar(
+              content: Text(
+                'Estoque insuficiente para adicionar mais deste produto.',
+              ),
+            ),
           );
           return;
         }
@@ -294,13 +303,20 @@ class _VendasLojaPageState extends State<VendasLojaPage> {
                             onPressed: () {
                               if (item.produto.id.startsWith('peca_')) {
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('Não é possível aumentar a quantidade de uma peça única.'))
+                                  const SnackBar(
+                                    content: Text(
+                                      'Não é possível aumentar a quantidade de uma peça única.',
+                                    ),
+                                  ),
                                 );
                                 return;
                               }
-                              if (item.quantidade + 1 > item.produto.quantidadeAtual) {
+                              if (item.quantidade + 1 >
+                                  item.produto.quantidadeAtual) {
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('Estoque insuficiente.'))
+                                  const SnackBar(
+                                    content: Text('Estoque insuficiente.'),
+                                  ),
                                 );
                                 return;
                               }

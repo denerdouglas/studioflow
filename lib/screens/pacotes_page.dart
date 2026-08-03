@@ -86,8 +86,8 @@ class _PacotesPageState extends State<PacotesPage>
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
-      heroTag: null,
-      onPressed: _novoModelo,
+        heroTag: null,
+        onPressed: _novoModelo,
         icon: const Icon(Icons.add),
         label: const Text('Novo pacote'),
       ),

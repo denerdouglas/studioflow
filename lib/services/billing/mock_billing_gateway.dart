@@ -3,25 +3,33 @@ import 'package:in_app_purchase/in_app_purchase.dart';
 import 'billing_gateway.dart';
 
 class MockBillingGateway implements BillingGateway {
-  final StreamController<List<PurchaseDetails>> _purchaseStreamController = StreamController.broadcast();
+  final StreamController<List<PurchaseDetails>> _purchaseStreamController =
+      StreamController.broadcast();
 
   @override
-  Stream<List<PurchaseDetails>> get purchaseStream => _purchaseStreamController.stream;
+  Stream<List<PurchaseDetails>> get purchaseStream =>
+      _purchaseStreamController.stream;
 
   @override
   Future<bool> get isAvailable async => true;
 
   @override
-  Future<List<ProductDetails>> queryProductDetails(Set<String> productIds) async {
+  Future<List<ProductDetails>> queryProductDetails(
+    Set<String> productIds,
+  ) async {
     await Future.delayed(const Duration(milliseconds: 500));
-    return productIds.map((id) => MockProductDetails(
-      id: id,
-      title: 'Plano Fundador StudioFlow',
-      description: 'Acesso completo',
-      price: 'R\$ 14,90',
-      rawPrice: 14.90,
-      currencyCode: 'BRL',
-    )).toList();
+    return productIds
+        .map(
+          (id) => MockProductDetails(
+            id: id,
+            title: 'Plano Fundador StudioFlow',
+            description: 'Acesso completo',
+            price: 'R\$ 14,90',
+            rawPrice: 14.90,
+            currencyCode: 'BRL',
+          ),
+        )
+        .toList();
   }
 
   @override
@@ -39,7 +47,8 @@ class MockBillingGateway implements BillingGateway {
         status: PurchaseStatus.purchased,
         verificationData: PurchaseVerificationData(
           localVerificationData: 'mock_local',
-          serverVerificationData: 'founder_valid_token', // token for backend mock
+          serverVerificationData:
+              'founder_valid_token', // token for backend mock
           source: 'mock_store',
         ),
       );

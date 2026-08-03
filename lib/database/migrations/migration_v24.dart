@@ -56,7 +56,12 @@ class MigrationV24 {
     // 3. Atualizar estoque para suportar lote, validade, e alerta de vencimento (bebidas/alimentos)
     await _addColumn(db, 'estoque', 'lote', 'TEXT');
     await _addColumn(db, 'estoque', 'data_fabricacao', 'TEXT');
-    await _addColumn(db, 'estoque', 'alerta_vencimento_dias', 'INTEGER DEFAULT 0');
+    await _addColumn(
+      db,
+      'estoque',
+      'alerta_vencimento_dias',
+      'INTEGER DEFAULT 0',
+    );
   }
 
   static Future<void> _addColumn(

@@ -1,10 +1,7 @@
 import 'package:sqflite/sqflite.dart';
 
 abstract final class MigrationV18 {
-  static Future<void> executar(
-    Database db, {
-    bool criarBackup = false,
-  }) async {
+  static Future<void> executar(Database db, {bool criarBackup = false}) async {
     await db.execute('''
       CREATE TABLE marketplace_search_cache (
         id TEXT PRIMARY KEY,

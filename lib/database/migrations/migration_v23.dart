@@ -18,7 +18,7 @@ class MigrationV23 {
 
     // 5. Garantir que agendamentos tenha unidade_id (pode ter sido adicionado antes, mas garantimos aqui)
     await _addColumn(db, 'agendamentos', 'unidade_id', 'TEXT');
-    
+
     // 6. Criar tabela loja / pdv_vendas simplificada se não houver algo parecido para colaborador
     await db.execute('''
       CREATE TABLE IF NOT EXISTS pdv_vendas (

@@ -111,7 +111,9 @@ class ConfiguracoesRepository {
         'moeda': 'BRL',
         'notificacoes': configuracao.notificacoesAtivas ? '1' : '0',
         'confirmar_exclusoes': configuracao.confirmarExclusoes ? '1' : '0',
-        'permitir_galeria_clientes': configuracao.permitirGaleriaClientes ? '1' : '0',
+        'permitir_galeria_clientes': configuracao.permitirGaleriaClientes
+            ? '1'
+            : '0',
       };
       for (final item in valores.entries) {
         await txn.insert('configuracoes', {

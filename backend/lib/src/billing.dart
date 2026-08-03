@@ -26,17 +26,21 @@ class MockBillingVerifier implements BillingVerifier {
     if (purchaseToken == 'mock_invalid_token') {
       throw Exception('Mock: Token inválido');
     }
-    
+
     final bool isFounder = purchaseToken.contains('founder');
     final bool isPending = purchaseToken.contains('pending');
-    
+
     return {
       'state': isPending ? 'pending' : 'active',
       'storeProductId': 'studioflow_premium',
       'basePlanId': 'monthly',
       'offerId': isFounder ? 'founder_trial_20d' : null,
-      'trialEndAt': isFounder ? DateTime.now().add(const Duration(days: 20)).toUtc() : null,
-      'currentPeriodEndAt': DateTime.now().add(const Duration(days: 30)).toUtc(),
+      'trialEndAt': isFounder
+          ? DateTime.now().add(const Duration(days: 20)).toUtc()
+          : null,
+      'currentPeriodEndAt': DateTime.now()
+          .add(const Duration(days: 30))
+          .toUtc(),
       'autoRenewEnabled': true,
       'acquiredPriceMicros': 14900000,
       'currencyCode': 'BRL',
@@ -48,14 +52,16 @@ class MockBillingVerifier implements BillingVerifier {
     // Simulando retorno da Google Play Developer API
     return {
       'state': 'active',
-      'currentPeriodEndAt': DateTime.now().add(const Duration(days: 30)).toUtc(),
+      'currentPeriodEndAt': DateTime.now()
+          .add(const Duration(days: 30))
+          .toUtc(),
     };
   }
 }
 
 class GooglePlayVerifier implements BillingVerifier {
   // Em produção, isso usará credenciais GCP via package googleapis
-  
+
   @override
   Future<Map<String, Object?>> verifyPurchase({
     required String purchaseToken,
@@ -64,12 +70,16 @@ class GooglePlayVerifier implements BillingVerifier {
     required String expectedObfuscatedProfileId,
   }) async {
     // Placeholder para a chamada real ao purchases.subscriptionsv2.get
-    throw UnimplementedError('Configurar as credenciais do Google Cloud primeiro.');
+    throw UnimplementedError(
+      'Configurar as credenciais do Google Cloud primeiro.',
+    );
   }
 
   @override
   Future<Map<String, Object?>> getSubscriptionInfo(String purchaseToken) async {
-    throw UnimplementedError('Configurar as credenciais do Google Cloud primeiro.');
+    throw UnimplementedError(
+      'Configurar as credenciais do Google Cloud primeiro.',
+    );
   }
 }
 
@@ -89,7 +99,7 @@ class SubscriptionService {
     // Dummy encryption for now
     return base64Encode(utf8.encode(token));
   }
-  
+
   String generateObfuscatedId(String rawId) {
     final hmac = Hmac(sha256, utf8.encode(_hmacSecret));
     final digest = hmac.convert(utf8.encode(rawId));

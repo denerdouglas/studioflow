@@ -7,8 +7,8 @@ class WhatsappQueueService {
   final Future<Database> Function() _databaseProvider;
 
   WhatsappQueueService({Future<Database> Function()? databaseProvider})
-      : _databaseProvider =
-            databaseProvider ?? (() => DatabaseService.instance.database);
+    : _databaseProvider =
+          databaseProvider ?? (() => DatabaseService.instance.database);
 
   Future<void> enfileirar({
     DatabaseExecutor? txn,
@@ -20,7 +20,7 @@ class WhatsappQueueService {
   }) async {
     final db = txn ?? await _databaseProvider();
     final now = DateTime.now().toUtc().toIso8601String();
-    
+
     await db.insert('whatsapp_fila', {
       'id': 'wa_${IdGenerator.temporal()}',
       'comercio_id': comercioId,
@@ -43,7 +43,7 @@ class WhatsappQueueService {
   }) async {
     final db = txn ?? await _databaseProvider();
     final now = DateTime.now().toUtc().toIso8601String();
-    
+
     await db.insert('whatsapp_fila', {
       'id': 'wa_${IdGenerator.temporal()}',
       'comercio_id': comercioId,

@@ -33,7 +33,9 @@ class SimpleBarChart extends StatelessWidget {
       );
     }
 
-    final double maxValue = data.map((e) => e.value).reduce((a, b) => a > b ? a : b);
+    final double maxValue = data
+        .map((e) => e.value)
+        .reduce((a, b) => a > b ? a : b);
     final double safeMaxValue = maxValue == 0 ? 1 : maxValue;
 
     return SizedBox(
@@ -56,13 +58,18 @@ class SimpleBarChart extends StatelessWidget {
                 height: barHeight > 0 ? barHeight : 2,
                 decoration: BoxDecoration(
                   color: color,
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(4),
+                  ),
                 ),
               ),
               const SizedBox(height: 4),
               Text(
                 item.label,
-                style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
+                style: const TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ],
           );

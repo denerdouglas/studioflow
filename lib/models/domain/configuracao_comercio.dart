@@ -113,7 +113,8 @@ class ConfiguracaoComercio {
       duracaoPadraoMinutos: duracaoPadraoMinutos ?? this.duracaoPadraoMinutos,
       notificacoesAtivas: notificacoesAtivas ?? this.notificacoesAtivas,
       confirmarExclusoes: confirmarExclusoes ?? this.confirmarExclusoes,
-      permitirGaleriaClientes: permitirGaleriaClientes ?? this.permitirGaleriaClientes,
+      permitirGaleriaClientes:
+          permitirGaleriaClientes ?? this.permitirGaleriaClientes,
       documentoTipo: documentoTipo ?? this.documentoTipo,
       documento: documento ?? this.documento,
       inscricaoEstadual: inscricaoEstadual ?? this.inscricaoEstadual,

@@ -34,7 +34,12 @@ class _ProducaoPageState extends State<ProducaoPage> {
   Future<void> _verificarServidor() async {
     final endpointStr = AcessoOnlineService.endpointCompilado;
     if (endpointStr.trim().isEmpty) {
-      if (mounted) setState(() => _statusServidor = 'Endpoint não configurado na compilação (--dart-define)');
+      if (mounted) {
+        setState(
+          () => _statusServidor =
+              'Endpoint não configurado na compilação (--dart-define)',
+        );
+      }
       return;
     }
     try {
@@ -235,7 +240,9 @@ class _ProducaoPageState extends State<ProducaoPage> {
                             '${estado.ultimaSincronizacao == null ? 'Aguardando primeira sincronização.' : 'Última sincronização: ${estado.ultimaSincronizacao}.'}\n'
                             'Status do servidor: ${_statusServidor ?? 'Verificando...'}'
                       : 'Não conectado. Status do servidor: ${_statusServidor ?? 'Verificando...'}',
-                  ok: estado.backendConfigurado && _statusServidor == 'Online e respondendo',
+                  ok:
+                      estado.backendConfigurado &&
+                      _statusServidor == 'Online e respondendo',
                 ),
                 const _StatusCard(
                   icon: Icons.workspace_premium_outlined,
@@ -247,8 +254,7 @@ class _ProducaoPageState extends State<ProducaoPage> {
                 const _StatusCard(
                   icon: Icons.storefront_outlined,
                   title: 'Marketplace StudioFlow',
-                  detail:
-                      'Disponível em uma atualização futura.',
+                  detail: 'Disponível em uma atualização futura.',
                   ok: false,
                 ),
                 const SizedBox(height: 12),
@@ -313,7 +319,6 @@ class _StatusCard extends StatelessWidget {
     );
   }
 }
-
 
 class _BackendConnectionDialog extends StatefulWidget {
   final String endpointInicial;
@@ -392,9 +397,7 @@ class _BackendConnectionDialogState extends State<_BackendConnectionDialog> {
               obscureText: true,
               textInputAction: TextInputAction.done,
               onSubmitted: (_) => _confirmar(),
-              decoration: const InputDecoration(
-                labelText: 'Senha online',
-              ),
+              decoration: const InputDecoration(labelText: 'Senha online'),
             ),
             CheckboxListTile(
               contentPadding: EdgeInsets.zero,
@@ -402,9 +405,7 @@ class _BackendConnectionDialogState extends State<_BackendConnectionDialog> {
               onChanged: (value) {
                 setState(() => _criarAmbiente = value ?? false);
               },
-              title: const Text(
-                'Criar ambiente remoto se ainda não existir',
-              ),
+              title: const Text('Criar ambiente remoto se ainda não existir'),
               subtitle: const Text(
                 'Disponível somente para o dono no primeiro vínculo.',
               ),
@@ -417,10 +418,7 @@ class _BackendConnectionDialogState extends State<_BackendConnectionDialog> {
           onPressed: () => Navigator.of(context).pop(),
           child: const Text('Cancelar'),
         ),
-        FilledButton(
-          onPressed: _confirmar,
-          child: const Text('Conectar'),
-        ),
+        FilledButton(onPressed: _confirmar, child: const Text('Conectar')),
       ],
     );
   }

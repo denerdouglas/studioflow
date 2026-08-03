@@ -13,7 +13,8 @@ class VisionScannerPreviewPage extends StatefulWidget {
   });
 
   @override
-  State<VisionScannerPreviewPage> createState() => _VisionScannerPreviewPageState();
+  State<VisionScannerPreviewPage> createState() =>
+      _VisionScannerPreviewPageState();
 }
 
 class _VisionScannerPreviewPageState extends State<VisionScannerPreviewPage> {
@@ -30,13 +31,23 @@ class _VisionScannerPreviewPageState extends State<VisionScannerPreviewPage> {
   @override
   void initState() {
     super.initState();
-    _codigoController = TextEditingController(text: widget.scannedCode ?? widget.data.codigo ?? '');
+    _codigoController = TextEditingController(
+      text: widget.scannedCode ?? widget.data.codigo ?? '',
+    );
     _nomeController = TextEditingController(text: widget.data.nome ?? '');
-    _fornecedorController = TextEditingController(text: widget.data.fornecedor ?? '');
-    _descricaoController = TextEditingController(text: widget.data.descricao ?? '');
-    _materialController = TextEditingController(text: widget.data.material ?? '');
+    _fornecedorController = TextEditingController(
+      text: widget.data.fornecedor ?? '',
+    );
+    _descricaoController = TextEditingController(
+      text: widget.data.descricao ?? '',
+    );
+    _materialController = TextEditingController(
+      text: widget.data.material ?? '',
+    );
     _precoController = TextEditingController(
-      text: widget.data.preco != null ? widget.data.preco!.toStringAsFixed(2) : '',
+      text: widget.data.preco != null
+          ? widget.data.preco!.toStringAsFixed(2)
+          : '',
     );
   }
 
@@ -54,12 +65,12 @@ class _VisionScannerPreviewPageState extends State<VisionScannerPreviewPage> {
   Future<void> _salvar() async {
     final codigo = _codigoController.text.trim();
     final nome = _nomeController.text.trim();
-    
+
     if (codigo.isEmpty) {
       setState(() => _erro = 'O código é obrigatório.');
       return;
     }
-    
+
     if (nome.isEmpty) {
       setState(() => _erro = 'O nome é obrigatório.');
       return;
@@ -72,7 +83,7 @@ class _VisionScannerPreviewPageState extends State<VisionScannerPreviewPage> {
 
     try {
       final repo = EstoqueRepository();
-      
+
       // Checar se já existe um produto com o mesmo código de barras
       final itens = await repo.listar(incluirInativos: true);
       final existeCodigo = itens.any((i) => i.codigoBarras == codigo);
@@ -84,7 +95,8 @@ class _VisionScannerPreviewPageState extends State<VisionScannerPreviewPage> {
         return;
       }
 
-      final preco = double.tryParse(_precoController.text.replaceAll(',', '.')) ?? 0;
+      final preco =
+          double.tryParse(_precoController.text.replaceAll(',', '.')) ?? 0;
 
       final novoItem = ItemEstoqueRegistro(
         id: DateTime.now().microsecondsSinceEpoch.toString(),
@@ -103,12 +115,13 @@ class _VisionScannerPreviewPageState extends State<VisionScannerPreviewPage> {
         dataValidade: null,
         ativo: true,
         descontarAutomaticamente: true,
-        observacoes: 'Material: ${_materialController.text.trim()}\nDesc: ${_descricaoController.text.trim()}',
+        observacoes:
+            'Material: ${_materialController.text.trim()}\nDesc: ${_descricaoController.text.trim()}',
         dataCadastro: DateTime.now(),
       );
 
       await repo.inserir(novoItem);
-      
+
       if (!mounted) return;
       Navigator.pop(context, novoItem);
     } catch (e) {
@@ -145,7 +158,9 @@ class _VisionScannerPreviewPageState extends State<VisionScannerPreviewPage> {
             ],
             TextField(
               controller: _codigoController,
-              decoration: const InputDecoration(labelText: 'Código / Código de Barras *'),
+              decoration: const InputDecoration(
+                labelText: 'Código / Código de Barras *',
+              ),
             ),
             const SizedBox(height: 8),
             TextField(
@@ -155,7 +170,9 @@ class _VisionScannerPreviewPageState extends State<VisionScannerPreviewPage> {
             const SizedBox(height: 8),
             TextField(
               controller: _fornecedorController,
-              decoration: const InputDecoration(labelText: 'Fornecedor / Marca'),
+              decoration: const InputDecoration(
+                labelText: 'Fornecedor / Marca',
+              ),
             ),
             const SizedBox(height: 8),
             TextField(
@@ -166,19 +183,30 @@ class _VisionScannerPreviewPageState extends State<VisionScannerPreviewPage> {
             const SizedBox(height: 8),
             TextField(
               controller: _materialController,
-              decoration: const InputDecoration(labelText: 'Material / Composição'),
+              decoration: const InputDecoration(
+                labelText: 'Material / Composição',
+              ),
             ),
             const SizedBox(height: 8),
             TextField(
               controller: _precoController,
               decoration: const InputDecoration(labelText: 'Preço (R\$)'),
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
             ),
             const SizedBox(height: 24),
             FilledButton(
               onPressed: _salvando ? null : _salvar,
-              child: _salvando 
-                  ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+              child: _salvando
+                  ? const SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 2,
+                      ),
+                    )
                   : const Text('Confirmar e Salvar'),
             ),
           ],

@@ -84,9 +84,13 @@ final class MarketplacePostgresStore implements MarketplaceBackendStore {
   }
 
   @override
-  Future<List<MarketplacePartnerDomain>> listDomainsForPartner(String partnerId) async {
+  Future<List<MarketplacePartnerDomain>> listDomainsForPartner(
+    String partnerId,
+  ) async {
     final result = await _pool.execute(
-      Sql.named('SELECT * FROM marketplace_partner_domains WHERE partner_id = @id'),
+      Sql.named(
+        'SELECT * FROM marketplace_partner_domains WHERE partner_id = @id',
+      ),
       parameters: {'id': partnerId},
     );
     return result.map((row) {
@@ -210,7 +214,11 @@ final class MarketplacePostgresStore implements MarketplaceBackendStore {
   }
 
   @override
-  Future<void> updateClickStatus(String id, String status, {DateTime? redirectedAt}) async {
+  Future<void> updateClickStatus(
+    String id,
+    String status, {
+    DateTime? redirectedAt,
+  }) async {
     await _pool.execute(
       Sql.named('''
         UPDATE marketplace_clicks 
@@ -218,11 +226,7 @@ final class MarketplacePostgresStore implements MarketplaceBackendStore {
             redirected_at = COALESCE(@redirected, redirected_at) 
         WHERE id = @id
       '''),
-      parameters: {
-        'id': id,
-        'status': status,
-        'redirected': redirectedAt,
-      },
+      parameters: {'id': id, 'status': status, 'redirected': redirectedAt},
     );
   }
 

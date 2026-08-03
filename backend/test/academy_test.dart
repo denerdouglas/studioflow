@@ -6,7 +6,8 @@ import 'package:test/test.dart';
 import 'package:uuid/uuid.dart';
 
 void main() {
-  const jwtSecret = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
+  const jwtSecret =
+      '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
   late MemoryBackendStore store;
   late AcademyMemoryStore academyStore;
   late Handler handler;
@@ -21,10 +22,15 @@ void main() {
       'JWT_SECRET': jwtSecret,
       'PUBLIC_BASE_URL': 'https://api.studioflow.test',
     });
-    
+
     // Seed some basic data
-    final catGestao = AcademyCategory(id: uuid.v4(), name: 'Gestão', displayOrder: 1, createdAt: DateTime.now().toUtc());
-    
+    final catGestao = AcademyCategory(
+      id: uuid.v4(),
+      name: 'Gestão',
+      displayOrder: 1,
+      createdAt: DateTime.now().toUtc(),
+    );
+
     final partnerHotmart = 'hotmart_id';
     final partnerInactive = 'inactive_id';
 
@@ -41,7 +47,7 @@ void main() {
       reviewsCount: 150,
       redirectUrl: 'https://hotmart.com/pt-br/checkout/abc',
     );
-    
+
     final courseSemPreco = AcademyCourse(
       id: uuid.v4(),
       title: 'Curso Grátis ou Consulta',
@@ -69,7 +75,7 @@ void main() {
       sourceType: 'partner',
       publicationStatus: 'suspended',
     );
-    
+
     final courseInactivePartner = AcademyCourse(
       id: uuid.v4(),
       title: 'Curso Inativo Parceiro',
@@ -89,7 +95,7 @@ void main() {
       publicationStatus: 'published',
       redirectUrl: 'http://localhost:8080/hack',
     );
-    
+
     final courseExpiredCampaign = AcademyCourse(
       id: uuid.v4(),
       title: 'Curso Campanha Expirada',
@@ -102,7 +108,15 @@ void main() {
 
     academyStore.seedAcademy(
       [catGestao],
-      [courseGestao, courseSemPreco, courseComingSoon, courseSuspended, courseInactivePartner, courseMalicious, courseExpiredCampaign],
+      [
+        courseGestao,
+        courseSemPreco,
+        courseComingSoon,
+        courseSuspended,
+        courseInactivePartner,
+        courseMalicious,
+        courseExpiredCampaign,
+      ],
       {partnerHotmart: 'hotmart', partnerInactive: 'inactive'},
       {partnerHotmart: true, partnerInactive: false},
       {'camp_expired': false},
@@ -118,18 +132,26 @@ void main() {
     ).handler;
 
     // Simulate login for tests (fast way)
-    final tokens = TokenSecurity(secret: jwtSecret, accessDuration: const Duration(hours: 1));
+    final tokens = TokenSecurity(
+      secret: jwtSecret,
+      accessDuration: const Duration(hours: 1),
+    );
     accessToken = tokens.createAccessToken(
       const AuthContext(
         userId: 'test-user',
         businessId: 'test-business',
         role: 'dono',
         sessionId: 'test-session',
-      )
+      ),
     );
   });
 
-  Future<Response> callApi(String method, String path, {Map<String, dynamic>? body, String? token}) async {
+  Future<Response> callApi(
+    String method,
+    String path, {
+    Map<String, dynamic>? body,
+    String? token,
+  }) async {
     final request = Request(
       method,
       Uri.parse('https://api.studioflow.test$path'),
@@ -143,26 +165,41 @@ void main() {
   }
 
   test('GET /v1/academy/categories returns categories', () async {
-    final response = await callApi('GET', '/v1/academy/categories', token: accessToken);
+    final response = await callApi(
+      'GET',
+      '/v1/academy/categories',
+      token: accessToken,
+    );
     expect(response.statusCode, 200);
     final json = jsonDecode(await response.readAsString());
     expect(json['categories'], isNotEmpty);
     expect(json['categories'][0]['name'], 'Gestão');
   });
 
-  test('GET /v1/academy/search with no query returns all published/coming_soon courses', () async {
-    final response = await callApi('GET', '/v1/academy/search', token: accessToken);
-    expect(response.statusCode, 200);
-    final json = jsonDecode(await response.readAsString());
-    expect(json['total'], 6); // Suspended is hidden
-    final titles = (json['courses'] as List).map((c) => c['title']).toList();
-    expect(titles, contains('Gestão de Salão 360'));
-    expect(titles, contains('Método StudioFlow'));
-    expect(titles, isNot(contains('Curso Suspenso')));
-  });
+  test(
+    'GET /v1/academy/search with no query returns all published/coming_soon courses',
+    () async {
+      final response = await callApi(
+        'GET',
+        '/v1/academy/search',
+        token: accessToken,
+      );
+      expect(response.statusCode, 200);
+      final json = jsonDecode(await response.readAsString());
+      expect(json['total'], 6); // Suspended is hidden
+      final titles = (json['courses'] as List).map((c) => c['title']).toList();
+      expect(titles, contains('Gestão de Salão 360'));
+      expect(titles, contains('Método StudioFlow'));
+      expect(titles, isNot(contains('Curso Suspenso')));
+    },
+  );
 
   test('GET /v1/academy/search with query filters correctly', () async {
-    final response = await callApi('GET', '/v1/academy/search?q=Gestão', token: accessToken);
+    final response = await callApi(
+      'GET',
+      '/v1/academy/search?q=Gestão',
+      token: accessToken,
+    );
     expect(response.statusCode, 200);
     final json = jsonDecode(await response.readAsString());
     expect(json['total'], 1);
@@ -170,7 +207,11 @@ void main() {
   });
 
   test('Course without price or rating does not return 0', () async {
-    final response = await callApi('GET', '/v1/academy/search?q=Grátis', token: accessToken);
+    final response = await callApi(
+      'GET',
+      '/v1/academy/search?q=Grátis',
+      token: accessToken,
+    );
     final json = jsonDecode(await response.readAsString());
     final course = json['courses'][0];
     expect(course.containsKey('price'), isFalse);
@@ -178,23 +219,35 @@ void main() {
   });
 
   test('Coming soon course does not have clickId', () async {
-    final response = await callApi('GET', '/v1/academy/search?q=Método', token: accessToken);
+    final response = await callApi(
+      'GET',
+      '/v1/academy/search?q=Método',
+      token: accessToken,
+    );
     final json = jsonDecode(await response.readAsString());
     final course = json['courses'][0];
     expect(course['publicationStatus'], 'coming_soon');
     expect(course.containsKey('clickId'), isFalse);
   });
-  
+
   test('Published course with active partner has clickId', () async {
-    final response = await callApi('GET', '/v1/academy/search?q=Gestão', token: accessToken);
+    final response = await callApi(
+      'GET',
+      '/v1/academy/search?q=Gestão',
+      token: accessToken,
+    );
     final json = jsonDecode(await response.readAsString());
     final course = json['courses'][0];
     expect(course['publicationStatus'], 'published');
     expect(course['clickId'], isNotNull);
   });
-  
+
   test('Published course with inactive partner has no clickId', () async {
-    final response = await callApi('GET', '/v1/academy/search?q=Inativo', token: accessToken);
+    final response = await callApi(
+      'GET',
+      '/v1/academy/search?q=Inativo',
+      token: accessToken,
+    );
     final json = jsonDecode(await response.readAsString());
     final course = json['courses'][0];
     expect(course['publicationStatus'], 'published');
@@ -202,13 +255,20 @@ void main() {
   });
 
   test('Valid redirect works correctly', () async {
-    final response = await callApi('GET', '/v1/academy/search?q=Gestão', token: accessToken);
+    final response = await callApi(
+      'GET',
+      '/v1/academy/search?q=Gestão',
+      token: accessToken,
+    );
     final json = jsonDecode(await response.readAsString());
     final clickId = json['courses'][0]['clickId'];
-    
+
     final redirectResponse = await callApi('GET', '/academy/r/$clickId');
     expect(redirectResponse.statusCode, 302);
-    expect(redirectResponse.headers['location'], 'https://hotmart.com/pt-br/checkout/abc');
+    expect(
+      redirectResponse.headers['location'],
+      'https://hotmart.com/pt-br/checkout/abc',
+    );
   });
 
   test('Missing clickId returns error', () async {
@@ -222,20 +282,31 @@ void main() {
   });
 
   test('Repeated redirect returns error (click already used)', () async {
-    final response = await callApi('GET', '/v1/academy/search?q=Gestão', token: accessToken);
+    final response = await callApi(
+      'GET',
+      '/v1/academy/search?q=Gestão',
+      token: accessToken,
+    );
     final json = jsonDecode(await response.readAsString());
     final clickId = json['courses'][0]['clickId'];
-    
+
     await callApi('GET', '/academy/r/$clickId'); // First time works
-    final second = await callApi('GET', '/academy/r/$clickId'); // Second time blocked
+    final second = await callApi(
+      'GET',
+      '/academy/r/$clickId',
+    ); // Second time blocked
     expect(second.statusCode, 400);
   });
-  
+
   test('Malicious redirect is blocked (HTTP/Localhost)', () async {
-    final response = await callApi('GET', '/v1/academy/search?q=Malicioso', token: accessToken);
+    final response = await callApi(
+      'GET',
+      '/v1/academy/search?q=Malicioso',
+      token: accessToken,
+    );
     final json = jsonDecode(await response.readAsString());
     final clickId = json['courses'][0]['clickId'];
-    
+
     final redirectResponse = await callApi('GET', '/academy/r/$clickId');
     expect(redirectResponse.statusCode, 400);
     final errJson = jsonDecode(await redirectResponse.readAsString());
@@ -243,7 +314,11 @@ void main() {
   });
 
   test('No secrets are returned in search', () async {
-    final response = await callApi('GET', '/v1/academy/search', token: accessToken);
+    final response = await callApi(
+      'GET',
+      '/v1/academy/search',
+      token: accessToken,
+    );
     final json = jsonDecode(await response.readAsString());
     final str = jsonEncode(json);
     expect(str.contains('secret'), isFalse);

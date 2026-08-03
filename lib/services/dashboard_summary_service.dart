@@ -7,25 +7,25 @@ class DashboardSummary {
   final List<AgendamentoRegistro> agendamentosHoje;
   final ResumoCaixa resumoCaixa;
   final List<ProdutoLoja> produtosBaixoEstoque;
-  
+
   DashboardSummary({
     required this.agendamentosHoje,
     required this.resumoCaixa,
     required this.produtosBaixoEstoque,
   });
 
-  bool get isEmpty => 
-      agendamentosHoje.isEmpty && 
-      resumoCaixa.totalEntradas == 0 && 
-      resumoCaixa.totalSaidas == 0 && 
+  bool get isEmpty =>
+      agendamentosHoje.isEmpty &&
+      resumoCaixa.totalEntradas == 0 &&
+      resumoCaixa.totalSaidas == 0 &&
       produtosBaixoEstoque.isEmpty;
 
-  List<AgendamentoRegistro> get agendamentosValidos => 
+  List<AgendamentoRegistro> get agendamentosValidos =>
       agendamentosHoje.where((a) => a.status != 'cancelado').toList();
-  
-  double get receitaPrevista => 
+
+  double get receitaPrevista =>
       agendamentosValidos.fold(0.0, (s, a) => s + a.valorFinal);
-  
+
   double get lucroDiario => resumoCaixa.saldo; // Saldo já é Entradas - Saídas
 }
 

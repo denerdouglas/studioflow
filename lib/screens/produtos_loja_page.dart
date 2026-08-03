@@ -89,12 +89,7 @@ class _ProdutosLojaPageState extends State<ProdutosLojaPage> {
             MaterialPageRoute(builder: (_) => const EstoquePage()),
           );
         } else {
-          await _abrir(
-            null,
-            result.normalizedGtin,
-            found,
-            found == null,
-          );
+          await _abrir(null, result.normalizedGtin, found, found == null);
         }
       } else {
         await Navigator.push(
@@ -142,8 +137,8 @@ class _ProdutosLojaPageState extends State<ProdutosLojaPage> {
             AcaoPermissao.cadastrarProduto,
           )
           ? FloatingActionButton.extended(
-      heroTag: null,
-      onPressed: () => _abrir(),
+              heroTag: null,
+              onPressed: () => _abrir(),
               icon: const Icon(Icons.add),
               label: const Text('Produto'),
             )
@@ -290,7 +285,12 @@ class _ProdutoFormPageState extends State<ProdutoFormPage> {
     _c('minimo', p?.estoqueMinimo.toString() ?? '0');
     _c('sugerida', p?.quantidadeSugerida.toString() ?? '0');
     _c('unidade', p?.unidade ?? catalog?.physicalUnit ?? 'un');
-    _c('conteudo', p?.conteudoPorUnidade.toString() ?? catalog?.contentPerUnit?.toString() ?? '1');
+    _c(
+      'conteudo',
+      p?.conteudoPorUnidade.toString() ??
+          catalog?.contentPerUnit?.toString() ??
+          '1',
+    );
     _c('unidade_conteudo', p?.unidadeConteudo ?? catalog?.contentUnit ?? 'g');
     _c('embalagem', p?.quantidadeEmbalagem.toString() ?? '1');
     _c('lote', p?.lote ?? '');
@@ -373,9 +373,9 @@ class _ProdutoFormPageState extends State<ProdutoFormPage> {
       });
     } on CatalogProviderUnavailable catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(error.message)),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.message)));
       }
     } catch (error) {
       if (mounted) {
@@ -495,7 +495,10 @@ class _ProdutoFormPageState extends State<ProdutoFormPage> {
                 padding: EdgeInsets.all(12),
                 child: Text(
                   'Revisão necessária: Separe a quantidade física (potes, frascos) do conteúdo (g, ml).',
-                  style: TextStyle(color: Color(0xFF856404), fontWeight: FontWeight.bold),
+                  style: TextStyle(
+                    color: Color(0xFF856404),
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
             ),
@@ -556,7 +559,13 @@ class _ProdutoFormPageState extends State<ProdutoFormPage> {
           ),
           Row(
             children: [
-              Expanded(child: _campo('unidade', 'Unidade física (pote)', obrigatorio: true)),
+              Expanded(
+                child: _campo(
+                  'unidade',
+                  'Unidade física (pote)',
+                  obrigatorio: true,
+                ),
+              ),
               const SizedBox(width: 12),
               Expanded(
                 child: _campo('embalagem', 'Qtd. por embalagem', numero: true),
@@ -565,10 +574,15 @@ class _ProdutoFormPageState extends State<ProdutoFormPage> {
           ),
           Row(
             children: [
-              Expanded(child: _campo('conteudo', 'Conteúdo (peso/vol)', numero: true)),
+              Expanded(
+                child: _campo('conteudo', 'Conteúdo (peso/vol)', numero: true),
+              ),
               const SizedBox(width: 12),
               Expanded(
-                child: _campo('unidade_conteudo', 'Unidade do conteúdo (g, ml)'),
+                child: _campo(
+                  'unidade_conteudo',
+                  'Unidade do conteúdo (g, ml)',
+                ),
               ),
             ],
           ),

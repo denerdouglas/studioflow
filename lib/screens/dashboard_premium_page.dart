@@ -13,7 +13,6 @@ import '../repositories/marketplace_repository.dart';
 import '../repositories/recommendation_engine.dart';
 import '../repositories/estoque_repository.dart';
 
-
 class DashboardPremiumPage extends StatefulWidget {
   final String nomeResponsavel;
   final String nomeNegocio;
@@ -34,7 +33,6 @@ class DashboardPremiumPage extends StatefulWidget {
 
 class _DashboardPremiumPageState extends State<DashboardPremiumPage> {
   int _paginaSelecionada = 0;
-
 
   late final MarketplaceController _marketplaceController;
 
@@ -75,17 +73,16 @@ class _DashboardPremiumPageState extends State<DashboardPremiumPage> {
       SessionController.instance.usuario!.pode(ModuloPermissao.clientes)
           ? const ClientesPage()
           : const Center(child: Text('Acesso não permitido.')),
-      MarketplacePage(controller: _marketplaceController), // const MarketplaceStubPage(),
+      MarketplacePage(
+        controller: _marketplaceController,
+      ), // const MarketplaceStubPage(),
       // Use MaisSprint2Page until Etapa 3A.2 creates MaisPremiumPage
       MaisPremiumPage(tema: widget.tema),
     ];
 
     return Scaffold(
       backgroundColor: widget.tema.fundo,
-      body: IndexedStack(
-        index: _paginaSelecionada,
-        children: paginas,
-      ),
+      body: IndexedStack(index: _paginaSelecionada, children: paginas),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _paginaSelecionada,
         backgroundColor: Colors.white,

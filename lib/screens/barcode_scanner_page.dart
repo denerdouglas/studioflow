@@ -55,8 +55,8 @@ class _BarcodeScannerPageState extends State<BarcodeScannerPage> {
     if (_ultimoCodigo == codigo) return;
     if (!isSupportedBarcode(codigo)) {
       setState(
-        () => _erro =
-            'Código inválido. Aponte para um código de barras válido.',
+        () =>
+            _erro = 'Código inválido. Aponte para um código de barras válido.',
       );
       return;
     }
@@ -186,8 +186,7 @@ class _BarcodeScannerPageState extends State<BarcodeScannerPage> {
                   'A permissão da câmera foi negada. Libere-a nas configurações do aparelho ou digite o código.',
                 MobileScannerErrorCode.unsupported =>
                   'Este dispositivo não oferece uma câmera compatível.',
-                _ =>
-                  'A câmera está indisponível. Você pode digitar o código.',
+                _ => 'A câmera está indisponível. Você pode digitar o código.',
               },
               onDigitar: _digitar,
               onConfiguracoes:

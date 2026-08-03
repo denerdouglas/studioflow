@@ -15,7 +15,7 @@ class ResultadoAcessoOnline {
 class AcessoOnlineService {
   static const endpointCompilado = String.fromEnvironment(
     'STUDIOFLOW_PUBLIC_BACKEND_URL',
-    defaultValue: '',
+    defaultValue: 'https://api.studioflowapp.com.br',
   );
 
   final BackendApiClient _api;

@@ -236,8 +236,8 @@ class _PagamentosSprint4PageState extends State<PagamentosSprint4Page>
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
-      heroTag: null,
-      onPressed: _criarCobranca,
+        heroTag: null,
+        onPressed: _criarCobranca,
         icon: const Icon(Icons.add),
         label: const Text('Cobrança'),
       ),

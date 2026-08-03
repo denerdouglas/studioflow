@@ -117,8 +117,10 @@ abstract interface class MarketplaceBackendStore {
   Future<List<MarketplacePartner>> listAllPartners();
   Future<MarketplacePartner?> findPartnerById(String id);
   Future<void> savePartner(MarketplacePartner partner);
-  
-  Future<List<MarketplacePartnerDomain>> listDomainsForPartner(String partnerId);
+
+  Future<List<MarketplacePartnerDomain>> listDomainsForPartner(
+    String partnerId,
+  );
   Future<void> saveDomain(MarketplacePartnerDomain domain);
 
   Future<void> logSearch({
@@ -133,8 +135,12 @@ abstract interface class MarketplaceBackendStore {
 
   Future<void> recordClick(MarketplaceClick click);
   Future<MarketplaceClick?> findClick(String id);
-  Future<void> updateClickStatus(String id, String status, {DateTime? redirectedAt});
-  
+  Future<void> updateClickStatus(
+    String id,
+    String status, {
+    DateTime? redirectedAt,
+  });
+
   Future<void> auditAdminAction({
     required String platformAdminId,
     required String action,
@@ -152,8 +158,9 @@ class MarketplaceService {
 
   MarketplaceService(this._store);
 
-    Future<List<MarketplacePartner>> listAllPartners() => _store.listAllPartners();
-  
+  Future<List<MarketplacePartner>> listAllPartners() =>
+      _store.listAllPartners();
+
   Future<void> logSearch({
     required String? businessId,
     required String userId,
@@ -198,7 +205,7 @@ class MarketplaceService {
     if (uri.userInfo.isNotEmpty) {
       throw Exception('URL com credenciais não é permitida.');
     }
-    
+
     // Check against allowlist
     final domains = await _store.listDomainsForPartner(partnerId);
     bool isAllowed = false;
@@ -220,7 +227,7 @@ class MarketplaceService {
     // 3. Create Click UUIDv7 (approximate using timestamp + random for now, or true v7 if available)
     // dart uuid package supports v7
     final clickId = const Uuid().v7();
-    
+
     // 4. Record Click
     final click = MarketplaceClick(
       id: clickId,
@@ -251,7 +258,8 @@ class MarketplaceService {
     if (click.clickStatus != 'created') {
       throw Exception('Link já utilizado ou inválido.');
     }
-    if (click.expiresAt != null && DateTime.now().toUtc().isAfter(click.expiresAt!)) {
+    if (click.expiresAt != null &&
+        DateTime.now().toUtc().isAfter(click.expiresAt!)) {
       await _store.updateClickStatus(clickId, 'expired');
       throw Exception('Link expirado.');
     }
@@ -271,7 +279,11 @@ class MarketplaceService {
     }
 
     // Update status
-    await _store.updateClickStatus(clickId, 'redirected', redirectedAt: DateTime.now().toUtc());
+    await _store.updateClickStatus(
+      clickId,
+      'redirected',
+      redirectedAt: DateTime.now().toUtc(),
+    );
 
     return finalUrl;
   }

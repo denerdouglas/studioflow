@@ -33,7 +33,9 @@ class DatabaseConfig {
       }
     }
 
-    final database = uri.pathSegments.isNotEmpty ? uri.pathSegments.first : 'postgres';
+    final database = uri.pathSegments.isNotEmpty
+        ? uri.pathSegments.first
+        : 'postgres';
 
     return Endpoint(
       host: uri.host,
@@ -46,21 +48,16 @@ class DatabaseConfig {
 
   static Pool createPool(String url) {
     final endpoint = _parseUrl(url);
-    return Pool.withEndpoints(
-      [endpoint],
-      settings: PoolSettings(
-        sslMode: _sslMode,
-      ),
-    );
+    return Pool.withEndpoints([
+      endpoint,
+    ], settings: PoolSettings(sslMode: _sslMode));
   }
 
   static Future<Connection> createConnection(String url) {
     final endpoint = _parseUrl(url);
     return Connection.open(
       endpoint,
-      settings: ConnectionSettings(
-        sslMode: _sslMode,
-      ),
+      settings: ConnectionSettings(sslMode: _sslMode),
     );
   }
 }

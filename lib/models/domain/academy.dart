@@ -93,15 +93,17 @@ class AcademyCourse {
       difficultyLevel: json['difficultyLevel'] as String? ?? 'beginner',
       price: json['price'] != null ? (json['price'] as num).toDouble() : null,
       currency: json['currency'] as String? ?? 'BRL',
-      rating: json['rating'] != null ? (json['rating'] as num).toDouble() : null,
+      rating: json['rating'] != null
+          ? (json['rating'] as num).toDouble()
+          : null,
       totalReviews: json['totalReviews'] as int? ?? 0,
       clickId: json['clickId'] as String?,
       publicationStatus: json['publicationStatus'] as String? ?? 'published',
-      publishedAt: json['publishedAt'] != null 
-          ? DateTime.parse(json['publishedAt'] as String) 
+      publishedAt: json['publishedAt'] != null
+          ? DateTime.parse(json['publishedAt'] as String)
           : DateTime.now(),
-      updatedAt: json['updatedAt'] != null 
-          ? DateTime.parse(json['updatedAt'] as String) 
+      updatedAt: json['updatedAt'] != null
+          ? DateTime.parse(json['updatedAt'] as String)
           : DateTime.now(),
     );
   }

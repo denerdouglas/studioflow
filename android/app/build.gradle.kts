@@ -1,4 +1,4 @@
-﻿import java.util.Properties
+import java.util.Properties
 
 plugins {
     id("com.android.application")
@@ -58,7 +58,7 @@ android {
     }
 
     lint {
-        // O flutter analyze Ã© a validaÃ§Ã£o estÃ¡tica oficial deste projeto.
+        // O flutter analyze é a validação estática oficial deste projeto.
         // Evita consulta remota do Android Lint durante um release offline.
         checkReleaseBuilds = false
     }

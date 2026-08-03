@@ -13,7 +13,9 @@ class GooglePlayBillingGateway implements BillingGateway {
   Future<bool> get isAvailable => _iap.isAvailable();
 
   @override
-  Future<List<ProductDetails>> queryProductDetails(Set<String> productIds) async {
+  Future<List<ProductDetails>> queryProductDetails(
+    Set<String> productIds,
+  ) async {
     final response = await _iap.queryProductDetails(productIds);
     return response.productDetails;
   }

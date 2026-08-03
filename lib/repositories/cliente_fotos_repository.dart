@@ -7,7 +7,7 @@ class ClienteFotosRepository {
   final DatabaseService _databaseService;
 
   ClienteFotosRepository({DatabaseService? databaseService})
-      : _databaseService = databaseService ?? DatabaseService.instance;
+    : _databaseService = databaseService ?? DatabaseService.instance;
 
   String get _comercioId => SessionController.instance.usuario!.comercioId;
 
@@ -25,14 +25,10 @@ class ClienteFotosRepository {
 
   Future<void> inserir(FotoCliente foto) async {
     final db = await _databaseService.database;
-    await db.insert(
-      'fotos_cliente',
-      {
-        ...foto.paraMapa(),
-        'comercio_id': _comercioId,
-      },
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+    await db.insert('fotos_cliente', {
+      ...foto.paraMapa(),
+      'comercio_id': _comercioId,
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   Future<void> excluir(String fotoId) async {

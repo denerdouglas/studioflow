@@ -121,7 +121,8 @@ class ItemEstoque {
       unidade: unidade ?? this.unidade,
       conteudoPorUnidade: conteudoPorUnidade ?? this.conteudoPorUnidade,
       unidadeConteudo: unidadeConteudo ?? this.unidadeConteudo,
-      revisaoModelagemEstoque: revisaoModelagemEstoque ?? this.revisaoModelagemEstoque,
+      revisaoModelagemEstoque:
+          revisaoModelagemEstoque ?? this.revisaoModelagemEstoque,
       custoUnitario: custoUnitario ?? this.custoUnitario,
       fornecedor: fornecedor ?? this.fornecedor,
       codigoBarras: codigoBarras ?? this.codigoBarras,
