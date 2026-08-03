@@ -7,7 +7,7 @@ import 'package:studioflow_backend/src/database_config.dart';
 Future<void> main() async {
   final databaseUrl = Platform.environment['DATABASE_URL']?.trim();
   if (databaseUrl == null || databaseUrl.isEmpty) {
-    stderr.writeln('Defina DATABASE_URL antes de executar as migrações.');
+    stderr.writeln('Defina DATABASE_URL antes de executar as migraÃ§Ãµes.');
     exitCode = 64;
     return;
   }
@@ -40,13 +40,16 @@ Future<void> main() async {
         applied = result.isNotEmpty;
       }
       if (applied) {
-        stdout.writeln('Migração $name já aplicada.');
+        stdout.writeln('MigraÃ§Ã£o $name jÃ¡ aplicada.');
         continue;
       }
       stdout.writeln('Aplicando $name...');
-      await connection.execute(await file.readAsString());
+      await connection.execute(
+        await file.readAsString(),
+        queryMode: QueryMode.simple,
+      );
     }
-    stdout.writeln('Migrações concluídas.');
+    stdout.writeln('MigraÃ§Ãµes concluÃ­das.');
   } finally {
     await connection.close();
   }
