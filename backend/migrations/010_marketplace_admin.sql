@@ -1,6 +1,6 @@
 -- Migration 010: Marketplace Admin & V2 Architecture
 
--- 1. Criação da estrutura de Platform Admin
+-- 1. CriaÃ§Ã£o da estrutura de Platform Admin
 CREATE TABLE IF NOT EXISTS platform_admins (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id uuid UNIQUE NOT NULL, -- references users(id) in logic (cross-tenant)
@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS platform_admins (
   last_login_at timestamptz
 );
 
--- 2. Evolução de affiliate_programs para marketplace_partners
+-- 2. EvoluÃ§Ã£o de affiliate_programs para marketplace_partners
 ALTER TABLE affiliate_programs RENAME TO marketplace_partners;
 ALTER INDEX affiliate_programs_pkey RENAME TO marketplace_partners_pkey;
 
@@ -34,18 +34,18 @@ ALTER TABLE marketplace_partners
   ADD COLUMN IF NOT EXISTS public_config jsonb NOT NULL DEFAULT '{}'::jsonb,
   ADD COLUMN IF NOT EXISTS notes text;
 
--- Atualização dos dados herdados
+-- AtualizaÃ§Ã£o dos dados herdados
 UPDATE marketplace_partners 
 SET status = CASE WHEN enabled THEN 'active' ELSE 'suspended' END,
     slug = lower(regexp_replace(name, '[^a-zA-Z0-9]+', '-', 'g')),
     affiliate_identifier = partner_id;
 
--- Podemos remover as antigas para forçar a migração de tipo, ou manter.
+-- Podemos remover as antigas para forÃ§ar a migraÃ§Ã£o de tipo, ou manter.
 -- Removemos enabled e partner_id pois foram migrados
 ALTER TABLE marketplace_partners DROP COLUMN IF EXISTS enabled;
 ALTER TABLE marketplace_partners DROP COLUMN IF EXISTS partner_id;
 
--- 3. Criação da tabela de domínios validados
+-- 3. CriaÃ§Ã£o da tabela de domÃ­nios validados
 CREATE TABLE IF NOT EXISTS marketplace_partner_domains (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   partner_id text NOT NULL REFERENCES marketplace_partners(id) ON DELETE CASCADE,
@@ -56,8 +56,8 @@ CREATE TABLE IF NOT EXISTS marketplace_partner_domains (
 );
 CREATE INDEX idx_marketplace_partner_domains ON marketplace_partner_domains(hostname);
 
--- Migração de allowed_domains (jsonb) da antiga tabela
-DO \$\$
+-- MigraÃ§Ã£o de allowed_domains (jsonb) da antiga tabela
+DO $$
 DECLARE 
   rec RECORD;
   domain_val text;
@@ -71,16 +71,16 @@ BEGIN
       ON CONFLICT DO NOTHING;
     END LOOP;
   END LOOP;
-END \$\$;
+END $$;
 
 ALTER TABLE marketplace_partners DROP COLUMN IF EXISTS allowed_domains;
 
--- 4. Evolução de marketplace_offers
--- Já existe e está associada a program_id, vamos renomear a fk se necessário, mas para manter compatibilidade:
+-- 4. EvoluÃ§Ã£o de marketplace_offers
+-- JÃ¡ existe e estÃ¡ associada a program_id, vamos renomear a fk se necessÃ¡rio, mas para manter compatibilidade:
 ALTER TABLE marketplace_offers RENAME COLUMN program_id TO partner_id;
--- Nota: A constraint antiga ainda se chamará marketplace_offers_program_id_fkey, deixaremos assim para evitar falhas ou podemos recriar.
+-- Nota: A constraint antiga ainda se chamarÃ¡ marketplace_offers_program_id_fkey, deixaremos assim para evitar falhas ou podemos recriar.
 
--- 5. Evolução de affiliate_clicks para marketplace_clicks
+-- 5. EvoluÃ§Ã£o de affiliate_clicks para marketplace_clicks
 ALTER TABLE affiliate_clicks RENAME TO marketplace_clicks;
 ALTER INDEX affiliate_clicks_pkey RENAME TO marketplace_clicks_pkey;
 ALTER INDEX idx_affiliate_click_business RENAME TO idx_marketplace_click_business;
@@ -108,13 +108,13 @@ ALTER TABLE marketplace_clicks
 
 CREATE INDEX idx_marketplace_clicks_status ON marketplace_clicks(click_status);
 
--- 6. Evolução de affiliate_conversions para marketplace_conversion_events
+-- 6. EvoluÃ§Ã£o de affiliate_conversions para marketplace_conversion_events
 ALTER TABLE affiliate_conversions RENAME TO marketplace_conversion_events;
 ALTER INDEX affiliate_conversions_pkey RENAME TO marketplace_conversion_events_pkey;
 ALTER TABLE marketplace_conversion_events RENAME COLUMN program_id TO partner_id;
--- Unique constraint antiga ainda valerá
+-- Unique constraint antiga ainda valerÃ¡
 
--- 7. Criação de Cache, Buscas, Campanhas e Auditoria
+-- 7. CriaÃ§Ã£o de Cache, Buscas, Campanhas e Auditoria
 CREATE TABLE IF NOT EXISTS marketplace_categories (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   parent_id uuid REFERENCES marketplace_categories(id),
@@ -149,7 +149,7 @@ CREATE TABLE IF NOT EXISTS marketplace_products_cache (
 CREATE INDEX idx_marketplace_cache_expire ON marketplace_products_cache(expires_at);
 
 CREATE TABLE IF NOT EXISTS marketplace_search_logs (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(), -- Pode usar v7 na inserção
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(), -- Pode usar v7 na inserÃ§Ã£o
   business_id uuid, -- Opcional, log de quem buscou
   user_id uuid,
   query text NOT NULL,
@@ -176,8 +176,11 @@ CREATE TABLE IF NOT EXISTS marketplace_admin_audit (
 
 -- Inserir registros na schema_migrations
 INSERT INTO schema_migrations (version)
-VALUES ('010_marketplace_admin')
+VALUES (10)
 ON CONFLICT (version) DO NOTHING;
 
--- Views de compatibilidade não serão necessárias pois renomeamos e os códigos que acessavam 'affiliate_programs' 
--- deverão ser refatorados na etapa 3B.2 (nenhuma interface os consumia ainda em prod de forma forte).
+-- Views de compatibilidade nÃ£o serÃ£o necessÃ¡rias pois renomeamos e os cÃ³digos que acessavam 'affiliate_programs' 
+-- deverÃ£o ser refatorados na etapa 3B.2 (nenhuma interface os consumia ainda em prod de forma forte).
+
+
+
