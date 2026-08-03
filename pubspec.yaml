@@ -2,7 +2,7 @@ name: studioflow
 description: "A new Flutter project."
 publish_to: 'none'
 
-version: 1.4.6+4017
+version: 1.4.7+4018
 
 environment:
   sdk: ^3.12.2

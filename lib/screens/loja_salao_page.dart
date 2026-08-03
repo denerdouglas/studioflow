@@ -5,6 +5,7 @@ import '../models/domain/loja.dart';
 import '../repositories/loja_repository.dart';
 import '../services/session_controller.dart';
 import 'vision_scanner_page.dart';
+import 'catalogos_loja_page.dart';
 import 'central_reposicao_completa_page.dart';
 import 'comandas_loja_page.dart';
 import 'joias_consignadas_page.dart';
@@ -75,6 +76,36 @@ class _LojaSalaoPageState extends State<LojaSalaoPage> {
             VoidCallback acao,
           })
         >[
+          (
+            titulo: 'Criar catálogo',
+            subtitulo: 'Monte seus próprios catálogos, tipos e produtos',
+            icone: Icons.add_business_outlined,
+            permissao: AcaoPermissao.movimentarEstoque,
+            acao: () => abrir(const CatalogosLojaPage(abrirCriacao: true)),
+          ),
+          (
+            titulo: 'Catálogos',
+            subtitulo:
+                'Joias, bebidas, cosméticos ou qualquer catálogo personalizado',
+            icone: Icons.storefront_outlined,
+            permissao: AcaoPermissao.visualizarEstoque,
+            acao: () => abrir(const CatalogosLojaPage()),
+          ),
+          (
+            titulo: 'Gerar comanda',
+            subtitulo:
+                'Combine produtos de vários catálogos em uma única comanda',
+            icone: Icons.post_add_outlined,
+            permissao: AcaoPermissao.realizarVenda,
+            acao: () => abrir(const ComandasLojaPage()),
+          ),
+          (
+            titulo: 'Joias consignadas',
+            subtitulo: 'Maletas, lotes, peças, vendas e devoluções',
+            icone: Icons.diamond_outlined,
+            permissao: AcaoPermissao.acessarConsignacao,
+            acao: () => abrir(const JoiasConsignadasPage()),
+          ),
           (
             titulo: 'Produtos',
             subtitulo: 'Cadastro, pesquisa, detalhes e histórico',

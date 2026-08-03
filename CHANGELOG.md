@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.4.7] - 2026-08-03
+
+### Added
+- Catálogos personalizados da Loja por comércio e unidade, com nome, descrição, capa, ícone, ordenação, tipo de controle e inativação com preservação de histórico.
+- Produtos de catálogo com campos dinâmicos, cadastro manual, scanner/QR/OCR, importação em lote, edição, duplicação e proteção contra exclusão com histórico.
+- Rastreamento de itens individuais por código único e integração dos produtos de múltiplos catálogos em uma única comanda.
+- Componente global `ContextActionMenu` para botão de ações, pressão longa nativa, clique direito, teclado, acessibilidade e feedback tátil.
+- Serviço global de ações reversíveis com aviso “Desfazer”, auditoria e operação correspondente na fila de sincronização.
+- Testes dedicados a catálogos, produtos dinâmicos, itens únicos, comandas mult catálogo e menu contextual.
+
+### Changed
+- A Loja do Salão passa a priorizar Criar catálogo, Catálogos, Gerar comanda, Joias consignadas, Histórico de vendas e Contas a receber, sem criar uma loja paralela.
+- Banco local atualizado para a versão 26, reutilizando estoque, comandas, consignação, contas a receber e sincronização existentes.
 ## [1.4.6] - 2026-08-03
 
 ### Changed

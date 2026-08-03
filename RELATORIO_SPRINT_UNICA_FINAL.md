@@ -1,9 +1,36 @@
 # Relatório da Sprint Única Final
 
 Data: 03/08/2026
-Versão: `1.4.5+4016`
+Versão: `1.4.7+4018`
 Branch: `release/v1.4.4-final`
 
+## Adendo final — Loja personalizável e padrões globais
+
+### Implementado nesta Sprint
+
+- A Loja atual foi refatorada para catálogos definidos pela dona do estabelecimento, isolados por comércio e unidade, sem categorias rígidas e sem criar uma Loja paralela.
+- Catálogos suportam criação, edição, capa/ícone, tipo de controle, ordenação, ativação, inativação e exclusão física somente quando vazios.
+- Produtos suportam cadastro manual, código de barras, QR, OCR e importação em lote, além de edição, duplicação, inativação e exclusão somente sem histórico.
+- Foram conectados os tipos comum, consignado, item individual, alimento/bebida, validade, consumível e outro aos registros existentes de estoque, peças únicas, comandas, consignação e contas a receber.
+- Uma comanda aceita itens de diferentes catálogos e mantém cálculo único de total.
+- `ContextActionMenu` unifica menu contextual, pressão longa nativa, clique direito, teclado, acessibilidade e vibração tátil.
+- `UndoActionService` registra estado anterior/novo, oferece sete segundos para desfazer, audita a reversão e enfileira sincronização idempotente da ação e da reversão.
+- A migration local v26 cria somente as tabelas auxiliares necessárias e amplia o estoque principal; não duplica stores, estoque, comandas ou Loja.
+
+### Já existente e apenas validado
+
+- Scanner/QR/OCR, estoque principal, comandas, joias consignadas, contas a receber, fila de sincronização, permissões e auditorias de negócio já existiam e foram reutilizados.
+- A baixa de estoque, comissão e pagamentos das comandas continuam no fluxo transacional principal já existente.
+
+### Dependência externa pendente
+
+- A suíte PostgreSQL descartável permanece condicionada a `POSTGRES_TEST_URL`; sem essa variável não há alegação de execução positiva.
+- Publicação, VPS, Nginx e validação remota foram retirados do escopo por instrução explícita.
+
+### Indisponível/oculto em produção
+
+- Integrações externas sem credenciais continuam retornando configuração pendente/503 e não simulam sucesso.
+- Nenhum APK ou AAB foi gerado nesta conclusão local.
 ## Resultado executivo
 
 A Sprint Única Final foi concluída sem criar uma sprint adicional. O aplicativo e o backend passaram em análise estática e testes antes do versionamento. Os artefatos Android desta versão devem ser gerados com o backend público de produção `https://api.studioflowapp.com.br`.
