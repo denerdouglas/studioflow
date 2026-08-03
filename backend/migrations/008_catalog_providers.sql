@@ -1,4 +1,4 @@
-CREATE TABLE IF NOT EXISTS catalog_search_logs (
+﻿CREATE TABLE IF NOT EXISTS catalog_search_logs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     gtin TEXT NOT NULL,
     provider TEXT NOT NULL,
@@ -15,3 +15,6 @@ CREATE TABLE IF NOT EXISTS catalog_search_logs (
 
 CREATE INDEX IF NOT EXISTS idx_catalog_search_logs_gtin ON catalog_search_logs(gtin);
 CREATE INDEX IF NOT EXISTS idx_catalog_search_logs_provider ON catalog_search_logs(provider);
+INSERT INTO schema_migrations (version)
+VALUES (8)
+ON CONFLICT DO NOTHING;

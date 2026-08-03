@@ -1,4 +1,4 @@
-BEGIN;
+﻿BEGIN;
 
 CREATE TABLE subscriptions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -37,7 +37,7 @@ CREATE INDEX idx_subscriptions_purchase_token_hash ON subscriptions(purchase_tok
 -- EXCLUDE constraints require btree_gist extension for partial exclusion based on text, 
 -- or we can use a partial unique index. A partial UNIQUE index on business_id where state is active is simpler:
 -- Wait, a business can have multiple active if one is being replaced, but linkedPurchaseToken handles that.
--- "Garantir no banco que não existam duas assinaturas simultaneamente concedendo entitlement ativo ao mesmo business_id"
+-- "Garantir no banco que nÃ£o existam duas assinaturas simultaneamente concedendo entitlement ativo ao mesmo business_id"
 CREATE UNIQUE INDEX idx_unique_active_subscription_per_business 
 ON subscriptions(business_id) 
 WHERE state IN ('active', 'trial', 'grace_period');
@@ -56,6 +56,7 @@ CREATE TABLE subscription_events (
 CREATE INDEX idx_subscription_events_sub_id ON subscription_events(subscription_id);
 
 -- Update schema_migrations
-INSERT INTO schema_migrations (version, applied_at) VALUES ('009_subscriptions', NOW());
+INSERT INTO schema_migrations (version, applied_at) VALUES (9, NOW()) ON CONFLICT DO NOTHING;
 
 COMMIT;
+
