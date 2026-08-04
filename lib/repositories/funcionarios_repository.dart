@@ -350,6 +350,39 @@ class FuncionariosRepository {
     );
   }
 
+  Future<bool> excluirSeSemHistorico(String id) async {
+    final db = await _databaseService.database;
+    return db.transaction((tx) async {
+      final usos = await tx.rawQuery(
+        '''SELECT
+          (SELECT COUNT(*) FROM agendamentos
+            WHERE comercio_id=? AND profissional_id=?) +
+          (SELECT COUNT(*) FROM comissoes
+            WHERE comercio_id=? AND profissional_id=?) +
+          (SELECT COUNT(*) FROM pacote_vendas
+            WHERE comercio_id=? AND vendedor_profissional_id=?) AS total''',
+        [_comercioId, id, _comercioId, id, _comercioId, id],
+      );
+      if ((usos.single['total'] as num? ?? 0) > 0) return false;
+      await tx.delete(
+        'profissional_funcoes',
+        where: 'comercio_id=? AND profissional_id=?',
+        whereArgs: [_comercioId, id],
+      );
+      await tx.delete(
+        'profissional_servicos',
+        where: 'profissional_id=?',
+        whereArgs: [id],
+      );
+      return await tx.delete(
+            'profissionais',
+            where: 'id=? AND comercio_id=?',
+            whereArgs: [id, _comercioId],
+          ) >
+          0;
+    });
+  }
+
   Future<bool> existeNome({required String nome, String? ignorarId}) async {
     final Database db = await _databaseService.database;
 

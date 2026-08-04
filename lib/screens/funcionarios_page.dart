@@ -115,6 +115,42 @@ class _FuncionariosPageState extends State<FuncionariosPage> {
         ativo: !funcionario.ativo,
       );
       await carregar();
+      return;
+    }
+
+    if (acao == 'excluir') {
+      final confirmou = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Excluir profissional?'),
+          content: const Text(
+            'O profissional será excluído somente se nunca tiver sido utilizado.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Excluir'),
+            ),
+          ],
+        ),
+      );
+      if (confirmou != true) return;
+      final excluiu = await repository.excluirSeSemHistorico(funcionario.id);
+      if (!mounted) return;
+      if (!excluiu) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Profissional com histórico não pode ser excluído. Inative-o para preservar os registros.',
+            ),
+          ),
+        );
+      }
+      await carregar();
     }
   }
 
@@ -126,7 +162,7 @@ class _FuncionariosPageState extends State<FuncionariosPage> {
         backgroundColor: kCorFundo,
         surfaceTintColor: Colors.transparent,
         title: const Text(
-          'Funcionários',
+          'Equipe e Comissões',
           style: TextStyle(color: kTextoEscuro, fontWeight: FontWeight.bold),
         ),
         actions: [
@@ -394,6 +430,13 @@ class OpcoesFuncionarioSheet extends StatelessWidget {
               Navigator.pop(context, 'status');
             },
           ),
+          ListTile(
+            leading: const Icon(Icons.delete_outline, color: kVermelho),
+            title: const Text('Excluir profissional'),
+            onTap: () {
+              Navigator.pop(context, 'excluir');
+            },
+          ),
         ],
       ),
     );
@@ -525,10 +568,10 @@ class _FuncionarioFormSheetState extends State<FuncionarioFormSheet> {
   void salvar() {
     final nome = nomeController.text.trim();
 
-    if (nome.isEmpty) {
+    if (nome.isEmpty || whatsappController.text.trim().isEmpty) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Informe o nome.')));
+      ).showSnackBar(const SnackBar(content: Text('Informe nome e WhatsApp.')));
       return;
     }
 
@@ -686,7 +729,7 @@ class _FuncionarioFormSheetState extends State<FuncionarioFormSheet> {
                 backgroundColor: kCorPrincipal,
                 foregroundColor: Colors.white,
               ),
-              child: const Text('Salvar funcionário'),
+              child: const Text('Salvar profissional'),
             ),
           ],
         ),

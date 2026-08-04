@@ -14,13 +14,12 @@ import 'clientes_page.dart';
 import 'configuracoes_page.dart';
 import 'estoque_page.dart';
 import 'financeiro_page.dart';
-import 'funcionarios_page.dart';
+import 'gestao_equipe_servicos_page.dart';
 import 'ia_local_page.dart';
 import 'loja_salao_page.dart';
 import 'producao_page.dart';
 import 'privacy_page.dart';
 import 'relatorios_page.dart';
-import 'servicos_page.dart';
 import 'usuarios_page.dart';
 
 class MaisSprint2Page extends StatelessWidget {
@@ -47,16 +46,16 @@ class MaisSprint2Page extends StatelessWidget {
         const ClientesPage(),
       ),
       _ItemMenu(
-        'Serviços',
-        Icons.design_services,
-        ModuloPermissao.servicos,
-        const ServicosPage(),
-      ),
-      _ItemMenu(
-        'Equipe profissional',
+        'Equipe e Comissões',
         Icons.groups_outlined,
         ModuloPermissao.funcionarios,
-        const FuncionariosPage(),
+        const EquipeComissoesPage(),
+      ),
+      _ItemMenu(
+        'Serviços e Pacotes',
+        Icons.design_services,
+        ModuloPermissao.servicos,
+        const ServicosPacotesPage(),
       ),
       _ItemMenu(
         'Funcionários e acessos',

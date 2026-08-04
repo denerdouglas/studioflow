@@ -11,6 +11,7 @@ import 'aniversarios_page.dart';
 import 'assinaturas_page.dart';
 import 'central_atendimento_page.dart';
 import 'clientes_page.dart';
+import 'gestao_equipe_servicos_page.dart';
 import 'commercial_center_page.dart';
 import 'ia_local_page.dart';
 import 'loja_salao_page.dart';
@@ -61,6 +62,24 @@ class MaisPremiumPage extends StatelessWidget {
               title: 'Clientes',
               subtitle: 'Cadastro, contatos e histórico',
               destination: const ClientesPage(),
+            ),
+          if (usuario.pode(ModuloPermissao.funcionarios))
+            _buildMenuItem(
+              context: context,
+              icon: Icons.groups_outlined,
+              color: const Color(0xFF4F65B8),
+              title: 'Equipe e Comissões',
+              subtitle: 'Profissionais, colaboradores e comissões',
+              destination: const EquipeComissoesPage(),
+            ),
+          if (usuario.pode(ModuloPermissao.servicos))
+            _buildMenuItem(
+              context: context,
+              icon: Icons.design_services_outlined,
+              color: const Color(0xFF8E5CE6),
+              title: 'Serviços e Pacotes',
+              subtitle: 'Serviços, preços, duração e combos',
+              destination: const ServicosPacotesPage(),
             ),
           if (usuario.pode(ModuloPermissao.agenda))
             _buildMenuItem(
