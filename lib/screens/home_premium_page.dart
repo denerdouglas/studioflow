@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import '../core/helpers/app_formatters.dart';
 import '../core/theme/studioflow_theme.dart';
 import '../models/domain/acesso.dart';
+import '../repositories/modalidades_repository.dart';
 import '../services/session_controller.dart';
 import '../services/dashboard_summary_service.dart';
 import '../widgets/shared/premium_card.dart';
 import 'ia_local_page.dart';
+import 'modalidades_page.dart';
 import 'configuracoes_page.dart';
 
 class HomePremiumPage extends StatefulWidget {
@@ -26,7 +28,9 @@ class HomePremiumPage extends StatefulWidget {
 
 class _HomePremiumPageState extends State<HomePremiumPage> {
   final DashboardSummaryService _summaryService = DashboardSummaryService();
+  final ModalidadesRepository _modalidadesRepository = ModalidadesRepository();
   DashboardSummary? _summary;
+  List<ModalidadeRegistro> _modalidades = const [];
   bool _isLoading = true;
   String? _error;
 
@@ -45,9 +49,13 @@ class _HomePremiumPageState extends State<HomePremiumPage> {
 
     try {
       final summary = await _summaryService.loadSummary(DateTime.now());
+      final modalidades = await _modalidadesRepository.listar(
+        incluirInativas: false,
+      );
       if (!mounted) return;
       setState(() {
         _summary = summary;
+        _modalidades = modalidades.where((item) => item.exibirHome).toList();
         _isLoading = false;
       });
     } catch (e) {
@@ -205,6 +213,10 @@ class _HomePremiumPageState extends State<HomePremiumPage> {
       sliver: SliverList(
         delegate: SliverChildListDelegate([
           _buildIaPanel(),
+          if (_modalidades.isNotEmpty) ...[
+            const SizedBox(height: 20),
+            _buildModalidades(),
+          ],
           const SizedBox(height: 24),
           _buildSectionTitle('Caixa'),
           const SizedBox(height: 12),
@@ -227,6 +239,47 @@ class _HomePremiumPageState extends State<HomePremiumPage> {
     );
   }
 
+  Widget _buildModalidades() => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Row(
+        children: [
+          const Expanded(
+            child: Text(
+              'Áreas do estabelecimento',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+          ),
+          if (SessionController.instance.usuario!.pode(
+            ModuloPermissao.configuracoes,
+          ))
+            TextButton(
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const ModalidadesPage()),
+              ).then((_) => _loadData()),
+              child: const Text('Organizar'),
+            ),
+        ],
+      ),
+      const SizedBox(height: 8),
+      Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: _modalidades
+            .map(
+              (item) => Chip(
+                avatar: Icon(
+                  item.favorita ? Icons.star : Icons.category_outlined,
+                  size: 18,
+                ),
+                label: Text(item.nome),
+              ),
+            )
+            .toList(),
+      ),
+    ],
+  );
   Widget _buildSectionTitle(String title) {
     return Text(
       title,

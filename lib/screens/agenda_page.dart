@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../repositories/agenda_completa_repository.dart';
 import '../repositories/agenda_repository.dart';
+import '../repositories/modalidades_repository.dart';
 import 'disponibilidade_page.dart';
 import '../repositories/cadastros_basicos_repository.dart';
 import '../repositories/cliente_repository.dart';
@@ -31,6 +32,7 @@ class _AgendaPageState extends State<AgendaPage> {
   static const Color _textoClaro = Color(0xFF766A85);
 
   final AgendaRepository _agendaRepository = AgendaRepository();
+  final ModalidadesRepository _modalidadesRepository = ModalidadesRepository();
   final AgendaCompletaRepository _agendaCompletaRepository =
       AgendaCompletaRepository();
 
@@ -45,6 +47,10 @@ class _AgendaPageState extends State<AgendaPage> {
   List<ClienteRegistro> _clientes = [];
   List<ProfissionalBasicoRegistro> _profissionais = [];
   List<ServicoBasicoRegistro> _servicos = [];
+  List<ModalidadeRegistro> _modalidades = const [];
+  String? _modalidadeId;
+  Set<String> _servicosModalidade = const {};
+  Set<String> _profissionaisModalidade = const {};
 
   bool _carregando = true;
   bool _abriuFormularioInicial = false;
@@ -65,6 +71,7 @@ class _AgendaPageState extends State<AgendaPage> {
         _clienteRepository.listar(),
         _cadastrosRepository.listarProfissionais(),
         _cadastrosRepository.listarServicos(),
+        _modalidadesRepository.listar(incluirInativas: false),
       ]);
 
       if (!mounted) {
@@ -79,6 +86,7 @@ class _AgendaPageState extends State<AgendaPage> {
         _profissionais = resultados[2] as List<ProfissionalBasicoRegistro>;
 
         _servicos = resultados[3] as List<ServicoBasicoRegistro>;
+        _modalidades = resultados[4] as List<ModalidadeRegistro>;
 
         _carregando = false;
         _erro = null;
@@ -820,6 +828,8 @@ class _AgendaPageState extends State<AgendaPage> {
           children: [
             _cabecalho(),
             _seletorData(),
+            const SizedBox(height: 10),
+            _filtroModalidade(),
             const SizedBox(height: 12),
             Expanded(child: _conteudo()),
           ],
@@ -975,6 +985,51 @@ class _AgendaPageState extends State<AgendaPage> {
     );
   }
 
+  Widget _filtroModalidade() => SizedBox(
+    height: 40,
+    child: ListView(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      scrollDirection: Axis.horizontal,
+      children: [
+        ChoiceChip(
+          label: const Text('Todos'),
+          selected: _modalidadeId == null,
+          onSelected: (_) => setState(() {
+            _modalidadeId = null;
+            _servicosModalidade = const {};
+            _profissionaisModalidade = const {};
+          }),
+        ),
+        const SizedBox(width: 8),
+        ..._modalidades.map(
+          (item) => Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: ChoiceChip(
+              label: Text(item.nome),
+              selected: _modalidadeId == item.id,
+              onSelected: (_) async {
+                final links = await _modalidadesRepository.opcoesVinculos(
+                  item.id,
+                );
+                if (!mounted) return;
+                setState(() {
+                  _modalidadeId = item.id;
+                  _servicosModalidade = links['servicos']!
+                      .where((row) => row['selecionado'] == 1)
+                      .map((row) => row['id'] as String)
+                      .toSet();
+                  _profissionaisModalidade = links['profissionais']!
+                      .where((row) => row['selecionado'] == 1)
+                      .map((row) => row['id'] as String)
+                      .toSet();
+                });
+              },
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
   Widget _conteudo() {
     if (_carregando) {
       return const Center(
@@ -986,15 +1041,24 @@ class _AgendaPageState extends State<AgendaPage> {
       return Center(child: Text(_erro!));
     }
 
-    if (_agendamentos.isEmpty) {
-      return const Center(child: Text('Nenhum agendamento para esta data.'));
+    final visible = _modalidadeId == null
+        ? _agendamentos
+        : _agendamentos
+              .where(
+                (item) =>
+                    _servicosModalidade.contains(item.servicoId) ||
+                    _profissionaisModalidade.contains(item.profissionalId),
+              )
+              .toList();
+    if (visible.isEmpty) {
+      return const Center(child: Text('Nenhum agendamento para este filtro.'));
     }
 
     return ListView.builder(
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 110),
-      itemCount: _agendamentos.length,
+      itemCount: visible.length,
       itemBuilder: (context, index) {
-        final agendamento = _agendamentos[index];
+        final agendamento = visible[index];
 
         return _AgendamentoCard(
           agendamento: agendamento,

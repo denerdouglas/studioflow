@@ -84,11 +84,26 @@ class IaCommandService {
     if (_isReminderAction(normalized)) {
       return _prepareReminders(unitId: unitId, now: now);
     }
+    if (_isLotExpiryUpdate(normalized)) {
+      return _prepareLotExpiry(text, normalized);
+    }
+    if (_isProductInactivate(normalized)) {
+      return _prepareProductInactivation(text, normalized);
+    }
+    if (_isServicePriceUpdate(normalized)) {
+      return _prepareServicePrice(text, normalized);
+    }
+    if (_isUnitTransfer(normalized)) {
+      return _prepareUnitTransfer(text, normalized, unitId);
+    }
     if (_isStockCreate(normalized)) {
       return _prepareStock(text, normalized, unitId);
     }
     if (_isStockAdd(normalized)) {
       return _prepareStockAddition(text, normalized, unitId);
+    }
+    if (_isProfessionalModalityLink(normalized)) {
+      return _prepareProfessionalModality(text, normalized);
     }
     if (_isServiceCreate(normalized)) {
       return _prepareService(text, normalized);
@@ -160,8 +175,21 @@ class IaCommandService {
             user,
             preview,
           ),
+          'vincular_profissional_modalidade' => _executeProfessionalModality(
+            tx,
+            user,
+            preview,
+          ),
           'criar_servico' => _executeService(tx, user, preview),
           'criar_colaborador' => _executeProfessional(tx, user, preview),
+          'alterar_validade_lote' => _executeLotExpiry(tx, user, preview),
+          'inativar_produto' => _executeProductInactivation(tx, user, preview),
+          'alterar_preco_servico' => _executeServicePrice(tx, user, preview),
+          'transferir_estoque_unidade' => _executeUnitTransfer(
+            tx,
+            user,
+            preview,
+          ),
           'criar_saida_caixa' => _executeExpense(tx, user, preview),
           _ => throw StateError('Comando ainda não possui executor real.'),
         };
@@ -254,6 +282,19 @@ class IaCommandService {
     );
     final code = RegExp(r'codigo\s*(\d{4,})').firstMatch(text)?.group(1);
     final expiry = _date(text);
+    final fabrication = text.contains('fabricacao') ? _date(text) : null;
+    final lot = _afterWord(text, 'lote');
+    final internalCode = RegExp(
+      r'codigo interno\s*([a-z0-9-]+)',
+    ).firstMatch(text)?.group(1);
+    final supplier = _afterWord(text, 'fornecedor');
+    final minimum = _number(
+      text,
+      RegExp(r'estoque minimo\s*(\d+(?:[.,]\d+)?)'),
+    );
+    final measure =
+        RegExp(r'\b(un|unidade|ml|l|g|kg)\b').firstMatch(text)?.group(1) ??
+        'un';
     final cost = _money(text, 'custo');
     final price = _money(text, 'preco de venda|preco');
     final name = _between(
@@ -277,8 +318,15 @@ class IaCommandService {
         'marca': brand,
         'cor': color,
         'quantidade': quantity,
+        'data_fabricacao': fabrication?.toIso8601String(),
         'data_validade': expiry?.toIso8601String(),
+        'lote': lot,
+        'unidade_medida': measure,
         'codigo_barras': code,
+        'codigo_interno': internalCode,
+        'fornecedor': supplier,
+        'estoque_minimo': minimum,
+        'categoria_sugerida': _suggestCategory(name),
         'custo': cost,
         'preco_venda': price,
         'texto_original': original,
@@ -319,8 +367,11 @@ class IaCommandService {
     final name = _between(
       text,
       RegExp(r'crie (?:um )?servico de\s+'),
-      RegExp(r',|\s+duracao'),
+      RegExp(r',|\s+(?:duracao|na (?:area de )?)'),
     );
+    final modality = RegExp(
+      r'na (?:area de )?([a-z0-9 ]+?)(?:\.|,|$)',
+    ).firstMatch(text)?.group(1)?.trim();
     final professional = RegExp(
       r'(?:feito|realizado) pela?\s+([a-z ]+?)(?:\.|$)',
     ).firstMatch(text)?.group(1)?.trim();
@@ -333,12 +384,33 @@ class IaCommandService {
         'duracao_minutos': duration,
         'preco': price,
         'profissional': professional,
+        'modalidade': modality,
         'texto_original': original,
       },
       [
         if (name == null) 'nome',
         if (duration == null) 'duração',
         if (price == null) 'preço',
+      ],
+    );
+  }
+
+  IaCommandPreview _prepareProfessionalModality(String original, String text) {
+    final match = RegExp(
+      r'vincule\s+([a-z ]+?)\s+(?:tambem\s+)?(?:a|na)\s+(?:area de\s+)?(.+?)(?:\.|$)',
+    ).firstMatch(text);
+    return _preview(
+      'vincular_profissional_modalidade',
+      'funcionarios',
+      'Vincular colaborador à modalidade',
+      {
+        'profissional': match?.group(1)?.trim(),
+        'modalidade': match?.group(2)?.trim(),
+        'texto_original': original,
+      },
+      [
+        if (match?.group(1) == null) 'colaborador',
+        if (match?.group(2) == null) 'modalidade',
       ],
     );
   }
@@ -366,6 +438,92 @@ class IaCommandService {
       [
         if (match?.group(1) == null) 'nome',
         if (roles == null || roles.isEmpty) 'funções',
+      ],
+    );
+  }
+
+  IaCommandPreview _prepareLotExpiry(String original, String text) {
+    final lot = RegExp(r'lote\s+([a-z0-9-]+)').firstMatch(text)?.group(1);
+    final expiry = _date(text);
+    return _preview(
+      'alterar_validade_lote',
+      'estoque',
+      'Alterar vencimento do lote',
+      {
+        'lote': lot,
+        'data_validade': expiry?.toIso8601String(),
+        'texto_original': original,
+      },
+      [if (lot == null) 'lote', if (expiry == null) 'nova data de vencimento'],
+    );
+  }
+
+  IaCommandPreview _prepareProductInactivation(String original, String text) {
+    final rawName = RegExp(
+      r'inative (?:o produto )?(.+?)(?:\.|$)',
+    ).firstMatch(text)?.group(1)?.trim();
+    final name = rawName
+        ?.replaceFirst(RegExp(r'\s+lote\s+[a-z0-9-]+.*$'), '')
+        .trim();
+    return _preview(
+      'inativar_produto',
+      'estoque',
+      'Inativar produto',
+      {'produto': name, 'texto_original': original},
+      [if (name == null) 'produto'],
+    );
+  }
+
+  IaCommandPreview _prepareServicePrice(String original, String text) {
+    final match = RegExp(
+      r'(?:preco|valor) do servico\s+(.+?)\s+para\s+(?:r.?\s*)?(\d+(?:[.,]\d+)?)',
+    ).firstMatch(text);
+    return _preview(
+      'alterar_preco_servico',
+      'servicos',
+      'Alterar preço do serviço',
+      {
+        'servico': match?.group(1)?.trim(),
+        'preco': match == null
+            ? null
+            : double.tryParse(match.group(2)!.replaceAll(',', '.')),
+        'texto_original': original,
+      },
+      [
+        if (match?.group(1) == null) 'serviço',
+        if (match?.group(2) == null) 'novo preço',
+      ],
+    );
+  }
+
+  IaCommandPreview _prepareUnitTransfer(
+    String original,
+    String text,
+    String? sourceUnitId,
+  ) {
+    final quantity = _number(text, RegExp(r'transfira\s+(\d+(?:[.,]\d+)?)'));
+    final product = RegExp(
+      r'unidades? (?:do |de )?(.+?)\s+para (?:o )?estoque',
+    ).firstMatch(text)?.group(1)?.trim();
+    final destination = RegExp(
+      r'estoque (?:da|de) unidade\s+([a-z0-9 -]+?)(?:\.|$)',
+    ).firstMatch(text)?.group(1)?.trim();
+    return _preview(
+      'transferir_estoque_unidade',
+      'estoque',
+      'Transferir estoque entre unidades',
+      {
+        'unidade_origem_id': sourceUnitId,
+        'unidade_destino': destination,
+        'produto': product,
+        'quantidade': quantity,
+        'texto_original': original,
+      },
+      [
+        if (sourceUnitId == null) 'unidade de origem ativa',
+        if (destination == null) 'unidade de destino',
+        if (product == null) 'produto',
+        if (quantity == null) 'quantidade',
       ],
     );
   }
@@ -487,20 +645,65 @@ class IaCommandService {
     IaCommandPreview p,
   ) async {
     final code = p.fields['codigo_barras'] as String?;
+    final now = DateTime.now().toUtc().toIso8601String();
+    final amount = (p.fields['quantidade'] as num).toDouble();
+    Map<String, Object?>? existing;
     if (code != null) {
       final duplicates = await tx.query(
         'estoque',
         where: 'comercio_id=? AND codigo_barras=? AND ativo=1',
         whereArgs: [user.comercioId, code],
       );
-      if (duplicates.isNotEmpty) {
+      if (duplicates.length > 1) {
+        throw StateError(
+          'Código duplicado em mais de um cadastro; escolha o registro exato.',
+        );
+      }
+      if (duplicates.isNotEmpty) existing = duplicates.single;
+    }
+    if (existing != null) {
+      if (p.fields['data_validade'] == null) {
         throw StateError(
           'Já existe produto com este código. Escolha adicionar quantidade, atualizar ou criar novo lote.',
         );
       }
+      final sameLots = await tx.query(
+        'estoque_lotes_ia',
+        where:
+            'comercio_id=? AND estoque_id=? AND COALESCE(unidade_id,\'\')=COALESCE(?,\'\') AND data_validade=? AND ativo=1',
+        whereArgs: [
+          user.comercioId,
+          existing['id'],
+          p.fields['unidade_id'],
+          p.fields['data_validade'],
+        ],
+      );
+      if (sameLots.isNotEmpty) {
+        throw StateError(
+          'Este produto já possui lote com o mesmo vencimento. Escolha adicionar quantidade ou atualizar o lote.',
+        );
+      }
+      final lotId = 'lote_${IdGenerator.temporal()}';
+      await _insertLot(tx, user, p, existing['id'] as String, lotId, now);
+      await tx.rawUpdate(
+        'UPDATE estoque SET quantidade_atual=quantidade_atual+? WHERE id=? AND comercio_id=?',
+        [amount, existing['id'], user.comercioId],
+      );
+      await _sync(
+        tx,
+        user,
+        existing['id'] as String,
+        'estoque',
+        'upsert',
+        p.fields,
+      );
+      return _result(
+        p,
+        existing['id'] as String,
+        'Novo lote $lotId criado no produto existente.',
+      );
     }
     final id = 'estoque_${IdGenerator.temporal()}';
-    final now = DateTime.now().toUtc().toIso8601String();
     final name = [
       p.fields['produto'],
       p.fields['marca'],
@@ -510,40 +713,57 @@ class IaCommandService {
       'id': id,
       'comercio_id': user.comercioId,
       'nome': name,
-      'categoria': 'Outros',
+      'categoria': p.fields['categoria_sugerida'] ?? 'Outros',
       'tipo': 'produto',
-      'quantidade_atual': p.fields['quantidade'],
-      'estoque_minimo': 0,
-      'unidade': 'un',
+      'quantidade_atual': amount,
+      'estoque_minimo': p.fields['estoque_minimo'] ?? 0,
+      'unidade': p.fields['unidade_medida'] ?? 'un',
       'custo_unitario': p.fields['custo'] ?? 0,
+      'fornecedor': p.fields['fornecedor'],
       'preco_venda': p.fields['preco_venda'] ?? 0,
       'codigo_barras': code,
+      'codigo_interno': p.fields['codigo_interno'],
       'data_validade': p.fields['data_validade'],
       'ativo': 1,
       'descontar_automaticamente': 1,
       'estoque_destino': 'uso_interno',
+      'observacoes': 'Criado pela Helloa Sophia',
       'data_cadastro': now,
     });
-    if (p.fields['data_validade'] != null) {
-      await tx.insert('estoque_lotes_ia', {
-        'id': 'lote_${IdGenerator.temporal()}',
-        'comercio_id': user.comercioId,
-        'unidade_id': p.fields['unidade_id'],
-        'estoque_id': id,
-        'quantidade': p.fields['quantidade'],
-        'data_validade': p.fields['data_validade'],
-        'custo': p.fields['custo'],
-        'preco_venda': p.fields['preco_venda'],
-        'codigo_barras': code,
-        'ativo': 1,
-        'criado_em': now,
-        'atualizado_em': now,
-      });
+    if (p.fields['data_validade'] != null ||
+        p.fields['lote'] != null ||
+        p.fields['unidade_id'] != null) {
+      await _insertLot(tx, user, p, id, 'lote_${IdGenerator.temporal()}', now);
     }
     await _sync(tx, user, id, 'estoque', 'upsert', p.fields);
     return _result(p, id, 'Produto cadastrado com ID $id.');
   }
 
+  Future<void> _insertLot(
+    DatabaseExecutor tx,
+    UsuarioAcesso user,
+    IaCommandPreview p,
+    String stockId,
+    String lotId,
+    String now,
+  ) => tx.insert('estoque_lotes_ia', {
+    'id': lotId,
+    'comercio_id': user.comercioId,
+    'unidade_id': p.fields['unidade_id'],
+    'estoque_id': stockId,
+    'lote': p.fields['lote'],
+    'quantidade': p.fields['quantidade'],
+    'data_fabricacao': p.fields['data_fabricacao'],
+    'data_validade': p.fields['data_validade'],
+    'custo': p.fields['custo'],
+    'preco_venda': p.fields['preco_venda'],
+    'codigo_barras': p.fields['codigo_barras'],
+    'codigo_interno': p.fields['codigo_interno'],
+    'observacoes': 'Criado pela Helloa Sophia',
+    'ativo': 1,
+    'criado_em': now,
+    'atualizado_em': now,
+  });
   Future<IaCommandResult> _executeStockAddition(
     DatabaseExecutor tx,
     UsuarioAcesso user,
@@ -620,8 +840,75 @@ class IaCommandService {
         'servico_id': id,
       });
     }
+    final modality = p.fields['modalidade'] as String?;
+    if (modality != null) {
+      final rows = await tx.query(
+        'modalidades_estabelecimento',
+        columns: ['id'],
+        where: 'comercio_id=? AND ativa=1 AND nome_normalizado=?',
+        whereArgs: [user.comercioId, _slug(modality)],
+      );
+      if (rows.length != 1) {
+        throw StateError(
+          'Modalidade informada não encontrada de forma inequívoca.',
+        );
+      }
+      await tx.insert('modalidade_servicos', {
+        'comercio_id': user.comercioId,
+        'modalidade_id': rows.single['id'],
+        'servico_id': id,
+        'ativo': 1,
+        'atualizado_em': now,
+      });
+    }
     await _sync(tx, user, id, 'servico', 'upsert', p.fields);
     return _result(p, id, 'Serviço criado com ID $id.');
+  }
+
+  Future<IaCommandResult> _executeProfessionalModality(
+    DatabaseExecutor tx,
+    UsuarioAcesso user,
+    IaCommandPreview p,
+  ) async {
+    final professionals = await tx.query(
+      'profissionais',
+      columns: ['id', 'nome'],
+      where: 'comercio_id=? AND ativo=1 AND LOWER(nome)=?',
+      whereArgs: [user.comercioId, p.fields['profissional']],
+    );
+    final modalities = await tx.query(
+      'modalidades_estabelecimento',
+      columns: ['id', 'nome'],
+      where: 'comercio_id=? AND ativa=1 AND nome_normalizado=?',
+      whereArgs: [user.comercioId, _slug(p.fields['modalidade'] as String)],
+    );
+    if (professionals.length != 1 || modalities.length != 1) {
+      throw StateError(
+        'Colaborador ou modalidade não encontrado de forma inequívoca.',
+      );
+    }
+    final professionalId = professionals.single['id'] as String;
+    final modalityId = modalities.single['id'] as String;
+    await tx.insert('modalidade_profissionais', {
+      'comercio_id': user.comercioId,
+      'modalidade_id': modalityId,
+      'profissional_id': professionalId,
+      'ativo': 1,
+      'atualizado_em': DateTime.now().toUtc().toIso8601String(),
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
+    await _sync(
+      tx,
+      user,
+      professionalId,
+      'modalidade_profissionais',
+      'upsert',
+      p.fields,
+    );
+    return _result(
+      p,
+      professionalId,
+      'Colaborador vinculado à modalidade ${modalities.single['nome']}.',
+    );
   }
 
   Future<IaCommandResult> _executeProfessional(
@@ -679,6 +966,224 @@ class IaCommandService {
     }
     await _sync(tx, user, id, 'profissional', 'upsert', p.fields);
     return _result(p, id, 'Colaborador criado com ID $id.');
+  }
+
+  Future<IaCommandResult> _executeLotExpiry(
+    DatabaseExecutor tx,
+    UsuarioAcesso user,
+    IaCommandPreview p,
+  ) async {
+    final lot = p.fields['lote'] as String;
+    final rows = await tx.query(
+      'estoque_lotes_ia',
+      where: 'comercio_id=? AND ativo=1 AND (LOWER(lote)=? OR LOWER(id)=?)',
+      whereArgs: [user.comercioId, lot.toLowerCase(), lot.toLowerCase()],
+    );
+    if (rows.length != 1) {
+      throw StateError(
+        rows.isEmpty
+            ? 'Lote não encontrado. Nenhuma alteração foi realizada.'
+            : 'Mais de um lote corresponde ao código informado.',
+      );
+    }
+    final id = rows.single['id'] as String;
+    await tx.update(
+      'estoque_lotes_ia',
+      {
+        'data_validade': p.fields['data_validade'],
+        'atualizado_em': DateTime.now().toUtc().toIso8601String(),
+      },
+      where: 'id=? AND comercio_id=?',
+      whereArgs: [id, user.comercioId],
+    );
+    await _sync(tx, user, id, 'estoque_lote', 'upsert', p.fields);
+    return _result(p, id, 'Vencimento do lote $id atualizado.');
+  }
+
+  Future<IaCommandResult> _executeProductInactivation(
+    DatabaseExecutor tx,
+    UsuarioAcesso user,
+    IaCommandPreview p,
+  ) async {
+    final rows = await tx.query(
+      'estoque',
+      columns: ['id', 'nome'],
+      where: 'comercio_id=? AND ativo=1 AND LOWER(nome) LIKE ?',
+      whereArgs: [user.comercioId, '%${p.fields['produto']}%'],
+    );
+    if (rows.length != 1) {
+      throw StateError(
+        rows.isEmpty
+            ? 'Produto não encontrado.'
+            : 'Há mais de um produto correspondente; informe o registro exato.',
+      );
+    }
+    final id = rows.single['id'] as String;
+    await tx.update(
+      'estoque',
+      {'ativo': 0},
+      where: 'id=? AND comercio_id=?',
+      whereArgs: [id, user.comercioId],
+    );
+    await _sync(tx, user, id, 'estoque', 'upsert', {'ativo': false});
+    return _result(p, id, 'Produto ${rows.single['nome']} inativado.');
+  }
+
+  Future<IaCommandResult> _executeServicePrice(
+    DatabaseExecutor tx,
+    UsuarioAcesso user,
+    IaCommandPreview p,
+  ) async {
+    final rows = await tx.query(
+      'servicos',
+      columns: ['id', 'nome'],
+      where: 'comercio_id=? AND LOWER(nome) LIKE ?',
+      whereArgs: [user.comercioId, '%${p.fields['servico']}%'],
+    );
+    if (rows.length != 1) {
+      throw StateError(
+        rows.isEmpty
+            ? 'Serviço não encontrado.'
+            : 'Há mais de um serviço correspondente; informe o registro exato.',
+      );
+    }
+    final id = rows.single['id'] as String;
+    await tx.update(
+      'servicos',
+      {'preco': p.fields['preco']},
+      where: 'id=? AND comercio_id=?',
+      whereArgs: [id, user.comercioId],
+    );
+    await _sync(tx, user, id, 'servico', 'upsert', {
+      'preco': p.fields['preco'],
+    });
+    return _result(
+      p,
+      id,
+      'Preço do serviço ${rows.single['nome']} atualizado.',
+    );
+  }
+
+  Future<IaCommandResult> _executeUnitTransfer(
+    DatabaseExecutor tx,
+    UsuarioAcesso user,
+    IaCommandPreview p,
+  ) async {
+    final sourceUnitId = p.fields['unidade_origem_id'] as String;
+    final destinationText = (p.fields['unidade_destino'] as String)
+        .toLowerCase();
+    final units = await tx.query(
+      'unidades',
+      columns: ['id', 'nome', 'codigo'],
+      where: 'comercio_id=? AND ativo=1',
+      whereArgs: [user.comercioId],
+      orderBy: 'principal DESC, nome COLLATE NOCASE',
+    );
+    Map<String, Object?>? destination;
+    final position = int.tryParse(destinationText);
+    if (position != null && position > 0 && position <= units.length) {
+      destination = units[position - 1];
+    } else {
+      for (final unit in units) {
+        final name = (unit['nome'] as String).toLowerCase();
+        final code = (unit['codigo'] as String? ?? '').toLowerCase();
+        if (name == destinationText || code == destinationText) {
+          destination = unit;
+          break;
+        }
+      }
+    }
+    if (destination == null) {
+      throw StateError('Unidade de destino não encontrada.');
+    }
+    final destinationId = destination['id'] as String;
+    if (destinationId == sourceUnitId) {
+      throw StateError('A unidade de destino deve ser diferente da origem.');
+    }
+    final products = await tx.query(
+      'estoque',
+      columns: ['id', 'nome'],
+      where: 'comercio_id=? AND ativo=1 AND LOWER(nome) LIKE ?',
+      whereArgs: [user.comercioId, '%${p.fields['produto']}%'],
+    );
+    if (products.length != 1) {
+      throw StateError(
+        products.isEmpty
+            ? 'Produto não encontrado.'
+            : 'Há mais de um produto correspondente; informe o registro exato.',
+      );
+    }
+    final productId = products.single['id'] as String;
+    final amount = (p.fields['quantidade'] as num).toDouble();
+    final sourceLots = await tx.query(
+      'estoque_lotes_ia',
+      where:
+          'comercio_id=? AND unidade_id=? AND estoque_id=? AND ativo=1 AND quantidade>=?',
+      whereArgs: [user.comercioId, sourceUnitId, productId, amount],
+      orderBy: 'data_validade, criado_em',
+      limit: 1,
+    );
+    if (sourceLots.isEmpty) {
+      throw StateError('Saldo por lote insuficiente na unidade de origem.');
+    }
+    final source = sourceLots.single;
+    final sourceId = source['id'] as String;
+    await tx.update(
+      'estoque_lotes_ia',
+      {
+        'quantidade': (source['quantidade'] as num).toDouble() - amount,
+        'atualizado_em': DateTime.now().toUtc().toIso8601String(),
+      },
+      where: 'id=? AND comercio_id=?',
+      whereArgs: [sourceId, user.comercioId],
+    );
+    final targetLots = await tx.query(
+      'estoque_lotes_ia',
+      where:
+          'comercio_id=? AND unidade_id=? AND estoque_id=? AND COALESCE(lote,\'\')=COALESCE(?,\'\') AND ativo=1',
+      whereArgs: [
+        user.comercioId,
+        destinationId,
+        productId,
+        source['lote'] ?? '',
+      ],
+      limit: 1,
+    );
+    final targetId = targetLots.isEmpty
+        ? 'lote_${IdGenerator.temporal()}'
+        : targetLots.single['id'] as String;
+    if (targetLots.isEmpty) {
+      await tx.insert('estoque_lotes_ia', {
+        ...source,
+        'id': targetId,
+        'unidade_id': destinationId,
+        'quantidade': amount,
+        'criado_em': DateTime.now().toUtc().toIso8601String(),
+        'atualizado_em': DateTime.now().toUtc().toIso8601String(),
+      });
+    } else {
+      await tx.update(
+        'estoque_lotes_ia',
+        {
+          'quantidade':
+              (targetLots.single['quantidade'] as num).toDouble() + amount,
+          'atualizado_em': DateTime.now().toUtc().toIso8601String(),
+        },
+        where: 'id=? AND comercio_id=?',
+        whereArgs: [targetId, user.comercioId],
+      );
+    }
+    await _sync(tx, user, productId, 'estoque_transferencia', 'upsert', {
+      ...p.fields,
+      'unidade_destino_id': destinationId,
+      'lote_origem_id': sourceId,
+      'lote_destino_id': targetId,
+    });
+    return _result(
+      p,
+      productId,
+      'Transferência registrada para ${destination['nome']}.',
+    );
   }
 
   Future<IaCommandResult> _executeExpense(
@@ -779,6 +1284,20 @@ class IaCommandService {
       RegExp(r'\b(envie|mandar|dispare|enviar)\b').hasMatch(t) &&
       t.contains('lembrete') &&
       (t.contains('agendamento') || t.contains('agenda'));
+  static bool _isLotExpiryUpdate(String t) =>
+      RegExp(r'\b(altere|corrija)\b').hasMatch(t) &&
+      t.contains('vencimento') &&
+      t.contains('lote');
+  static bool _isProductInactivate(String t) =>
+      t.startsWith('inative') && t.contains('produto');
+  static bool _isServicePriceUpdate(String t) =>
+      RegExp(r'\b(corrija|altere)\b').hasMatch(t) &&
+      (t.contains('preco') || t.contains('valor')) &&
+      t.contains('servico');
+  static bool _isUnitTransfer(String t) =>
+      t.startsWith('transfira') &&
+      t.contains('estoque') &&
+      t.contains('unidade');
   static bool _isStockCreate(String t) =>
       t.startsWith('cadastre') &&
       (t.contains('unidade') ||
@@ -789,6 +1308,8 @@ class IaCommandService {
   static bool _isStockAdd(String t) =>
       RegExp(r'\b(acrescente|adicione)\b').hasMatch(t) &&
       (t.contains('estoque') || t.contains('unidade'));
+  static bool _isProfessionalModalityLink(String t) =>
+      t.startsWith('vincule') && t.contains('area');
   static bool _isServiceCreate(String t) =>
       RegExp(r'\b(crie|cadastre)\b').hasMatch(t) && t.contains('servico');
   static bool _isProfessionalCreate(String t) =>
@@ -797,14 +1318,17 @@ class IaCommandService {
       RegExp(r'\b(adicione|registre|lance)\b').hasMatch(t) &&
       t.contains('saida') &&
       t.contains('caixa');
-  static String _normalize(String v) => v
+  static String _normalize(String value) => value
       .toLowerCase()
       .replaceAll(RegExp('[áàãâ]'), 'a')
       .replaceAll(RegExp('[éê]'), 'e')
-      .replaceAll(RegExp('[í]'), 'i')
+      .replaceAll('í', 'i')
       .replaceAll(RegExp('[óõô]'), 'o')
-      .replaceAll(RegExp('[ú]'), 'u')
-      .replaceAll('ç', 'c');
+      .replaceAll('ú', 'u')
+      .replaceAll('ç', 'c')
+      .replaceAll(RegExp(r'\bcadastra\b|\bcadatra\b'), 'cadastre')
+      .replaceAll(RegExp(r'\badcion(e|a)\b'), 'adicione')
+      .replaceAll(RegExp(r'\bacrecente\b'), 'acrescente');
   static bool _validPhone(String? v) =>
       v != null && v.replaceAll(RegExp(r'\D'), '').length >= 10;
   static double? _number(String t, RegExp r) {
@@ -816,17 +1340,39 @@ class IaCommandService {
     t,
     RegExp('(?:$label)\\s*(?:de\\s*)?(?:r.?\\s*)?(\\d+(?:[.,]\\d+)?)'),
   );
-  static DateTime? _date(String t) {
-    final m = RegExp(r'(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})').firstMatch(t);
-    if (m == null) {
-      return null;
+  static DateTime? _date(String text) {
+    final numeric = RegExp(
+      r'(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})',
+    ).firstMatch(text);
+    if (numeric != null) {
+      var year = int.parse(numeric.group(3)!);
+      if (year < 100) year += 2000;
+      return DateTime.tryParse(
+        '$year-${numeric.group(2)!.padLeft(2, '0')}-${numeric.group(1)!.padLeft(2, '0')}',
+      );
     }
-    var year = int.parse(m.group(3)!);
-    if (year < 100) {
-      year += 2000;
-    }
-    return DateTime.tryParse(
-      '$year-${m.group(2)!.padLeft(2, '0')}-${m.group(1)!.padLeft(2, '0')}',
+    final written = RegExp(
+      r'(\d{1,2})\s+de\s+(janeiro|fevereiro|marco|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)\s+de\s+(\d{4})',
+    ).firstMatch(text);
+    if (written == null) return null;
+    const months = <String, int>{
+      'janeiro': 1,
+      'fevereiro': 2,
+      'marco': 3,
+      'abril': 4,
+      'maio': 5,
+      'junho': 6,
+      'julho': 7,
+      'agosto': 8,
+      'setembro': 9,
+      'outubro': 10,
+      'novembro': 11,
+      'dezembro': 12,
+    };
+    return DateTime(
+      int.parse(written.group(3)!),
+      months[written.group(2)]!,
+      int.parse(written.group(1)!),
     );
   }
 
@@ -844,6 +1390,16 @@ class IaCommandService {
   static String? _afterWord(String t, String word) {
     final m = RegExp('$word\\s+([a-z0-9-]+)').firstMatch(t);
     return m?.group(1);
+  }
+
+  static String _suggestCategory(String? name) {
+    final value = name ?? '';
+    if (RegExp(r'esmalte|lixa|unha|acetona').hasMatch(value)) return 'Unhas';
+    if (RegExp(r'shampoo|condicionador|cabelo').hasMatch(value)) {
+      return 'Cabelo';
+    }
+    if (RegExp(r'luva|mascara|alcool').hasMatch(value)) return 'Consumíveis';
+    return 'Outros';
   }
 
   static String _slug(String t) => _normalize(

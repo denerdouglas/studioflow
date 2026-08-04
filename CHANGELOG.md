@@ -8,11 +8,16 @@
 - Cadastro por linguagem natural de estoque/lotes, serviços, colaboradores com múltiplas funções e saídas financeiras.
 - Funções profissionais múltiplas e personalizadas, separadas do perfil de acesso, com migração compatível e fila de sincronização.
 - Testes para comandos operacionais, consentimento, idempotência, cadastros, funções e jornada real.
+- Estabelecimento multimodal no mesmo comércio, com modalidades sugeridas ou personalizadas, ordenação, ícone, capa, cor, favoritos, Home, ativação e proteção de histórico.
+- Vínculos muitos-para-muitos de modalidades com serviços, colaboradores, funções profissionais e estoque, sem duplicar cadastros.
+- Novas ordens da Helloa Sophia para lotes, datas por extenso, inativação de produto, correção de preço, transferência entre unidades e reconhecimento de modalidade.
 
 ### Changed
 - Disponibilidade consolidada por profissional, seleção de vários dias e seletores visuais de horário, preservando exceções e o motor real da agenda.
 - Central de Atendimento agora abre a configuração real do agendamento público em vez da antiga tela de rascunho.
 - Banco local atualizado para a versão 27; `versionName` e `versionCode` do aplicativo permanecem inalterados nesta sprint.
+- Agenda recebe filtro por modalidade e a Home respeita modalidades ativas, favoritas, visíveis e sua ordem configurada.
+- Banco local atualizado para a versão 28, preservando o mesmo estabelecimento e os dados anteriores; a versão do aplicativo permanece `1.4.7+4018`.
 
 ## [1.4.7] - 2026-08-03
 

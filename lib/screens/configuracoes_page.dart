@@ -9,6 +9,7 @@ import 'aparencia_page.dart';
 import 'agendamento_online_page.dart';
 import 'configuracao_comercial_page.dart';
 import 'modelos_mensagens_page.dart';
+import 'modalidades_page.dart';
 import 'pagamentos_sprint4_page.dart';
 
 class ConfiguracoesPage extends StatefulWidget {
@@ -194,6 +195,22 @@ class _ConfiguracoesPageState extends State<ConfiguracoesPage> {
                       ),
                     ),
                   ),
+                Card(
+                  child: ListTile(
+                    leading: const Icon(Icons.category_outlined),
+                    title: const Text('Modalidades'),
+                    subtitle: const Text(
+                      'Áreas do estabelecimento, vínculos e atalhos da Home',
+                    ),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => Navigator.push(
+                      context,
+                      AppRoutes.material(
+                        builder: (_) => const ModalidadesPage(),
+                      ),
+                    ),
+                  ),
+                ),
                 Card(
                   child: ListTile(
                     leading: const Icon(Icons.event_available_outlined),

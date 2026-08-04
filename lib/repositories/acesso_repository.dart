@@ -48,6 +48,11 @@ class AcessoRepository {
         'criado_em': agora.toIso8601String(),
         'atualizado_em': agora.toIso8601String(),
       });
+      await _garantirModalidadeInicial(
+        txn,
+        comercioId,
+        agora.toIso8601String(),
+      );
       await txn.insert('usuarios', {
         'id': usuarioId,
         'comercio_id': comercioId,
@@ -161,6 +166,7 @@ class AcessoRepository {
         'criado_em': agora,
         'atualizado_em': agora,
       }, conflictAlgorithm: ConflictAlgorithm.ignore);
+      await _garantirModalidadeInicial(txn, comercioId, agora);
       await txn.insert('usuarios', {
         'id': usuarioId,
         'comercio_id': comercioId,
@@ -847,6 +853,26 @@ class AcessoRepository {
     );
   }
 
+  static Future<void> _garantirModalidadeInicial(
+    DatabaseExecutor db,
+    String comercioId,
+    String agora,
+  ) => db.insert('modalidades_estabelecimento', {
+    'id': 'modalidade_${comercioId}_salao',
+    'comercio_id': comercioId,
+    'nome': 'Salão de beleza',
+    'nome_normalizado': 'salao_de_beleza',
+    'descricao': 'Modalidade inicial editável',
+    'icone': 'content_cut',
+    'cor': '#8E5CE6',
+    'ordem': 0,
+    'favorita': 1,
+    'exibir_home': 1,
+    'ativa': 1,
+    'personalizada': 0,
+    'criado_em': agora,
+    'atualizado_em': agora,
+  }, conflictAlgorithm: ConflictAlgorithm.ignore);
   static String _digitos(String? valor) =>
       (valor ?? '').replaceAll(RegExp(r'\D'), '');
   static String _codigoComercio(String id) {

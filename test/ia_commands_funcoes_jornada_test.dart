@@ -1,9 +1,11 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:studioflow/database/database_schema_latest.dart';
+import 'package:studioflow/database/migrations/migration_v28.dart';
 import 'package:studioflow/models/domain/acesso.dart';
 import 'package:studioflow/models/domain/atendimento.dart';
 import 'package:studioflow/repositories/agenda_completa_repository.dart';
+import 'package:studioflow/repositories/modalidades_repository.dart';
 import 'package:studioflow/services/ia_command_service.dart';
 import 'package:studioflow/services/session_controller.dart';
 import 'package:studioflow/services/whatsapp_queue_service.dart';
@@ -47,6 +49,17 @@ void main() {
       'criado_em': now,
       'atualizado_em': now,
     });
+    await db.insert('unidades', {
+      'id': 'unit-2',
+      'comercio_id': 'commerce-1',
+      'nome': 'Norte',
+      'codigo': 'N',
+      'principal': 0,
+      'ativo': 1,
+      'criado_em': now,
+      'atualizado_em': now,
+    });
+    await MigrationV28.executar(db);
     await db.insert('profissionais', {
       'id': 'prof-1',
       'comercio_id': 'commerce-1',
@@ -154,6 +167,33 @@ void main() {
     expect(await db.query('estoque_lotes_ia'), hasLength(1));
     expect(await db.query('fila_sincronizacao'), isNotEmpty);
   });
+  test('comando informal e data por extenso são compreendidos', () async {
+    final preview = (await commands.prepare(
+      'Cadastra esmalte marca Anita, 4 unidades, vencimento 20 de setembro de 2026, codigo 776655.',
+      unitId: 'unit-1',
+    ))!;
+    expect(preview.ready, isTrue);
+    expect(preview.fields['quantidade'], 4.0);
+    expect(preview.fields['data_validade'], startsWith('2026-09-20'));
+  });
+  test('prévia cancelada não grava registro nem sincronização', () async {
+    final beforeStock = await db.query('estoque');
+    final beforeSync = await db.query('fila_sincronizacao');
+    final preview = await commands.prepare(
+      'Cadastre acetona, 2 unidades, codigo 554433.',
+      unitId: 'unit-1',
+    );
+    expect(preview?.ready, isTrue);
+    expect(await db.query('estoque'), hasLength(beforeStock.length));
+    expect(await db.query('fila_sincronizacao'), hasLength(beforeSync.length));
+  });
+
+  test('ordem operacional sem permissão permanece bloqueada', () async {
+    SessionController.instance.entrar(_restricted());
+    final preview = (await commands.prepare('Inative o produto qualquer.'))!;
+    await expectLater(commands.execute(preview), throwsStateError);
+    SessionController.instance.entrar(_owner());
+  });
   test('campos obrigatórios ausentes não executam', () async {
     final p = (await commands.prepare('Cadastre shampoo no estoque.'))!;
     expect(p.ready, isFalse);
@@ -247,6 +287,169 @@ void main() {
     );
     expect(saturday.last.hour, 13);
   });
+
+  test(
+    'modalidades são multimodais, reordenáveis e protegem histórico',
+    () async {
+      final repo = ModalidadesRepository(
+        databaseProvider: () async => db,
+        comercioId: 'commerce-1',
+        usuarioId: 'user-1',
+      );
+      final initial = await repo.listar();
+      expect(initial, hasLength(1));
+      final customId = await repo.salvar(
+        const ModalidadeRegistro(
+          id: '',
+          nome: 'Spa Capilar',
+          descricao: 'Terapias e tratamentos',
+          favorita: true,
+        ),
+      );
+      await repo.vincularServico(customId, 'service-1');
+      await repo.vincularProfissional(customId, 'prof-1');
+      expect(
+        await db.query(
+          'modalidade_servicos',
+          where: 'modalidade_id=?',
+          whereArgs: [customId],
+        ),
+        hasLength(1),
+      );
+      await expectLater(
+        repo.excluir(customId),
+        throwsA(isA<ModalidadeExclusaoException>()),
+      );
+      await repo.alterarStatus(customId, false);
+      expect(
+        (await repo.listar()).firstWhere((e) => e.id == customId).ativa,
+        isFalse,
+      );
+      await repo.alterarStatus(customId, true);
+      await repo.reordenar([customId, initial.single.id]);
+      expect((await repo.listar()).first.id, customId);
+    },
+  );
+
+  test('IA edita lote, inativa produto e altera preço do serviço', () async {
+    final create = (await commands.prepare(
+      'Cadastre esmalte Anita preto, lote 123, 2 unidades, vencimento 20/09/2026, código 789123.',
+      unitId: 'unit-1',
+    ))!;
+    final product = await commands.execute(create);
+    final expiry = (await commands.prepare(
+      'Altere o vencimento do lote 123 para 30/09/2026.',
+    ))!;
+    await commands.execute(expiry);
+    final lots = await db.query(
+      'estoque_lotes_ia',
+      where: 'estoque_id=?',
+      whereArgs: [product.recordId],
+    );
+    expect(lots.single['data_validade'], startsWith('2026-09-30'));
+
+    final price = (await commands.prepare(
+      'Corrija o preço do serviço Manicure para 60 reais.',
+    ))!;
+    await commands.execute(price);
+    expect(
+      (await db.query(
+        'servicos',
+        where: 'id=?',
+        whereArgs: ['service-1'],
+      )).single['preco'],
+      60.0,
+    );
+    final inactive = (await commands.prepare(
+      'Inative o produto esmalte Anita preto lote 123.',
+    ))!;
+    await commands.execute(inactive);
+    expect(
+      (await db.query(
+        'estoque',
+        where: 'id=?',
+        whereArgs: [product.recordId],
+      )).single['ativo'],
+      0,
+    );
+  });
+
+  test(
+    'mesmo código com vencimento diferente cria lote e transfere unidade',
+    () async {
+      final first = (await commands.prepare(
+        'Cadastre shampoo marca X, 3 unidades, vencimento 20/09/2026, código 998877.',
+        unitId: 'unit-1',
+      ))!;
+      final product = await commands.execute(first);
+      final second = (await commands.prepare(
+        'Cadastre shampoo marca X, 2 unidades, vencimento 20/10/2026, código 998877.',
+        unitId: 'unit-1',
+      ))!;
+      final reused = await commands.execute(second);
+      expect(reused.recordId, product.recordId);
+      expect(
+        await db.query(
+          'estoque_lotes_ia',
+          where: 'estoque_id=?',
+          whereArgs: [product.recordId],
+        ),
+        hasLength(2),
+      );
+      final transfer = (await commands.prepare(
+        'Transfira 1 unidade do shampoo x para o estoque da unidade 2.',
+        unitId: 'unit-1',
+      ))!;
+      expect(transfer.fields['unidade_destino'], '2');
+      expect(await db.query('unidades', where: 'ativo=1'), hasLength(2));
+      await commands.execute(transfer);
+      final target = await db.query(
+        'estoque_lotes_ia',
+        where: 'estoque_id=? AND unidade_id=?',
+        whereArgs: [product.recordId, 'unit-2'],
+      );
+      expect(target, hasLength(1));
+      expect(target.single['quantidade'], 1.0);
+    },
+  );
+
+  test(
+    'IA reconhece modalidade ao criar serviço e vincular colaborador',
+    () async {
+      final repo = ModalidadesRepository(
+        databaseProvider: () async => db,
+        comercioId: 'commerce-1',
+        usuarioId: 'user-1',
+      );
+      final modalityId = await repo.salvar(
+        const ModalidadeRegistro(id: '', nome: 'Barbearia'),
+      );
+      final service = (await commands.prepare(
+        'Crie um serviço de corte e barba na barbearia, duração de 45 minutos, valor de 70 reais.',
+      ))!;
+      final created = await commands.execute(service);
+      expect(
+        await db.query(
+          'modalidade_servicos',
+          where: 'modalidade_id=? AND servico_id=?',
+          whereArgs: [modalityId, created.recordId],
+        ),
+        hasLength(1),
+      );
+      final link = (await commands.prepare(
+        'Vincule Ana também à área de barbearia.',
+      ))!;
+      await commands.execute(link);
+      expect(
+        await db.query(
+          'modalidade_profissionais',
+          where: 'modalidade_id=? AND profissional_id=?',
+          whereArgs: [modalityId, 'prof-1'],
+        ),
+        hasLength(1),
+      );
+    },
+  );
 }
 
 Future<void> _appointment(
@@ -272,6 +475,20 @@ Future<void> _appointment(
   'unidade_id': 'unit-1',
   'data_criacao': DateTime.utc(2026, 8, 4).toIso8601String(),
 });
+UsuarioAcesso _restricted() => UsuarioAcesso(
+  id: 'user-restricted',
+  comercioId: 'commerce-1',
+  codigoComercio: 'IA27',
+  nomeComercio: 'Studio',
+  nomeExibicao: 'Studio',
+  nome: 'Colaborador',
+  telefone: '1199',
+  emailLogin: 'colaborador@local',
+  funcao: FuncaoUsuario.colaborador,
+  ativo: true,
+  permissoes: const {},
+  acoes: const {},
+);
 UsuarioAcesso _owner() => UsuarioAcesso(
   id: 'user-1',
   comercioId: 'commerce-1',
