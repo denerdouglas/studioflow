@@ -561,18 +561,28 @@ class _CadastroClienteSheetState extends State<CadastroClienteSheet> {
   void _salvar() {
     final nome = _nomeController.text.trim();
     final whatsapp = _whatsappController.text.trim();
-    final instagram = InstagramUrl.normalizar(_instagramController.text);
+    final instagramTexto = _instagramController.text.trim();
+    final instagram = instagramTexto.isEmpty
+        ? null
+        : InstagramUrl.normalizar(instagramTexto);
 
-    if (nome.isEmpty || whatsapp.isEmpty || instagram == null) {
+    if (nome.isEmpty || whatsapp.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text(
-            'Preencha nome, WhatsApp e um perfil válido do Instagram.',
-          ),
+          content: Text('Preencha nome e WhatsApp.'),
           behavior: SnackBarBehavior.floating,
         ),
       );
+      return;
+    }
 
+    if (instagramTexto.isNotEmpty && instagram == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Informe um perfil válido do Instagram.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
       return;
     }
 
@@ -677,7 +687,7 @@ class _CadastroClienteSheetState extends State<CadastroClienteSheet> {
               controller: _instagramController,
               keyboardType: TextInputType.url,
               decoration: const InputDecoration(
-                labelText: 'Instagram *',
+                labelText: 'Instagram (opcional)',
                 hintText: '@usuario ou instagram.com/usuario',
                 prefixIcon: Icon(Icons.camera_alt_outlined),
               ),
@@ -848,18 +858,28 @@ class _EditarClienteSheetState extends State<EditarClienteSheet> {
   void _salvar() {
     final nome = _nomeController.text.trim();
     final whatsapp = _whatsappController.text.trim();
-    final instagram = InstagramUrl.normalizar(_instagramController.text);
+    final instagramTexto = _instagramController.text.trim();
+    final instagram = instagramTexto.isEmpty
+        ? null
+        : InstagramUrl.normalizar(instagramTexto);
 
-    if (nome.isEmpty || whatsapp.isEmpty || instagram == null) {
+    if (nome.isEmpty || whatsapp.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text(
-            'Preencha nome, WhatsApp e um perfil válido do Instagram.',
-          ),
+          content: Text('Preencha nome e WhatsApp.'),
           behavior: SnackBarBehavior.floating,
         ),
       );
+      return;
+    }
 
+    if (instagramTexto.isNotEmpty && instagram == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Informe um perfil válido do Instagram.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
       return;
     }
 
@@ -937,7 +957,7 @@ class _EditarClienteSheetState extends State<EditarClienteSheet> {
               controller: _instagramController,
               keyboardType: TextInputType.url,
               decoration: const InputDecoration(
-                labelText: 'Instagram *',
+                labelText: 'Instagram (opcional)',
                 hintText: '@usuario ou instagram.com/usuario',
                 prefixIcon: Icon(Icons.camera_alt_outlined),
               ),
