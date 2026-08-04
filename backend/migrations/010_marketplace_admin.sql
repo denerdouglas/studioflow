@@ -1,4 +1,4 @@
--- Migration 010: Marketplace Admin & V2 Architecture
+﻿-- Migration 010: Marketplace Admin & V2 Architecture
 
 -- 1. CriaÃ§Ã£o da estrutura de Platform Admin
 CREATE TABLE IF NOT EXISTS platform_admins (
@@ -89,8 +89,8 @@ ALTER INDEX idx_affiliate_click_business RENAME TO idx_marketplace_click_busines
 DROP POLICY IF EXISTS affiliate_click_tenant ON marketplace_clicks;
 ALTER TABLE marketplace_clicks ENABLE ROW LEVEL SECURITY;
 CREATE POLICY marketplace_click_tenant ON marketplace_clicks
-  USING (business_id = nullif(current_setting('app.business_id', true), '')::uuid)
-  WITH CHECK (business_id = nullif(current_setting('app.business_id', true), '')::uuid);
+  USING (business_id = nullif(current_setting('app.business_id', true), ''))
+  WITH CHECK (business_id = nullif(current_setting('app.business_id', true), ''));
 
 ALTER TABLE marketplace_clicks
   RENAME COLUMN program_id TO partner_id;
