@@ -41,6 +41,24 @@ class _DisponibilidadePageState extends State<DisponibilidadePage> {
     }
   }
 
+  Future<void> _selecionarHorario(TextEditingController controller) async {
+    final partes = controller.text.split(':');
+    final inicial = partes.length == 2
+        ? TimeOfDay(
+            hour: int.tryParse(partes[0]) ?? 8,
+            minute: int.tryParse(partes[1]) ?? 0,
+          )
+        : const TimeOfDay(hour: 8, minute: 0);
+    final escolhido = await showTimePicker(
+      context: context,
+      initialTime: inicial,
+    );
+    if (escolhido != null) {
+      controller.text =
+          '${escolhido.hour.toString().padLeft(2, '0')}:${escolhido.minute.toString().padLeft(2, '0')}';
+    }
+  }
+
   Future<void> _editarHorario([HorarioProfissional? atual]) async {
     if (_profissionais.isEmpty) {
       _mensagem('Cadastre um profissional ativo primeiro.');
@@ -48,7 +66,16 @@ class _DisponibilidadePageState extends State<DisponibilidadePage> {
     }
     var profissionalId =
         atual?.profissionalId ?? _profissionais.first['id'] as String;
-    var dia = atual?.diaSemana ?? DateTime.monday;
+    final diasSelecionados = atual == null
+        ? <int>{DateTime.monday}
+        : _horarios
+              .where((h) => h.profissionalId == atual.profissionalId && h.ativo)
+              .map((h) => h.diaSemana)
+              .toSet();
+    if (diasSelecionados.isEmpty) {
+      diasSelecionados.add(atual?.diaSemana ?? DateTime.monday);
+    }
+    var aplicarAosSelecionados = atual == null;
     final inicio = TextEditingController(text: atual?.inicio ?? '08:00');
     final fim = TextEditingController(text: atual?.fim ?? '18:00');
     final intervaloInicio = TextEditingController(
@@ -80,37 +107,82 @@ class _DisponibilidadePageState extends State<DisponibilidadePage> {
                       .toList(),
                   onChanged: (v) => setLocal(() => profissionalId = v!),
                 ),
-                DropdownButtonFormField<int>(
-                  initialValue: dia,
-                  decoration: const InputDecoration(labelText: 'Dia'),
-                  items: List.generate(
-                    7,
-                    (i) => DropdownMenuItem(
-                      value: i + 1,
-                      child: Text(_dias[i + 1]),
-                    ),
+                const Align(
+                  alignment: Alignment.centerLeft,
+                  child: Padding(
+                    padding: EdgeInsets.only(top: 12, bottom: 6),
+                    child: Text('Aplicar aos dias'),
                   ),
-                  onChanged: (v) => setLocal(() => dia = v!),
+                ),
+                Wrap(
+                  spacing: 6,
+                  children: List.generate(7, (i) {
+                    final dia = i + 1;
+                    return FilterChip(
+                      label: Text(_dias[dia]),
+                      selected: diasSelecionados.contains(dia),
+                      onSelected: (selected) => setLocal(() {
+                        if (selected) {
+                          diasSelecionados.add(dia);
+                        } else if (diasSelecionados.length > 1) {
+                          diasSelecionados.remove(dia);
+                        }
+                      }),
+                    );
+                  }),
+                ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  value: aplicarAosSelecionados,
+                  title: const Text(
+                    'Aplicar este horário a todos os dias selecionados',
+                  ),
+                  subtitle: const Text(
+                    'Desative para personalizar somente o dia em edição.',
+                  ),
+                  onChanged: (value) =>
+                      setLocal(() => aplicarAosSelecionados = value),
                 ),
                 TextField(
                   controller: inicio,
-                  decoration: const InputDecoration(
-                    labelText: 'Início (HH:mm)',
+                  decoration: InputDecoration(
+                    labelText: 'Início',
+                    suffixIcon: IconButton(
+                      tooltip: 'Escolher horário',
+                      onPressed: () => _selecionarHorario(inicio),
+                      icon: const Icon(Icons.schedule),
+                    ),
                   ),
                 ),
                 TextField(
                   controller: fim,
-                  decoration: const InputDecoration(labelText: 'Fim (HH:mm)'),
+                  decoration: InputDecoration(
+                    labelText: 'Fim',
+                    suffixIcon: IconButton(
+                      onPressed: () => _selecionarHorario(fim),
+                      icon: const Icon(Icons.schedule),
+                    ),
+                  ),
                 ),
                 TextField(
                   controller: intervaloInicio,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: 'Intervalo início',
+                    suffixIcon: IconButton(
+                      onPressed: () => _selecionarHorario(intervaloInicio),
+                      icon: const Icon(Icons.schedule),
+                    ),
                   ),
                 ),
                 TextField(
                   controller: intervaloFim,
-                  decoration: const InputDecoration(labelText: 'Intervalo fim'),
+                  decoration: InputDecoration(
+                    labelText: 'Intervalo fim',
+                    suffixIcon: IconButton(
+                      onPressed: () => _selecionarHorario(intervaloFim),
+                      icon: const Icon(Icons.schedule),
+                    ),
+                  ),
                 ),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
@@ -136,22 +208,29 @@ class _DisponibilidadePageState extends State<DisponibilidadePage> {
     );
     if (salvar != true) return;
     try {
-      await _repository.salvarHorario(
-        HorarioProfissional(
-          id: atual?.id ?? '',
-          profissionalId: profissionalId,
-          diaSemana: dia,
-          inicio: inicio.text.trim(),
-          fim: fim.text.trim(),
-          intervaloInicio: intervaloInicio.text.trim().isEmpty
-              ? null
-              : intervaloInicio.text.trim(),
-          intervaloFim: intervaloFim.text.trim().isEmpty
-              ? null
-              : intervaloFim.text.trim(),
-          ativo: ativo,
-        ),
-      );
+      for (final dia in diasSelecionados) {
+        if (!aplicarAosSelecionados &&
+            atual != null &&
+            dia != atual.diaSemana) {
+          continue;
+        }
+        await _repository.salvarHorario(
+          HorarioProfissional(
+            id: dia == atual?.diaSemana ? atual?.id ?? '' : '',
+            profissionalId: profissionalId,
+            diaSemana: dia,
+            inicio: inicio.text.trim(),
+            fim: fim.text.trim(),
+            intervaloInicio: intervaloInicio.text.trim().isEmpty
+                ? null
+                : intervaloInicio.text.trim(),
+            intervaloFim: intervaloFim.text.trim().isEmpty
+                ? null
+                : intervaloFim.text.trim(),
+            ativo: ativo,
+          ),
+        );
+      }
       await _carregar();
     } catch (e) {
       _mensagem('$e');
@@ -289,6 +368,24 @@ class _DisponibilidadePageState extends State<DisponibilidadePage> {
     }
   }
 
+  List<HorarioProfissional> _doProfissional(String id) =>
+      _horarios.where((h) => h.profissionalId == id).toList()
+        ..sort((a, b) => a.diaSemana.compareTo(b.diaSemana));
+
+  String _resumoProfissional(String id) {
+    final dias = _doProfissional(id);
+    if (dias.isEmpty) return 'Jornada ainda não configurada';
+    return dias
+        .map((h) {
+          if (!h.ativo) return '${_dias[h.diaSemana]}: folga';
+          final intervalo = h.intervaloInicio == null
+              ? ''
+              : ' · intervalo ${h.intervaloInicio}–${h.intervaloFim}';
+          return '${_dias[h.diaSemana]}: ${h.inicio}–${h.fim}$intervalo';
+        })
+        .join('\n');
+  }
+
   void _mensagem(String texto) => ScaffoldMessenger.of(
     context,
   ).showSnackBar(SnackBar(content: Text(texto)));
@@ -329,23 +426,32 @@ class _DisponibilidadePageState extends State<DisponibilidadePage> {
                   ),
                 ],
               ),
-              if (_horarios.isEmpty)
+              if (_profissionais.isEmpty)
                 const Card(
-                  child: ListTile(title: Text('Nenhuma jornada configurada.')),
+                  child: ListTile(title: Text('Nenhum profissional ativo.')),
                 ),
-              ..._horarios.map(
-                (h) => Card(
+              ..._profissionais.map((p) {
+                final id = p['id'] as String;
+                final jornadas = _doProfissional(id);
+                return Card(
                   child: ListTile(
-                    leading: CircleAvatar(child: Text(_dias[h.diaSemana])),
-                    title: Text(h.profissionalNome),
-                    subtitle: Text(
-                      h.ativo
-                          ? '${h.inicio}–${h.fim}${h.intervaloInicio == null ? '' : ' • intervalo ${h.intervaloInicio}–${h.intervaloFim}'}'
-                          : 'Folga',
+                    leading: const CircleAvatar(
+                      child: Icon(Icons.person_outline),
                     ),
-                    trailing: const Icon(Icons.edit_outlined),
-                    onTap: () => _editarHorario(h),
+                    title: Text(p['nome'] as String),
+                    subtitle: Text(_resumoProfissional(id)),
+                    isThreeLine: true,
+                    trailing: const Icon(Icons.edit_calendar_outlined),
+                    onTap: () => _editarHorario(
+                      jornadas.isEmpty ? null : jornadas.first,
+                    ),
                   ),
+                );
+              }),
+              const Padding(
+                padding: EdgeInsets.only(top: 8),
+                child: Text(
+                  'Toque no profissional para ajustar a jornada. Use + para adicionar uma exceção por dia.',
                 ),
               ),
               const SizedBox(height: 16),

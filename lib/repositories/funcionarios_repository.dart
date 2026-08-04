@@ -1,6 +1,9 @@
+import 'dart:convert';
+
 import 'package:sqflite/sqflite.dart';
 
 import '../database/database_service.dart';
+import '../models/domain/acesso.dart';
 import '../services/session_controller.dart';
 
 class ProfissionalRegistro {
@@ -25,6 +28,7 @@ class ProfissionalRegistro {
   final String? sexo;
   final String? observacoes;
   final String? contatoEmergencia;
+  final List<String> funcoes;
 
   const ProfissionalRegistro({
     required this.id,
@@ -48,6 +52,7 @@ class ProfissionalRegistro {
     this.sexo,
     this.observacoes,
     this.contatoEmergencia,
+    this.funcoes = const [],
   });
 
   Map<String, Object?> paraMapa() {
@@ -102,6 +107,7 @@ class ProfissionalRegistro {
       sexo: mapa['sexo'] as String?,
       observacoes: mapa['observacoes'] as String?,
       contatoEmergencia: mapa['contato_emergencia'] as String?,
+      funcoes: (mapa['funcoes'] as List?)?.cast<String>() ?? const [],
     );
   }
 
@@ -125,6 +131,7 @@ class ProfissionalRegistro {
     String? sexo,
     String? observacoes,
     String? contatoEmergencia,
+    List<String>? funcoes,
   }) {
     return ProfissionalRegistro(
       id: id,
@@ -148,6 +155,7 @@ class ProfissionalRegistro {
       sexo: sexo ?? this.sexo,
       observacoes: observacoes ?? this.observacoes,
       contatoEmergencia: contatoEmergencia ?? this.contatoEmergencia,
+      funcoes: funcoes ?? this.funcoes,
     );
   }
 }
@@ -220,13 +228,115 @@ class FuncionariosRepository {
 
   Future<void> salvar(ProfissionalRegistro profissional) async {
     final existente = await buscarPorId(profissional.id);
-
     if (existente == null) {
       await inserir(profissional);
-      return;
+    } else {
+      await atualizar(profissional);
     }
+    if (profissional.funcoes.isNotEmpty) {
+      await salvarFuncoes(profissional.id, profissional.funcoes);
+    }
+  }
 
-    await atualizar(profissional);
+  Future<List<String>> listarFuncoes(String profissionalId) async {
+    final db = await _databaseService.database;
+    final rows = await db.rawQuery(
+      '''SELECT f.nome FROM funcoes_profissionais f
+      JOIN profissional_funcoes pf ON pf.funcao_id=f.id AND pf.comercio_id=f.comercio_id
+      WHERE pf.comercio_id=? AND pf.profissional_id=? AND pf.ativo=1 AND f.ativo=1
+      ORDER BY f.nome COLLATE NOCASE''',
+      [_comercioId, profissionalId],
+    );
+    return rows.map((e) => e['nome'] as String).toList();
+  }
+
+  Future<List<String>> listarFuncoesDisponiveis() async {
+    final db = await _databaseService.database;
+    final rows = await db.query(
+      'funcoes_profissionais',
+      columns: ['nome'],
+      where: 'comercio_id=? AND ativo=1',
+      whereArgs: [_comercioId],
+      orderBy: 'nome COLLATE NOCASE',
+    );
+    return rows.map((e) => e['nome'] as String).toList();
+  }
+
+  Future<void> salvarFuncoes(
+    String profissionalId,
+    Iterable<String> values,
+  ) async {
+    final user = SessionController.instance.usuario;
+    if (user == null || !user.pode(ModuloPermissao.funcionarios)) {
+      throw StateError('Ação não autorizada para colaboradores.');
+    }
+    final unique = <String, String>{};
+    for (final value in values) {
+      final name = value.trim();
+      if (name.isNotEmpty) {
+        unique[name.toLowerCase()] = name;
+      }
+    }
+    if (unique.isEmpty) {
+      throw StateError('Selecione ao menos uma função.');
+    }
+    final db = await _databaseService.database;
+    final now = DateTime.now().toUtc().toIso8601String();
+    await db.transaction((tx) async {
+      await tx.update(
+        'profissional_funcoes',
+        {'ativo': 0, 'atualizado_em': now},
+        where: 'comercio_id=? AND profissional_id=?',
+        whereArgs: [_comercioId, profissionalId],
+      );
+      for (final name in unique.values) {
+        final normalized = name
+            .toLowerCase()
+            .replaceAll(RegExp(r'[^a-z0-9]+'), '_')
+            .replaceAll(RegExp(r'^_|_$'), '');
+        final rows = await tx.query(
+          'funcoes_profissionais',
+          columns: ['id'],
+          where: 'comercio_id=? AND nome_normalizado=?',
+          whereArgs: [_comercioId, normalized],
+          limit: 1,
+        );
+        final functionId = rows.isEmpty
+            ? 'func_${_comercioId}_${DateTime.now().microsecondsSinceEpoch}_$normalized'
+            : rows.single['id'] as String;
+        if (rows.isEmpty) {
+          await tx.insert('funcoes_profissionais', {
+            'id': functionId,
+            'comercio_id': _comercioId,
+            'nome': name,
+            'nome_normalizado': normalized,
+            'personalizada': 1,
+            'ativo': 1,
+            'criado_em': now,
+            'atualizado_em': now,
+          });
+        }
+        await tx.insert('profissional_funcoes', {
+          'comercio_id': _comercioId,
+          'profissional_id': profissionalId,
+          'funcao_id': functionId,
+          'ativo': 1,
+          'atualizado_em': now,
+        }, conflictAlgorithm: ConflictAlgorithm.replace);
+      }
+      await tx.insert('fila_sincronizacao', {
+        'id': 'sync_${DateTime.now().microsecondsSinceEpoch}',
+        'comercio_id': _comercioId,
+        'unidade_id': SessionController.instance.unidadeAtiva,
+        'entidade': 'profissional_funcoes',
+        'entidade_id': profissionalId,
+        'operacao': 'upsert',
+        'payload_json': jsonEncode(unique.values.toList()),
+        'status': 'pendente',
+        'criada_em': now,
+        'atualizada_em': now,
+      });
+    });
   }
 
   Future<void> alterarStatus({required String id, required bool ativo}) async {

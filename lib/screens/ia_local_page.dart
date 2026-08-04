@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/ia_local_service.dart';
+import '../services/ia_command_service.dart';
 import '../services/session_controller.dart';
 import '../services/external_action_service.dart';
 import 'agenda_page.dart';
@@ -18,6 +19,7 @@ class IaLocalPage extends StatefulWidget {
 
 class _IaLocalPageState extends State<IaLocalPage> {
   final _service = IaLocalService();
+  final _commands = IaCommandService();
   final _controller = TextEditingController();
   final _messages = <({bool user, String text})>[];
   bool _sending = false;
@@ -32,7 +34,9 @@ class _IaLocalPageState extends State<IaLocalPage> {
 
   Future<void> _send([String? prompt]) async {
     final text = (prompt ?? _controller.text).trim();
-    if (text.isEmpty || _sending) return;
+    if (text.isEmpty || _sending) {
+      return;
+    }
     setState(() {
       _sending = true;
       _messages.add((user: true, text: text));
@@ -40,8 +44,39 @@ class _IaLocalPageState extends State<IaLocalPage> {
     });
     try {
       final user = SessionController.instance.usuario!;
-      final answer = await _service.conversar(text, user.comercioId);
-      if (mounted) setState(() => _messages.add((user: false, text: answer)));
+      final preview = await _commands.prepare(
+        text,
+        unitId: SessionController.instance.unidadeAtiva,
+      );
+      if (preview != null) {
+        if (!preview.ready) {
+          final answer =
+              '${preview.summary}\n\nInforme somente os campos faltantes e refaça o comando.';
+          if (mounted) {
+            setState(() => _messages.add((user: false, text: answer)));
+          }
+        } else {
+          final confirmed = await _confirmCommand(preview);
+          if (confirmed == true) {
+            final result = await _commands.execute(preview);
+            if (mounted) {
+              setState(
+                () => _messages.add((user: false, text: result.message)),
+              );
+            }
+          } else if (mounted) {
+            setState(
+              () => _messages.add((
+                user: false,
+                text: 'Ação cancelada. Nenhum dado foi alterado.',
+              )),
+            );
+          }
+        }
+      } else {
+        final answer = await _service.conversar(text, user.comercioId);
+        if (mounted) setState(() => _messages.add((user: false, text: answer)));
+      }
     } catch (error) {
       if (mounted) setState(() => _messages.add((user: false, text: '$error')));
     } finally {
@@ -49,6 +84,27 @@ class _IaLocalPageState extends State<IaLocalPage> {
     }
   }
 
+  Future<bool?> _confirmCommand(IaCommandPreview preview) => showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('Confirme antes de executar'),
+      content: SingleChildScrollView(child: SelectableText(preview.summary)),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('Cancelar'),
+        ),
+        OutlinedButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('Editar informações'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, true),
+          child: const Text('Confirmar ação'),
+        ),
+      ],
+    ),
+  );
   Future<void> _open(Widget page) =>
       Navigator.push(context, MaterialPageRoute(builder: (_) => page));
 

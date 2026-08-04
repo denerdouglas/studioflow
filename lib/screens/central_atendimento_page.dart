@@ -6,7 +6,7 @@ import '../services/session_controller.dart';
 import 'clientes_360_page.dart';
 import 'configuracao_ia_page.dart';
 import 'disponibilidade_page.dart';
-import 'link_agendamento_page.dart';
+import 'agendamento_online_page.dart';
 import 'pagamentos_sprint4_page.dart';
 import 'simulador_ia_page.dart';
 
@@ -36,9 +36,9 @@ class CentralAtendimentoPage extends StatelessWidget {
           ),
           (
             titulo: 'Link público de agendamento',
-            subtitulo: 'Rascunho seguro para futura publicação no backend',
+            subtitulo: 'Configuração e link do agendamento público real',
             icone: Icons.link,
-            pagina: const LinkAgendamentoPage(),
+            pagina: const AgendamentoOnlinePage(),
             permissao: ModuloPermissao.agenda,
             acao: AcaoPermissao.gerenciarAgenda,
           ),

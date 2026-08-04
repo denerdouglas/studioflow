@@ -44,7 +44,9 @@ class _FuncionariosPageState extends State<FuncionariosPage> {
   Future<void> carregar() async {
     final lista = await repository.listar(incluirInativos: mostrarInativos);
 
-    if (!mounted) return;
+    if (!mounted) {
+      return;
+    }
 
     setState(() {
       funcionarios = lista;
@@ -420,7 +422,28 @@ class _FuncionarioFormSheetState extends State<FuncionarioFormSheet> {
 
   String cargo = 'Profissional';
   bool ativo = true;
+  final _funcoesRepository = FuncionariosRepository();
+  final _funcaoPersonalizada = TextEditingController();
+  final Set<String> _funcoes = {};
+  List<String> _funcoesDisponiveis = const [];
 
+  static const _sugestoesFuncoes = <String>[
+    'Manicure',
+    'Pedicure',
+    'Cabeleireira',
+    'Barbeiro',
+    'Designer de sobrancelhas',
+    'Lash designer',
+    'Maquiadora',
+    'Esteticista',
+    'Massoterapeuta',
+    'Depiladora',
+    'Tatuadora',
+    'Recepcionista',
+    'Gerente',
+    'Auxiliar',
+    'Outra',
+  ];
   final cargos = const [
     'Proprietário',
     'Administrador',
@@ -444,6 +467,8 @@ class _FuncionarioFormSheetState extends State<FuncionarioFormSheet> {
     if (f == null) {
       comissaoController.text = '50';
       metaController.text = '0';
+      _funcoes.add('Profissional');
+      _carregarFuncoes();
       return;
     }
 
@@ -455,6 +480,35 @@ class _FuncionarioFormSheetState extends State<FuncionarioFormSheet> {
 
     cargo = f.cargo;
     ativo = f.ativo;
+    _funcoes.addAll(f.funcoes.isEmpty ? [f.cargo] : f.funcoes);
+    _carregarFuncoes();
+  }
+
+  Future<void> _carregarFuncoes() async {
+    final available = await _funcoesRepository.listarFuncoesDisponiveis();
+    if (widget.funcionarioInicial != null) {
+      _funcoes.addAll(
+        await _funcoesRepository.listarFuncoes(widget.funcionarioInicial!.id),
+      );
+    }
+    if (mounted) {
+      setState(
+        () => _funcoesDisponiveis = available.isEmpty
+            ? _sugestoesFuncoes
+            : available,
+      );
+    }
+  }
+
+  void _adicionarFuncao() {
+    final value = _funcaoPersonalizada.text.trim();
+    if (value.isEmpty) {
+      return;
+    }
+    setState(() {
+      _funcoes.add(value);
+      _funcaoPersonalizada.clear();
+    });
   }
 
   @override
@@ -464,6 +518,7 @@ class _FuncionarioFormSheetState extends State<FuncionarioFormSheet> {
     emailController.dispose();
     comissaoController.dispose();
     metaController.dispose();
+    _funcaoPersonalizada.dispose();
     super.dispose();
   }
 
@@ -493,6 +548,7 @@ class _FuncionarioFormSheetState extends State<FuncionarioFormSheet> {
           double.tryParse(metaController.text.replaceAll(',', '.')) ?? 0,
       faturamentoMes: widget.funcionarioInicial?.faturamentoMes ?? 0,
       dataCadastro: widget.funcionarioInicial?.dataCadastro ?? DateTime.now(),
+      funcoes: _funcoes.toList(),
     );
 
     Navigator.pop(context, funcionario);
@@ -528,18 +584,76 @@ class _FuncionarioFormSheetState extends State<FuncionarioFormSheet> {
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(
               initialValue: cargo,
-              decoration: const InputDecoration(labelText: 'Cargo'),
+              decoration: const InputDecoration(
+                labelText: 'Cargo principal (legado)',
+              ),
               items: cargos
                   .map((e) => DropdownMenuItem(value: e, child: Text(e)))
                   .toList(),
-              onChanged: (v) {
-                if (v == null) return;
-
-                setState(() {
-                  cargo = v;
-                });
-              },
+              onChanged: (v) => v == null ? null : setState(() => cargo = v),
             ),
+            const SizedBox(height: 16),
+            const Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Funções',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 4,
+                children: _funcoesDisponiveis
+                    .map(
+                      (item) => FilterChip(
+                        label: Text(item),
+                        selected: _funcoes.contains(item),
+                        onSelected: (selected) => setState(
+                          () => selected
+                              ? _funcoes.add(item)
+                              : _funcoes.remove(item),
+                        ),
+                      ),
+                    )
+                    .toList(),
+              ),
+            ),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _funcaoPersonalizada,
+                    decoration: const InputDecoration(
+                      labelText: 'Adicionar função personalizada',
+                    ),
+                  ),
+                ),
+                IconButton(
+                  onPressed: _adicionarFuncao,
+                  icon: const Icon(Icons.add),
+                  tooltip: 'Adicionar função',
+                ),
+              ],
+            ),
+            if (_funcoes.isNotEmpty)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Wrap(
+                  spacing: 6,
+                  children: _funcoes
+                      .map(
+                        (item) => InputChip(
+                          label: Text(item),
+                          onDeleted: () =>
+                              setState(() => _funcoes.remove(item)),
+                        ),
+                      )
+                      .toList(),
+                ),
+              ),
             const SizedBox(height: 12),
             TextField(
               controller: comissaoController,

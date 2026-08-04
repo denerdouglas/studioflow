@@ -1,5 +1,19 @@
 # Changelog
 
+## [Não publicado] - 2026-08-04
+
+### Added
+- Execução local segura de comandos da Helloa Sophia com distinção entre consulta e ação, prévia, confirmação, permissões, idempotência, auditoria e sincronização offline.
+- Lembretes em massa usando agenda, consentimento e fila oficial do WhatsApp, com prevenção de duplicidade e resultados parciais.
+- Cadastro por linguagem natural de estoque/lotes, serviços, colaboradores com múltiplas funções e saídas financeiras.
+- Funções profissionais múltiplas e personalizadas, separadas do perfil de acesso, com migração compatível e fila de sincronização.
+- Testes para comandos operacionais, consentimento, idempotência, cadastros, funções e jornada real.
+
+### Changed
+- Disponibilidade consolidada por profissional, seleção de vários dias e seletores visuais de horário, preservando exceções e o motor real da agenda.
+- Central de Atendimento agora abre a configuração real do agendamento público em vez da antiga tela de rascunho.
+- Banco local atualizado para a versão 27; `versionName` e `versionCode` do aplicativo permanecem inalterados nesta sprint.
+
 ## [1.4.7] - 2026-08-03
 
 ### Added
