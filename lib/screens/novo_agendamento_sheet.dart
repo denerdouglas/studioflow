@@ -34,7 +34,9 @@ class _ItemServico {
 
   _ItemServico({
     this.profissional,
-  }) : servico = null : inicioPrevisto : fimPrevisto;
+  }) : servico = null,
+       inicioPrevisto = null,
+       fimPrevisto = null;
 }
 
 class _NovoAgendamentoSheetState extends State<NovoAgendamentoSheet> {
