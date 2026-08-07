@@ -4,6 +4,8 @@ import '../database/database_service.dart';
 import '../models/domain/acesso.dart';
 import '../services/session_controller.dart';
 import '../services/whatsapp_queue_service.dart';
+import '../models/domain/agendamento_grupo_registro.dart';
+import '../domain/services/agenda_conflict_checker.dart';
 import 'agenda_completa_repository.dart';
 import 'pacotes_repository.dart';
 
@@ -41,6 +43,9 @@ class AgendamentoRegistro {
   final bool compareceu;
   final bool encaixe;
 
+  final String? grupoAgendamentoId;
+  final int ordemNoGrupo;
+
   final String observacoes;
 
   final DateTime dataCriacao;
@@ -62,7 +67,9 @@ class AgendamentoRegistro {
     required this.confirmado,
     required this.compareceu,
     this.encaixe = false,
-    required this.observacoes,
+    this.grupoAgendamentoId,
+    this.ordemNoGrupo = 0,
+    this.observacoes = '',
     required this.dataCriacao,
   });
 
@@ -81,6 +88,8 @@ class AgendamentoRegistro {
       'confirmado': confirmado ? 1 : 0,
       'compareceu': compareceu ? 1 : 0,
       'encaixe': encaixe ? 1 : 0,
+      'grupo_agendamento_id': grupoAgendamentoId,
+      'ordem_no_grupo': ordemNoGrupo,
       'observacoes': observacoes,
       'data_criacao': dataCriacao.toIso8601String(),
     };
@@ -91,35 +100,22 @@ class AgendamentoRegistro {
       id: mapa['id'] as String,
       clienteId: mapa['cliente_id'] as String,
       clienteNome: mapa['cliente_nome'] as String? ?? 'Cliente',
-
       profissionalId: mapa['profissional_id'] as String,
-
       profissionalNome: mapa['profissional_nome'] as String? ?? 'Profissional',
-
       servicoId: mapa['servico_id'] as String,
-
       servicoNome: mapa['servico_nome'] as String? ?? 'Serviço',
-
       inicio: DateTime.parse(mapa['inicio'] as String),
-
       fim: DateTime.parse(mapa['fim'] as String),
-
       status: mapa['status'] as String? ?? 'agendado',
-
       valorServico: (mapa['valor_servico'] as num? ?? 0).toDouble(),
-
       desconto: (mapa['desconto'] as num? ?? 0).toDouble(),
-
       valorRecebido: (mapa['valor_recebido'] as num? ?? 0).toDouble(),
-
       confirmado: (mapa['confirmado'] as int? ?? 0) == 1,
-
       compareceu: (mapa['compareceu'] as int? ?? 0) == 1,
-
       encaixe: (mapa['encaixe'] as int? ?? 0) == 1,
-
+      grupoAgendamentoId: mapa['grupo_agendamento_id'] as String?,
+      ordemNoGrupo: (mapa['ordem_no_grupo'] as int? ?? 0),
       observacoes: mapa['observacoes'] as String? ?? '',
-
       dataCriacao: DateTime.parse(mapa['data_criacao'] as String),
     );
   }
@@ -133,17 +129,21 @@ class AgendamentoRegistro {
   }
 
   AgendamentoRegistro copiarCom({
-    DateTime? inicio,
-    DateTime? fim,
+    String? id,
     String? status,
     bool? confirmado,
     bool? compareceu,
     bool? encaixe,
+    double? desconto,
     double? valorRecebido,
     String? observacoes,
+    String? grupoAgendamentoId,
+    int? ordemNoGrupo,
+    DateTime? inicio,
+    DateTime? fim,
   }) {
     return AgendamentoRegistro(
-      id: id,
+      id: id ?? this.id,
       clienteId: clienteId,
       clienteNome: clienteNome,
       profissionalId: profissionalId,
@@ -154,11 +154,13 @@ class AgendamentoRegistro {
       fim: fim ?? this.fim,
       status: status ?? this.status,
       valorServico: valorServico,
-      desconto: desconto,
+      desconto: desconto ?? this.desconto,
       valorRecebido: valorRecebido ?? this.valorRecebido,
       confirmado: confirmado ?? this.confirmado,
       compareceu: compareceu ?? this.compareceu,
       encaixe: encaixe ?? this.encaixe,
+      grupoAgendamentoId: grupoAgendamentoId ?? this.grupoAgendamentoId,
+      ordemNoGrupo: ordemNoGrupo ?? this.ordemNoGrupo,
       observacoes: observacoes ?? this.observacoes,
       dataCriacao: dataCriacao,
     );
@@ -239,6 +241,34 @@ class AgendaRepository {
     return registros.map(AgendamentoRegistro.doMapa).toList();
   }
 
+  Future<List<AgendamentoRegistro>> listarPorGrupo(String grupoAgendamentoId) async {
+    final Database db = await _databaseService.database;
+
+    final registros = await db.rawQuery(
+      '''
+      SELECT
+        a.*,
+        c.nome AS cliente_nome,
+        p.nome AS profissional_nome,
+        s.nome AS servico_nome
+      FROM agendamentos a
+      INNER JOIN clientes c
+        ON c.id = a.cliente_id
+      INNER JOIN profissionais p
+        ON p.id = a.profissional_id
+      INNER JOIN servicos s
+        ON s.id = a.servico_id
+      WHERE a.comercio_id = ?
+        AND a.grupo_agendamento_id = ?
+        AND a.excluido = 0
+      ORDER BY a.ordem_no_grupo ASC
+      ''',
+      [_comercioId, grupoAgendamentoId],
+    );
+
+    return registros.map(AgendamentoRegistro.doMapa).toList();
+  }
+
   Future<void> inserir(AgendamentoRegistro agendamento) async {
     final Database db = await _databaseService.database;
 
@@ -273,27 +303,95 @@ class AgendaRepository {
         'comercio_id': _comercioId,
       }, conflictAlgorithm: ConflictAlgorithm.abort);
 
-      final cliente = await txn.query(
-        'clientes',
-        columns: ['whatsapp'],
-        where: 'id = ? AND comercio_id = ?',
-        whereArgs: [agendamento.clienteId, _comercioId],
-      );
+      await _enfileirarWhatsapp(txn, agendamento);
+    });
+  }
 
-      if (cliente.isNotEmpty) {
-        final whatsapp = cliente.first['whatsapp'] as String?;
-        if (whatsapp != null && whatsapp.isNotEmpty) {
-          await WhatsappQueueService().enfileirar(
-            txn: txn,
-            comercioId: _comercioId,
-            destinatario: whatsapp,
-            template: 'agendamento_criado',
-            payload: agendamento.paraMapa(),
-            agendamentoId: agendamento.id,
-          );
-        }
+  Future<void> inserirGrupo(
+    AgendamentoGrupoRegistro grupo,
+    List<AgendamentoRegistro> agendamentos,
+  ) async {
+    final Database db = await _databaseService.database;
+
+    // Buscar todos os agendamentos existentes no dia para os profissionais envolvidos
+    final profissionalIds = agendamentos.map((e) => e.profissionalId).toSet();
+    final inicioMenor = agendamentos.map((e) => e.inicio).reduce((a, b) => a.isBefore(b) ? a : b);
+    final fimMaior = agendamentos.map((e) => e.fim).reduce((a, b) => a.isAfter(b) ? a : b);
+
+    final inicioDia = DateTime(inicioMenor.year, inicioMenor.month, inicioMenor.day);
+    final fimDia = DateTime(fimMaior.year, fimMaior.month, fimMaior.day).add(const Duration(days: 1));
+
+    final profIdsParams = profissionalIds.map((_) => '?').join(',');
+    final args = [_comercioId, inicioDia.toIso8601String(), fimDia.toIso8601String(), ...profissionalIds];
+
+    final registrosDb = await db.rawQuery(
+      '''
+      SELECT a.*, c.nome AS cliente_nome, p.nome AS profissional_nome, s.nome AS servico_nome
+      FROM agendamentos a
+      INNER JOIN clientes c ON c.id = a.cliente_id
+      INNER JOIN profissionais p ON p.id = a.profissional_id
+      INNER JOIN servicos s ON s.id = a.servico_id
+      WHERE a.comercio_id = ?
+        AND a.excluido = 0
+        AND a.inicio >= ?
+        AND a.inicio < ?
+        AND a.profissional_id IN ($profIdsParams)
+      ''',
+      args,
+    );
+
+    final existentes = registrosDb.map(AgendamentoRegistro.doMapa).toList();
+
+    // Validação pura do conflito
+    AgendaConflictChecker.validar(novos: agendamentos, existentes: existentes);
+
+    // Inserção atômica
+    await db.transaction((txn) async {
+      // 1. Inserir grupo
+      await txn.insert('agendamento_grupos', {
+        'id': grupo.id,
+        'business_id': _comercioId,
+        'cliente_id': grupo.clienteId,
+        'comanda_id': grupo.comandaId,
+        'status': grupo.status,
+        'observacoes': grupo.observacoes,
+        'created_at': grupo.createdAt.toIso8601String(),
+        'updated_at': grupo.updatedAt.toIso8601String(),
+      }, conflictAlgorithm: ConflictAlgorithm.abort);
+
+      // 2. Inserir cada serviço associado
+      for (var item in agendamentos) {
+        await txn.insert('agendamentos', {
+          ...item.paraMapa(),
+          'comercio_id': _comercioId,
+        }, conflictAlgorithm: ConflictAlgorithm.abort);
+
+        await _enfileirarWhatsapp(txn, item);
       }
     });
+  }
+
+  Future<void> _enfileirarWhatsapp(Transaction txn, AgendamentoRegistro agendamento) async {
+    final cliente = await txn.query(
+      'clientes',
+      columns: ['whatsapp'],
+      where: 'id = ? AND comercio_id = ?',
+      whereArgs: [agendamento.clienteId, _comercioId],
+    );
+
+    if (cliente.isNotEmpty) {
+      final whatsapp = cliente.first['whatsapp'] as String?;
+      if (whatsapp != null && whatsapp.isNotEmpty) {
+        await WhatsappQueueService().enfileirar(
+          txn: txn,
+          comercioId: _comercioId,
+          destinatario: whatsapp,
+          template: 'agendamento_criado',
+          payload: agendamento.paraMapa(),
+          agendamentoId: agendamento.id,
+        );
+      }
+    }
   }
 
   Future<void> atualizar(AgendamentoRegistro agendamento) async {
@@ -335,6 +433,93 @@ class AgendaRepository {
     if (quantidadeAlterada == 0) {
       throw StateError('Agendamento não encontrado.');
     }
+  }
+
+  Future<void> remarcarGrupo(String grupoAgendamentoId, DateTime novoInicio) async {
+    final Database db = await _databaseService.database;
+    final grupo = await listarPorGrupo(grupoAgendamentoId);
+    if (grupo.isEmpty) throw StateError('Grupo não encontrado.');
+
+    // Encontrar o menor inicio atual para calcular a diferença
+    final inicioMenor = grupo.map((e) => e.inicio).reduce((a, b) => a.isBefore(b) ? a : b);
+    final offset = novoInicio.difference(inicioMenor);
+
+    // Ajustar todos os agendamentos do grupo com o mesmo offset
+    final grupoAtualizado = grupo.map((e) {
+      return e.copiarCom(
+        inicio: e.inicio.add(offset),
+        fim: e.fim.add(offset),
+      );
+    }).toList();
+
+    // Validar conflitos puros
+    // (Apenas buscaríamos existentes se estivéssemos no método de inserirGrupo;
+    // aqui para simplificar, vamos reutilizar a mesma lógica de busca de existentes 
+    // mas com os novos horários)
+    
+    final profissionalIds = grupoAtualizado.map((e) => e.profissionalId).toSet();
+    final inicioMenorAtualizado = novoInicio;
+    final fimMaiorAtualizado = grupoAtualizado.map((e) => e.fim).reduce((a, b) => a.isAfter(b) ? a : b);
+    
+    final inicioDia = DateTime(inicioMenorAtualizado.year, inicioMenorAtualizado.month, inicioMenorAtualizado.day);
+    final fimDia = DateTime(fimMaiorAtualizado.year, fimMaiorAtualizado.month, fimMaiorAtualizado.day).add(const Duration(days: 1));
+
+    final profIdsParams = profissionalIds.map((_) => '?').join(',');
+    final args = [_comercioId, inicioDia.toIso8601String(), fimDia.toIso8601String(), ...profissionalIds];
+
+    final registrosDb = await db.rawQuery(
+      '''
+      SELECT a.*, c.nome AS cliente_nome, p.nome AS profissional_nome, s.nome AS servico_nome
+      FROM agendamentos a
+      INNER JOIN clientes c ON c.id = a.cliente_id
+      INNER JOIN profissionais p ON p.id = a.profissional_id
+      INNER JOIN servicos s ON s.id = a.servico_id
+      WHERE a.comercio_id = ?
+        AND a.excluido = 0
+        AND a.inicio >= ?
+        AND a.inicio < ?
+        AND a.profissional_id IN ($profIdsParams)
+      ''',
+      args,
+    );
+    final existentes = registrosDb.map(AgendamentoRegistro.doMapa).toList();
+
+    AgendaConflictChecker.validar(novos: grupoAtualizado, existentes: existentes);
+
+    await db.transaction((txn) async {
+      for (var item in grupoAtualizado) {
+        await txn.update(
+          'agendamentos',
+          item.paraMapa(),
+          where: 'id = ? AND comercio_id = ?',
+          whereArgs: [item.id, _comercioId],
+        );
+      }
+    });
+  }
+
+  Future<void> cancelarGrupo(String grupoAgendamentoId) async {
+    final Database db = await _databaseService.database;
+    final grupo = await listarPorGrupo(grupoAgendamentoId);
+    if (grupo.isEmpty) return;
+
+    await db.transaction((txn) async {
+      for (var item in grupo) {
+        await txn.update(
+          'agendamentos',
+          {'status': 'cancelado'},
+          where: 'id = ? AND comercio_id = ? AND excluido = 0',
+          whereArgs: [item.id, _comercioId],
+        );
+      }
+      
+      await txn.update(
+        'agendamento_grupos',
+        {'status': 'cancelado', 'updated_at': DateTime.now().toIso8601String()},
+        where: 'id = ? AND business_id = ?',
+        whereArgs: [grupoAgendamentoId, _comercioId],
+      );
+    });
   }
 
   Future<void> atualizarStatus({

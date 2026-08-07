@@ -15,6 +15,7 @@ import '../services/mensagem_service.dart';
 import '../services/session_controller.dart';
 import '../services/whatsapp_queue_service.dart';
 import '../widgets/mensagem_revisao_dialog.dart';
+import 'novo_agendamento_sheet.dart';
 
 class AgendaPage extends StatefulWidget {
   final ClienteRegistro? clienteInicial;
@@ -169,97 +170,24 @@ class _AgendaPageState extends State<AgendaPage> {
       }
     }
 
-    final novo = await showModalBottomSheet<AgendamentoRegistro>(
+    final novo = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) {
         return NovoAgendamentoSheet(
           dataBase: _dataSelecionada,
-          clientes: _clientes,
           profissionais: _profissionais,
-          servicos: _servicos,
           clienteInicial: clienteSelecionada,
         );
       },
     );
 
-    if (novo == null) {
-      return;
-    }
-
-    try {
-      await _agendaRepository.inserir(novo);
-      await _agendaCompletaRepository.registrarStatus(
-        agendamentoId: novo.id,
-        status: 'agendado',
-        detalhes: 'Agendamento criado.',
-      );
-
+    if (novo == true) {
       setState(() {
-        _dataSelecionada = DateTime(
-          novo.inicio.year,
-          novo.inicio.month,
-          novo.inicio.day,
-        );
-
         _carregando = true;
       });
-
       await _carregarTudo();
-
-      if (!mounted) {
-        return;
-      }
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Agendamento salvo com sucesso.'),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    } on ConflitoAgendaException catch (erro) {
-      if (!mounted) return;
-      await _mostrarResolucaoConflito(erro, (novoInicio, novoFim) async {
-        final agendamentoCorrigido = novo.copiarCom(
-          inicio: novoInicio,
-          fim: novoFim,
-        );
-        try {
-          await _agendaRepository.inserir(agendamentoCorrigido);
-          if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Agendamento salvo com sucesso no novo horário.'),
-            ),
-          );
-          setState(() {
-            _dataSelecionada = novoInicio;
-            _carregando = true;
-          });
-          _carregarTudo();
-        } catch (e) {
-          if (!mounted) return;
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text('Erro: $e')));
-        }
-      });
-    } catch (erro) {
-      if (!mounted) {
-        return;
-      }
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            erro is StateError
-                ? erro.message
-                : 'Não foi possível salvar o agendamento.',
-          ),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
     }
   }
 
@@ -294,6 +222,11 @@ class _AgendaPageState extends State<AgendaPage> {
       return;
     }
 
+    if (acao == 'reagendar_grupo' && agendamento.grupoAgendamentoId != null) {
+      await _reagendarAgendamento(agendamento, reagendarGrupo: true);
+      return;
+    }
+
     if (acao == 'historico') {
       await _mostrarHistorico(agendamento);
       return;
@@ -312,7 +245,7 @@ class _AgendaPageState extends State<AgendaPage> {
           titulo: 'Cancelar agendamento',
           mensagem:
               'Informe o motivo. As mensagens pendentes deste horário serão canceladas.',
-          rotuloBotao: 'Cancelar agendamento',
+          rotuloBotao: 'Cancelar',
         );
         if (motivo == null) return;
         await _agendaCompletaRepository.registrarStatus(
@@ -320,6 +253,18 @@ class _AgendaPageState extends State<AgendaPage> {
           status: 'cancelado',
           detalhes: motivo,
         );
+      }
+
+      if (acao == 'cancelar_grupo' && agendamento.grupoAgendamentoId != null) {
+        final motivo = await _solicitarMotivo(
+          titulo: 'Cancelar grupo inteiro',
+          mensagem:
+              'Deseja cancelar o atendimento completo de ${agendamento.clienteNome}? Todos os serviços serão cancelados.',
+          rotuloBotao: 'Cancelar grupo',
+        );
+        if (motivo == null) return;
+        
+        await _agendaRepository.cancelarGrupo(agendamento.grupoAgendamentoId!);
       }
 
       if (acao == 'lembrete') {
@@ -461,7 +406,7 @@ class _AgendaPageState extends State<AgendaPage> {
     );
   }
 
-  Future<void> _reagendarAgendamento(AgendamentoRegistro agendamento) async {
+  Future<void> _reagendarAgendamento(AgendamentoRegistro agendamento, {bool reagendarGrupo = false}) async {
     var data = agendamento.inicio;
     var horario = TimeOfDay.fromDateTime(agendamento.inicio);
     final motivo = TextEditingController();
@@ -469,7 +414,7 @@ class _AgendaPageState extends State<AgendaPage> {
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setLocal) => AlertDialog(
-          title: const Text('Reagendar atendimento'),
+          title: Text(reagendarGrupo ? 'Reagendar grupo completo' : 'Reagendar atendimento'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -527,12 +472,17 @@ class _AgendaPageState extends State<AgendaPage> {
       horario.minute,
     );
     try {
-      await _agendaCompletaRepository.reagendar(
-        agendamentoId: agendamento.id,
-        novoInicio: inicio,
-        novoFim: inicio.add(agendamento.fim.difference(agendamento.inicio)),
-        motivo: motivo.text.trim(),
-      );
+      if (reagendarGrupo) {
+        await _agendaRepository.remarcarGrupo(agendamento.grupoAgendamentoId!, inicio);
+      } else {
+        await _agendaCompletaRepository.reagendar(
+          agendamentoId: agendamento.id,
+          novoInicio: inicio,
+          novoFim: inicio.add(agendamento.fim.difference(agendamento.inicio)),
+          motivo: motivo.text.trim(),
+        );
+      }
+      
       _dataSelecionada = inicio;
       await _carregarTudo();
       if (mounted) {
@@ -544,11 +494,15 @@ class _AgendaPageState extends State<AgendaPage> {
       if (mounted) {
         await _mostrarResolucaoConflito(erro, (novoInicio, novoFim) async {
           try {
-            await _agendaCompletaRepository.reagendar(
-              agendamentoId: agendamento.id,
-              novoInicio: novoInicio,
-              novoFim: novoFim,
-            );
+            if (reagendarGrupo) {
+              await _agendaRepository.remarcarGrupo(agendamento.grupoAgendamentoId!, novoInicio);
+            } else {
+              await _agendaCompletaRepository.reagendar(
+                agendamentoId: agendamento.id,
+                novoInicio: novoInicio,
+                novoFim: novoFim,
+              );
+            }
             if (!mounted) return;
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
@@ -1348,13 +1302,22 @@ class OpcoesAgendamentoSheet extends StatelessWidget {
                   },
                 ),
                 _OpcaoAgendamento(
-                  titulo: 'Reagendar',
+                  titulo: 'Reagendar este serviço',
                   icone: Icons.edit_calendar_outlined,
                   cor: const Color(0xFF70569A),
                   onTap: () {
                     Navigator.pop(context, 'reagendar');
                   },
                 ),
+                if (agendamento.grupoAgendamentoId != null)
+                  _OpcaoAgendamento(
+                    titulo: 'Reagendar o atendimento completo (todos os serviços)',
+                    icone: Icons.calendar_month,
+                    cor: const Color(0xFF5D408B),
+                    onTap: () {
+                      Navigator.pop(context, 'reagendar_grupo');
+                    },
+                  ),
                 _OpcaoAgendamento(
                   titulo: 'Registrar falta',
                   icone: Icons.person_off_outlined,
@@ -1372,13 +1335,22 @@ class OpcoesAgendamentoSheet extends StatelessWidget {
                   },
                 ),
                 _OpcaoAgendamento(
-                  titulo: 'Cancelar',
+                  titulo: 'Cancelar este serviço',
                   icone: Icons.cancel_outlined,
                   cor: const Color(0xFFE58A25),
                   onTap: () {
                     Navigator.pop(context, 'cancelar');
                   },
                 ),
+                if (agendamento.grupoAgendamentoId != null)
+                  _OpcaoAgendamento(
+                    titulo: 'Cancelar o atendimento completo (todos os serviços)',
+                    icone: Icons.cancel,
+                    cor: const Color(0xFFC76C12),
+                    onTap: () {
+                      Navigator.pop(context, 'cancelar_grupo');
+                    },
+                  ),
                 _OpcaoAgendamento(
                   titulo: 'Enviar lembrete',
                   icone: Icons.chat_bubble_outline,
@@ -1532,374 +1504,3 @@ class _ConcluirAgendamentoDialogState extends State<ConcluirAgendamentoDialog> {
   }
 }
 
-class NovoAgendamentoSheet extends StatefulWidget {
-  final DateTime dataBase;
-  final List<ClienteRegistro> clientes;
-  final List<ProfissionalBasicoRegistro> profissionais;
-  final List<ServicoBasicoRegistro> servicos;
-  final ClienteRegistro? clienteInicial;
-
-  const NovoAgendamentoSheet({
-    super.key,
-    required this.dataBase,
-    required this.clientes,
-    required this.profissionais,
-    required this.servicos,
-    this.clienteInicial,
-  });
-
-  @override
-  State<NovoAgendamentoSheet> createState() => _NovoAgendamentoSheetState();
-}
-
-class _NovoAgendamentoSheetState extends State<NovoAgendamentoSheet> {
-  static const Color _corPrincipal = Color(0xFF70569A);
-
-  static const Color _corFundo = Color(0xFFF9F6FC);
-
-  final TextEditingController _observacoesController = TextEditingController();
-  bool _encaixe = false;
-
-  ClienteRegistro? _clienteSelecionado;
-  ProfissionalBasicoRegistro? _profissionalSelecionado;
-  ServicoBasicoRegistro? _servicoSelecionado;
-
-  late DateTime _dataSelecionada;
-
-  TimeOfDay _horarioSelecionado = const TimeOfDay(hour: 9, minute: 0);
-
-  @override
-  void initState() {
-    super.initState();
-
-    _dataSelecionada = DateTime(
-      widget.dataBase.year,
-      widget.dataBase.month,
-      widget.dataBase.day,
-    );
-
-    if (widget.clienteInicial != null) {
-      for (final cliente in widget.clientes) {
-        if (cliente.id == widget.clienteInicial!.id) {
-          _clienteSelecionado = cliente;
-          break;
-        }
-      }
-    }
-
-    _clienteSelecionado ??= widget.clientes.isNotEmpty
-        ? widget.clientes.first
-        : null;
-
-    _profissionalSelecionado = widget.profissionais.isNotEmpty
-        ? widget.profissionais.first
-        : null;
-
-    _servicoSelecionado = widget.servicos.isNotEmpty
-        ? widget.servicos.first
-        : null;
-  }
-
-  @override
-  void dispose() {
-    _observacoesController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _selecionarData() async {
-    final data = await showDatePicker(
-      context: context,
-      initialDate: _dataSelecionada,
-      firstDate: DateTime(2025),
-      lastDate: DateTime(2035),
-      locale: const Locale('pt', 'BR'),
-    );
-
-    if (data == null) {
-      return;
-    }
-
-    setState(() {
-      _dataSelecionada = data;
-    });
-  }
-
-  Future<void> _selecionarHorario() async {
-    final horario = await showTimePicker(
-      context: context,
-      initialTime: _horarioSelecionado,
-    );
-
-    if (horario == null) {
-      return;
-    }
-
-    setState(() {
-      _horarioSelecionado = horario;
-    });
-  }
-
-  void _salvar() {
-    final cliente = _clienteSelecionado;
-    final profissional = _profissionalSelecionado;
-    final servico = _servicoSelecionado;
-
-    if (cliente == null || profissional == null || servico == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Selecione cliente, profissional e serviço.'),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-
-      return;
-    }
-
-    final inicio = DateTime(
-      _dataSelecionada.year,
-      _dataSelecionada.month,
-      _dataSelecionada.day,
-      _horarioSelecionado.hour,
-      _horarioSelecionado.minute,
-    );
-
-    final fim = inicio.add(Duration(minutes: servico.duracaoMinutos));
-
-    final agora = DateTime.now();
-
-    Navigator.pop(
-      context,
-      AgendamentoRegistro(
-        id: agora.microsecondsSinceEpoch.toString(),
-        clienteId: cliente.id,
-        clienteNome: cliente.nome,
-        profissionalId: profissional.id,
-        profissionalNome: profissional.nome,
-        servicoId: servico.id,
-        servicoNome: servico.nome,
-        inicio: inicio,
-        fim: fim,
-        status: 'agendado',
-        valorServico: servico.preco,
-        desconto: 0,
-        valorRecebido: 0,
-        confirmado: false,
-        compareceu: false,
-        encaixe: _encaixe,
-        observacoes: _observacoesController.text.trim(),
-        dataCriacao: agora,
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final teclado = MediaQuery.viewInsetsOf(context).bottom;
-
-    return Container(
-      padding: EdgeInsets.fromLTRB(22, 22, 22, teclado + 25),
-      decoration: const BoxDecoration(
-        color: _corFundo,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      child: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Center(
-              child: Container(
-                width: 48,
-                height: 5,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFD6CDDD),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-            const Text(
-              'Novo agendamento',
-              style: TextStyle(
-                fontSize: 25,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF2D2140),
-              ),
-            ),
-            const SizedBox(height: 6),
-            const Text(
-              'Selecione os dados do atendimento.',
-              style: TextStyle(fontSize: 13, color: Color(0xFF766A85)),
-            ),
-            const SizedBox(height: 22),
-            DropdownButtonFormField<ClienteRegistro>(
-              initialValue: _clienteSelecionado,
-              decoration: const InputDecoration(
-                labelText: 'Cliente',
-                prefixIcon: Icon(Icons.person_outline),
-              ),
-              items: widget.clientes.map((cliente) {
-                return DropdownMenuItem(
-                  value: cliente,
-                  child: Text(cliente.nome),
-                );
-              }).toList(),
-              onChanged: (valor) {
-                setState(() {
-                  _clienteSelecionado = valor;
-                });
-              },
-            ),
-            const SizedBox(height: 14),
-            DropdownButtonFormField<ProfissionalBasicoRegistro>(
-              initialValue: _profissionalSelecionado,
-              decoration: const InputDecoration(
-                labelText: 'Profissional',
-                prefixIcon: Icon(Icons.badge_outlined),
-              ),
-              items: widget.profissionais.map((profissional) {
-                return DropdownMenuItem(
-                  value: profissional,
-                  child: Text(profissional.nome),
-                );
-              }).toList(),
-              onChanged: (valor) {
-                setState(() {
-                  _profissionalSelecionado = valor;
-                });
-              },
-            ),
-            const SizedBox(height: 14),
-            DropdownButtonFormField<ServicoBasicoRegistro>(
-              initialValue: _servicoSelecionado,
-              decoration: const InputDecoration(
-                labelText: 'Serviço',
-                prefixIcon: Icon(Icons.content_cut),
-              ),
-              items: widget.servicos.map((servico) {
-                return DropdownMenuItem(
-                  value: servico,
-                  child: Text(
-                    '${servico.nome} • '
-                    'R\$ ${servico.preco.toStringAsFixed(2)}',
-                  ),
-                );
-              }).toList(),
-              onChanged: (valor) {
-                setState(() {
-                  _servicoSelecionado = valor;
-                });
-              },
-            ),
-            const SizedBox(height: 14),
-            Row(
-              children: [
-                Expanded(
-                  child: InkWell(
-                    onTap: _selecionarData,
-                    borderRadius: BorderRadius.circular(14),
-                    child: InputDecorator(
-                      decoration: const InputDecoration(
-                        labelText: 'Data',
-                        prefixIcon: Icon(Icons.calendar_month_outlined),
-                      ),
-                      child: Text(_formatarData(_dataSelecionada)),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: InkWell(
-                    onTap: _selecionarHorario,
-                    borderRadius: BorderRadius.circular(14),
-                    child: InputDecorator(
-                      decoration: const InputDecoration(
-                        labelText: 'Horário',
-                        prefixIcon: Icon(Icons.schedule_outlined),
-                      ),
-                      child: Text(_horarioSelecionado.format(context)),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 14),
-            if (_servicoSelecionado != null)
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(15),
-                decoration: BoxDecoration(
-                  color: _corPrincipal.withValues(alpha: 0.10),
-                  borderRadius: BorderRadius.circular(15),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.info_outline, color: _corPrincipal),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        'Duração: '
-                        '${_servicoSelecionado!.duracaoMinutos} minutos'
-                        ' • Valor: R\$ '
-                        '${_servicoSelecionado!.preco.toStringAsFixed(2)}',
-                        style: const TextStyle(
-                          color: Color(0xFF2D2140),
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            const SizedBox(height: 14),
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              value: _encaixe,
-              title: const Text('Agendamento por encaixe'),
-              subtitle: const Text(
-                'Identifica horários adicionados como exceção.',
-              ),
-              onChanged: (valor) => setState(() => _encaixe = valor),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _observacoesController,
-              maxLines: 3,
-              textCapitalization: TextCapitalization.sentences,
-              decoration: const InputDecoration(
-                labelText: 'Observações',
-                alignLabelWithHint: true,
-                prefixIcon: Icon(Icons.notes_outlined),
-              ),
-            ),
-            const SizedBox(height: 22),
-            FilledButton.icon(
-              onPressed: _salvar,
-              icon: const Icon(Icons.save_outlined),
-              label: const Text(
-                'Salvar agendamento',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-              ),
-              style: FilledButton.styleFrom(
-                backgroundColor: _corPrincipal,
-                foregroundColor: Colors.white,
-                minimumSize: const Size.fromHeight(57),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(17),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  String _formatarData(DateTime data) {
-    final dia = data.day.toString().padLeft(2, '0');
-
-    final mes = data.month.toString().padLeft(2, '0');
-
-    return '$dia/$mes/${data.year}';
-  }
-}
