@@ -596,7 +596,7 @@ class IaCommandService {
         'whatsapp_fila',
         columns: ['id'],
         where:
-            "comercio_id=? AND agendamento_id=? AND template='lembrete_ia_hoje' AND status NOT IN ('falhou','cancelado')",
+            "business_id=? AND agendamento_id=? AND template_id='lembrete_ia_hoje' AND status NOT IN ('falhou','cancelado')",
         whereArgs: [user.comercioId, row['id']],
         limit: 1,
       );
@@ -624,7 +624,8 @@ class IaCommandService {
           },
         );
         pending++;
-      } catch (_) {
+      } catch (e, stack) {
+        print('Exception in _executeReminders: $e\n$stack');
         failures++;
       }
     }

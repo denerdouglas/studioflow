@@ -146,13 +146,13 @@ void main() {
     });
     await db.insert('whatsapp_fila', {
       'id': 'wa-1',
-      'comercio_id': dono.comercioId,
+      'business_id': dono.comercioId,
       'destinatario': '5511988888888',
-      'payload_json': '{}',
+      'payload': '{}',
       'agendamento_id': 'agenda-cancelar',
       'status': 'simulado',
-      'criado_em': now,
-      'atualizado_em': now,
+      'created_at': DateTime.now().toUtc().toIso8601String(),
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
     });
     final agenda = AgendaCompletaRepository(
       databaseProvider: () async => db,

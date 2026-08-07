@@ -225,8 +225,32 @@ class ComprasRepository {
       limit: 1,
     );
     if (produto.isEmpty) throw StateError('Produto recebido não encontrado.');
-    final anterior = (produto.first['quantidade_atual'] as num).toDouble();
+    
+    final saldoQuery = await txn.query(
+      'estoque_saldos',
+      where: "estoque_id = ? AND business_id = ? AND finalidade = 'venda'",
+      whereArgs: [produtoId, u.comercioId],
+      limit: 1,
+    );
+    
+    final anterior = saldoQuery.isNotEmpty 
+      ? (saldoQuery.first['quantidade_atual'] as num).toDouble() 
+      : (produto.first['quantidade_atual'] as num).toDouble();
+      
     final posterior = anterior + quantidade;
+    
+    if (saldoQuery.isNotEmpty) {
+      await txn.update(
+        'estoque_saldos',
+        {
+          'quantidade_atual': posterior,
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        },
+        where: "estoque_id = ? AND business_id = ? AND finalidade = 'venda'",
+        whereArgs: [produtoId, u.comercioId],
+      );
+    }
+    
     await txn.update(
       'estoque',
       {

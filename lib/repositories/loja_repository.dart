@@ -235,11 +235,22 @@ class LojaRepository {
           'business_id': u.comercioId,
           'estoque_id': produto.id,
           'finalidade': 'venda',
-          'quantidade_atual': quantidadeInicial,
+          'quantidade_atual': 0.0,
           'estoque_minimo': produto.estoqueMinimo,
           'created_at': agoraStr,
           'updated_at': agoraStr,
         });
+
+        if (quantidadeInicial > 0) {
+          await _movimentarTxn(
+            txn,
+            produtoId: produto.id,
+            tipo: TipoMovimentoLoja.entradaManual,
+            quantidade: quantidadeInicial,
+            origem: 'cadastro_inicial',
+            observacao: 'Saldo inicial',
+          );
+        }
       } else {
         mapa.remove('quantidade_atual');
         mapa.remove('data_cadastro');

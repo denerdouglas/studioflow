@@ -18,7 +18,7 @@ void main() {
     db = await databaseFactoryFfi.openDatabase(
       inMemoryDatabasePath,
       options: OpenDatabaseOptions(
-        version: 27,
+        version: 30,
         onConfigure: (d) => d.execute('PRAGMA foreign_keys=ON'),
         onCreate: DatabaseSchemaLatest.criar,
       ),

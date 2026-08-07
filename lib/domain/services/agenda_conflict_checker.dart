@@ -9,6 +9,7 @@ class AgendaConflictChecker {
   static void validar({
     required List<AgendamentoRegistro> novos,
     required List<AgendamentoRegistro> existentes,
+    Set<String>? ignoredAppointmentIds,
   }) {
     final existentesRelevantes = existentes
         .where((e) => _estadosBloqueantes.contains(e.status))
@@ -17,8 +18,10 @@ class AgendaConflictChecker {
     for (var novo in novos) {
       // 1. Verificar conflito com os agendamentos já existentes no banco
       for (var existente in existentesRelevantes) {
-        // Ignorar a si mesmo (em caso de edição)
+        // Sempre ignorar a si mesmo (em caso de edição)
         if (novo.id == existente.id) continue;
+        // Ignorar de acordo com o Set explícito de ignorados (ex: remarcação de grupo)
+        if (ignoredAppointmentIds != null && ignoredAppointmentIds.contains(existente.id)) continue;
 
         if (_isSobreposto(novo, existente)) {
           if (_temRecursoEmComum(novo, existente)) {

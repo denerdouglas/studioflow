@@ -23,14 +23,14 @@ class WhatsappQueueService {
 
     await db.insert('whatsapp_fila', {
       'id': 'wa_${IdGenerator.temporal()}',
-      'comercio_id': comercioId,
+      'business_id': comercioId,
       'destinatario': destinatario,
-      'template': template,
-      'payload_json': jsonEncode(payload),
+      'template_id': template,
+      'payload': jsonEncode(payload),
       'status': 'pendente',
       'agendamento_id': agendamentoId,
-      'criado_em': now,
-      'atualizado_em': now,
+      'created_at': now,
+      'updated_at': now,
     });
   }
 
@@ -46,14 +46,14 @@ class WhatsappQueueService {
 
     await db.insert('whatsapp_fila', {
       'id': 'wa_${IdGenerator.temporal()}',
-      'comercio_id': comercioId,
+      'business_id': comercioId,
       'destinatario': destinatario,
-      'template': 'texto_livre',
-      'payload_json': jsonEncode({'texto': texto}),
+      'template_id': 'texto_livre',
+      'payload': jsonEncode({'texto': texto}),
       'status': 'pendente',
       'agendamento_id': agendamentoId,
-      'criado_em': now,
-      'atualizado_em': now,
+      'created_at': now,
+      'updated_at': now,
     });
   }
 }

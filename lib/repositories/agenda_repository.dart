@@ -484,7 +484,11 @@ class AgendaRepository {
     );
     final existentes = registrosDb.map(AgendamentoRegistro.doMapa).toList();
 
-    AgendaConflictChecker.validar(novos: grupoAtualizado, existentes: existentes);
+    AgendaConflictChecker.validar(
+      novos: grupoAtualizado,
+      existentes: existentes,
+      ignoredAppointmentIds: grupoAtualizado.map((e) => e.id).toSet(),
+    );
 
     await db.transaction((txn) async {
       for (var item in grupoAtualizado) {

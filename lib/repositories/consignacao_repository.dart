@@ -67,7 +67,30 @@ class ConsignacaoRepository {
         limit: 1,
       );
       if (produto.isEmpty) throw StateError('Produto não encontrado.');
-      final anterior = (produto.first['quantidade_atual'] as num).toDouble();
+      
+      final saldoQuery = await txn.query(
+        'estoque_saldos',
+        where: "estoque_id = ? AND business_id = ? AND finalidade = 'venda'",
+        whereArgs: [produtoId, u.comercioId],
+        limit: 1,
+      );
+      
+      final anterior = saldoQuery.isNotEmpty 
+        ? (saldoQuery.first['quantidade_atual'] as num).toDouble() 
+        : (produto.first['quantidade_atual'] as num).toDouble();
+        
+      if (saldoQuery.isNotEmpty) {
+        await txn.update(
+          'estoque_saldos',
+          {
+            'quantidade_atual': anterior + quantidade,
+            'updated_at': agora.toUtc().toIso8601String(),
+          },
+          where: "estoque_id = ? AND business_id = ? AND finalidade = 'venda'",
+          whereArgs: [produtoId, u.comercioId],
+        );
+      }
+      
       await txn.update(
         'estoque',
         {
@@ -163,13 +186,37 @@ class ConsignacaoRepository {
         if (produtos.isEmpty) {
           throw StateError('Produto consignado não encontrado.');
         }
-        final anterior = (produtos.first['quantidade_atual'] as num).toDouble();
+        
+        final saldoQuery = await txn.query(
+          'estoque_saldos',
+          where: "estoque_id = ? AND business_id = ? AND finalidade = 'venda'",
+          whereArgs: [produtoId, u.comercioId],
+          limit: 1,
+        );
+        
+        final anterior = saldoQuery.isNotEmpty 
+          ? (saldoQuery.first['quantidade_atual'] as num).toDouble() 
+          : (produtos.first['quantidade_atual'] as num).toDouble();
+          
         if (anterior < restante) {
           throw StateError(
             'Estoque consignado divergente. Ajuste o produto antes de fechar.',
           );
         }
         final posterior = anterior - restante;
+        
+        if (saldoQuery.isNotEmpty) {
+          await txn.update(
+            'estoque_saldos',
+            {
+              'quantidade_atual': posterior,
+              'updated_at': DateTime.now().toUtc().toIso8601String(),
+            },
+            where: "estoque_id = ? AND business_id = ? AND finalidade = 'venda'",
+            whereArgs: [produtoId, u.comercioId],
+          );
+        }
+        
         await txn.update(
           'estoque',
           {

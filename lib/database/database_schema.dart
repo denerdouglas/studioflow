@@ -261,6 +261,7 @@ abstract final class DatabaseSchema {
         id TEXT PRIMARY KEY,
         item_estoque_id TEXT NOT NULL,
         tipo TEXT NOT NULL,
+        finalidade TEXT,
 
         quantidade REAL NOT NULL,
         quantidade_anterior REAL NOT NULL,
@@ -651,6 +652,7 @@ abstract final class DatabaseSchema {
         id TEXT PRIMARY KEY,
         business_id TEXT NOT NULL,
         cliente_id TEXT,
+        destinatario TEXT,
         agendamento_id TEXT,
         status TEXT NOT NULL,
         idempotency_key TEXT,

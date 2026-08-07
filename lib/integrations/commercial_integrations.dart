@@ -63,13 +63,13 @@ class SimulatedWhatsAppProvider implements WhatsAppProvider {
     final now = DateTime.now().toUtc().toIso8601String();
     await db.insert('whatsapp_fila', {
       'id': id,
-      'comercio_id': message.commerceId,
+      'business_id': message.commerceId,
       'destinatario': message.recipient,
-      'template': message.template,
-      'payload_json': jsonEncode({'content': message.content}),
+      'template_id': message.template,
+      'payload': jsonEncode({'content': message.content}),
       'status': 'simulado',
-      'criado_em': now,
-      'atualizado_em': now,
+      'created_at': now,
+      'updated_at': now,
     });
     return id;
   }

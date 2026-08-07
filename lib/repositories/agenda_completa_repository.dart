@@ -418,9 +418,9 @@ class AgendaCompletaRepository {
       );
       final whatsapp = await txn.update(
         'whatsapp_fila',
-        {'status': 'cancelado', 'atualizado_em': agora},
+        {'status': 'cancelado', 'updated_at': agora},
         where:
-            "comercio_id = ? AND (agendamento_id = ? OR payload_json LIKE ?) AND status NOT IN ('enviado','entregue','lido','cancelado')",
+            "business_id = ? AND (agendamento_id = ? OR payload LIKE ?) AND status NOT IN ('enviado','entregue','lido','cancelado')",
         whereArgs: [_comercioId, agendamentoId, '%$agendamentoId%'],
       );
       await txn.update(
@@ -594,9 +594,9 @@ class AgendaCompletaRepository {
         );
         await txn.update(
           'whatsapp_fila',
-          {'status': 'cancelado', 'atualizado_em': agora},
+          {'status': 'cancelado', 'updated_at': agora},
           where:
-              "comercio_id = ? AND (agendamento_id = ? OR payload_json LIKE ?) AND status NOT IN ('enviado','entregue','lido','cancelado')",
+              "business_id = ? AND (agendamento_id = ? OR payload LIKE ?) AND status NOT IN ('enviado','entregue','lido','cancelado')",
           whereArgs: [_comercioId, agendamentoId, '%$agendamentoId%'],
         );
       }
