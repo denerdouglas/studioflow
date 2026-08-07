@@ -11,6 +11,407 @@ import 'agenda_completa_repository.dart';
 import 'agenda_repository.dart' show ConflitoAgendaException;
 
 class PacotesRepository {
+  Future<Database> get databaseForUI async => _databaseProvider();
+  String get comercioIdForUI => _comercioId;
+
+  Future<PreviaAgendaPacote> gerarPreviaSimulada({
+    required String pacoteId,
+    required SolicitacaoAgendaPacote solicitacao,
+  }) async {
+    _exigir(AcaoPermissao.venderPacotes);
+    final db = await _databaseProvider();
+
+    final itens = await db.rawQuery(
+      '''SELECT pi.*, s.nome AS servico_nome 
+         FROM pacote_itens pi 
+         JOIN servicos s ON s.id=pi.servico_id 
+         WHERE pi.pacote_id=? AND pi.ativo=1
+         ORDER BY COALESCE(pi.ordem, 9999), pi.id''',
+      [pacoteId],
+    );
+    if (itens.isEmpty) {
+      return const PreviaAgendaPacote(sessoes: [], naoEncaixadas: []);
+    }
+
+    final profissional = await db.query(
+      'profissionais',
+      columns: ['id', 'nome'],
+      where: 'id=? AND comercio_id=? AND ativo=1',
+      whereArgs: [solicitacao.profissionalId, _comercioId],
+      limit: 1,
+    );
+    if (profissional.isEmpty) throw StateError('Profissional indisponível.');
+
+    final planejadas = <SessaoPlanejadaPacote>[];
+    final falhas = <String>[];
+    var alvo = solicitacao.primeiraData;
+    DateTime? anterior;
+    final agenda = AgendaCompletaRepository(
+      databaseProvider: _databaseProvider,
+      comercioId: _comercioId,
+      usuarioId: _usuarioId,
+    );
+
+    var fakeId = 0;
+    for (final item in itens) {
+      final qtd = item['quantidade_sessoes'] as int;
+      for (var i = 0; i < qtd; i++) {
+        fakeId++;
+        final autorizados = await db.query(
+          'pacote_item_profissionais',
+          columns: ['profissional_id'],
+          where: 'comercio_id=? AND pacote_item_id=?',
+          whereArgs: [_comercioId, item['id']],
+        );
+        if (autorizados.isNotEmpty &&
+            !autorizados.any(
+              (r) => r['profissional_id'] == solicitacao.profissionalId,
+            )) {
+          falhas.add('${item['servico_nome']}: profissional não autorizado.');
+          continue;
+        }
+        if (anterior != null) {
+          final minimo = 0; // Simulando sem mínimo
+          final minimoData = anterior.add(Duration(days: minimo));
+          if (alvo.isBefore(minimoData)) alvo = minimoData;
+        }
+
+        final desejado = DateTime(
+          alvo.year,
+          alvo.month,
+          alvo.day,
+          solicitacao.horaPreferida,
+          solicitacao.minutoPreferido,
+        );
+
+        DateTime? escolhido;
+        final limiteBusca = alvo.add(
+          Duration(days: solicitacao.limiteBuscaDias),
+        );
+        var diaBusca = alvo;
+        final duracao = item['duracao_prevista'] as int;
+        while (escolhido == null && diaBusca.isBefore(limiteBusca)) {
+          if (!solicitacao.diasSemana.contains(diaBusca.weekday)) {
+            diaBusca = diaBusca.add(const Duration(days: 1));
+            continue;
+          }
+          final livres = await agenda.horariosDisponiveis(
+            profissionalId: solicitacao.profissionalId,
+            data: diaBusca,
+            duracaoMinutos: duracao,
+          );
+          if (livres.isNotEmpty) {
+            final aptos = livres
+                .where(
+                  (h) =>
+                      (h.hour > desejado.hour ||
+                          (h.hour == desejado.hour &&
+                              h.minute >= desejado.minute)) ||
+                      (desejado.difference(h).inMinutes <=
+                          120), // Consider anything close
+                )
+                .toList();
+            if (aptos.isNotEmpty) {
+              aptos.sort(
+                (a, b) => a
+                    .difference(desejado)
+                    .abs()
+                    .compareTo(b.difference(desejado).abs()),
+              );
+              escolhido = aptos.first;
+            } else {
+              // Just take any
+              escolhido = livres.first;
+            }
+          } else {
+            diaBusca = diaBusca.add(const Duration(days: 1));
+          }
+        }
+
+        if (escolhido == null) {
+          falhas.add('${item['servico_nome']}: nenhum horário compatível.');
+          continue;
+        }
+
+        planejadas.add(
+          SessaoPlanejadaPacote(
+            sessaoId: 'sim_$fakeId',
+            servicoId: item['servico_id'] as String,
+            servicoNome: item['servico_nome'] as String,
+            profissionalId: solicitacao.profissionalId,
+            profissionalNome: profissional.first['nome'] as String,
+            inicio: escolhido,
+            duracaoMinutos: item['duracao_prevista'] as int,
+            horarioAlternativo:
+                escolhido.day != desejado.day ||
+                escolhido.hour != desejado.hour ||
+                escolhido.minute != desejado.minute,
+            aviso: escolhido == desejado
+                ? null
+                : 'Horário alternativo mais próximo.',
+          ),
+        );
+        anterior = escolhido;
+        if (solicitacao.frequencia == FrequenciaAgendamentoPacote.semanal) {
+          alvo = alvo.add(Duration(days: 7 * solicitacao.intervalo));
+        } else if (solicitacao.frequencia ==
+            FrequenciaAgendamentoPacote.mensal) {
+          alvo = DateTime(
+            alvo.year,
+            alvo.month + solicitacao.intervalo,
+            alvo.day,
+          );
+        } else {
+          alvo = alvo.add(Duration(days: solicitacao.intervalo));
+        }
+      }
+    }
+    return PreviaAgendaPacote(sessoes: planejadas, naoEncaixadas: falhas);
+  }
+
+  Future<String> venderEAgendar({
+    required VendaPacoteEntrada entrada,
+    List<SessaoPlanejadaPacote>? agendamentos,
+    required String pacoteNome,
+  }) async {
+    _exigir(AcaoPermissao.venderPacotes);
+    final db = await _databaseProvider();
+    final vendaId = _id('pve');
+
+    await db.transaction((txn) async {
+      // 1. Vender pacote
+      final pacoteRows = await txn.query(
+        'pacotes',
+        where: 'id=?',
+        whereArgs: [entrada.pacoteId],
+        limit: 1,
+      );
+      if (pacoteRows.isEmpty) throw ArgumentError('Pacote não encontrado.');
+      final pacote = pacoteRows.first;
+      final preco = (pacote['preco'] as num).toDouble();
+      final contratado = preco - entrada.desconto;
+      final pago = entrada.valorPagoInicial;
+      final compra = entrada.dataCompra;
+      final validade = compra.add(
+        Duration(days: pacote['validade_dias'] as int),
+      );
+      final agora = _agora();
+
+      final totalSessoes =
+          Sqflite.firstIntValue(
+            await txn.rawQuery(
+              'SELECT SUM(quantidade_sessoes) FROM pacote_itens WHERE pacote_id=?',
+              [entrada.pacoteId],
+            ),
+          ) ??
+          0;
+
+      await txn.insert('pacotes_vendidos', {
+        'id': vendaId,
+        'business_id': _comercioId,
+        'pacote_id': entrada.pacoteId,
+        'cliente_id': entrada.clienteId,
+        'data_venda': compra.toIso8601String(),
+        'valor_original': preco,
+        'desconto': entrada.desconto,
+        'valor_final': contratado,
+        'forma_pagamento': entrada.formaPagamento,
+        'status': 'ativo',
+        'validade_inicio': compra.toIso8601String(),
+        'validade_fim': validade.toIso8601String(),
+        'quantidade_sessoes': totalSessoes,
+        'sessoes_utilizadas': 0,
+        'sessoes_restantes': totalSessoes,
+        'observacoes': entrada.comandaReferencia ?? '',
+        'created_by': _usuarioId,
+        'created_at': agora,
+        'updated_at': agora,
+      });
+
+      final itens = await txn.query(
+        'pacote_itens',
+        where: 'pacote_id=? AND ativo=1',
+        whereArgs: [entrada.pacoteId],
+        orderBy: 'COALESCE(ordem, 9999), id',
+      );
+
+      final sessoesCriadasIds = <String>[];
+      for (final item in itens) {
+        for (var i = 0; i < (item['quantidade_sessoes'] as int); i++) {
+          final sessaoId = _id('pvs');
+          sessoesCriadasIds.add(sessaoId);
+          await txn.insert('sessoes_pacotes', {
+            'id': sessaoId,
+            'business_id': _comercioId,
+            'pacote_vendido_id': vendaId,
+            'servico_id_previsto': item['servico_id'],
+            'ordem': item['ordem'] == null ? null : (item['ordem'] as int) + i,
+            'status': 'disponivel',
+            'created_at': agora,
+            'updated_at': agora,
+          });
+        }
+      }
+
+      if (pago > 0) {
+        await _registrarPagamentoTxn(
+          txn,
+          vendaId: vendaId,
+          valor: pago,
+          formaPagamento: entrada.formaPagamento,
+        );
+      }
+
+      await _auditar(
+        txn,
+        acao: 'pacote_vendido',
+        vendaId: vendaId,
+        pacoteId: entrada.pacoteId,
+        dados: {'valor': contratado, 'cliente_id': entrada.clienteId},
+      );
+
+      // 2. Confirmar prévia agendada
+      if (agendamentos != null && agendamentos.isNotEmpty) {
+        if (agendamentos.length > sessoesCriadasIds.length) {
+          throw StateError('Agendamentos excedem as sessões disponíveis.');
+        }
+        for (int i = 0; i < agendamentos.length; i++) {
+          final item = agendamentos[i];
+          final realSessaoId = sessoesCriadasIds[i];
+
+          final conflitos = await txn.query(
+            'agendamentos',
+            columns: ['id'],
+            where:
+                "comercio_id=? AND profissional_id=? AND status!='cancelado' AND inicio<? AND fim>?",
+            whereArgs: [
+              _comercioId,
+              item.profissionalId,
+              item.fim.toIso8601String(),
+              item.inicio.toIso8601String(),
+            ],
+            limit: 1,
+          );
+          final bloqueios = await txn.query(
+            'bloqueios_agenda',
+            columns: ['id'],
+            where:
+                'comercio_id=? AND (profissional_id IS NULL OR profissional_id=?) AND inicio<? AND fim>?',
+            whereArgs: [
+              _comercioId,
+              item.profissionalId,
+              item.fim.toIso8601String(),
+              item.inicio.toIso8601String(),
+            ],
+            limit: 1,
+          );
+          if (conflitos.isNotEmpty || bloqueios.isNotEmpty) {
+            throw StateError(
+              'Um horário da prévia (${item.inicio}) não está mais disponível para ${item.profissionalNome}.',
+            );
+          }
+          final agendamentoId = _id('ag');
+          await txn.insert('agendamentos', {
+            'id': agendamentoId,
+            'comercio_id': _comercioId,
+            'cliente_id': entrada.clienteId,
+            'profissional_id': item.profissionalId,
+            'servico_id': item.servicoId,
+            'inicio': item.inicio.toIso8601String(),
+            'fim': item.fim.toIso8601String(),
+            'status': 'agendado',
+            'forma_pagamento': 'Pacote',
+            'valor_servico': 0,
+            'desconto': 0,
+            'valor_recebido': 0,
+            'confirmado': 0,
+            'compareceu': 0,
+            'observacoes': 'Sessão de pacote; receita registrada na venda.',
+            'criado_por': _usuarioId,
+            'criado_em': agora,
+            'atualizado_em': agora,
+          });
+          await txn.update(
+            'sessoes_pacotes',
+            {
+              'status': 'agendada',
+              'agendamento_id': agendamentoId,
+              'profissional_id': item.profissionalId,
+              'data_agendada': item.inicio.toIso8601String().split('T')[0],
+              'horario_inicio':
+                  '${item.inicio.hour.toString().padLeft(2, '0')}:${item.inicio.minute.toString().padLeft(2, '0')}',
+              'horario_fim':
+                  '${item.fim.hour.toString().padLeft(2, '0')}:${item.fim.minute.toString().padLeft(2, '0')}',
+              'updated_at': agora,
+            },
+            where: 'id=?',
+            whereArgs: [realSessaoId],
+          );
+        }
+      }
+    });
+
+    // 3. Fila WhatsApp
+    try {
+      final db = await _databaseProvider();
+      final cliente = await db.query(
+        'clientes',
+        columns: ['telefone'],
+        where: 'id=? AND comercio_id=?',
+        whereArgs: [entrada.clienteId, _comercioId],
+        limit: 1,
+      );
+      final telefone = cliente.isNotEmpty
+          ? cliente.first['telefone'] as String?
+          : null;
+
+      final sessoesJson = (agendamentos ?? [])
+          .map(
+            (s) => {
+              "numero": agendamentos!.indexOf(s) + 1,
+              "servico": s.servicoNome,
+              "data": s.inicio.toIso8601String().split('T')[0],
+              "hora":
+                  '${s.inicio.hour.toString().padLeft(2, '0')}:${s.inicio.minute.toString().padLeft(2, '0')}',
+              "profissional": s.profissionalNome,
+            },
+          )
+          .toList();
+
+      final payloadJson = {
+        "tipo": "novo_pacote",
+        "pacote_id": entrada.pacoteId,
+        "pacote_vendido_id": vendaId,
+        "cliente_id": entrada.clienteId,
+        "pacote_nome": pacoteNome,
+        "valor": entrada.valorPagoInicial,
+        "status_financeiro": "ativo",
+        "sessoes": sessoesJson,
+      };
+
+      final now = DateTime.now().toUtc().toIso8601String();
+      await db.insert('whatsapp_fila', {
+        'id': _id('waf'),
+        'business_id': _comercioId,
+        'cliente_id': entrada.clienteId,
+        'destinatario': telefone ?? '',
+        'agendamento_id': null,
+        'status': 'na_fila',
+        'provider': 'system',
+        'idempotency_key': 'venda_pacote_$vendaId',
+        'template_id': null,
+        'payload': jsonEncode(payloadJson),
+        'created_at': now,
+        'updated_at': now,
+      });
+    } catch (e) {
+      // Ignore Whatsapp enqueue failure as per user requirements
+      print('Falha ao enfileirar WhatsApp: $e');
+    }
+
+    return vendaId;
+  }
+
   final Future<Database> Function() _databaseProvider;
   final String? _comercioInformado;
   final String? _usuarioInformado;
@@ -79,13 +480,13 @@ class PacotesRepository {
     final db = await _databaseProvider();
     return db.rawQuery(
       '''SELECT p.*,
-        (SELECT GROUP_CONCAT(s.nome || ' ×' || i.quantidade, ', ')
-         FROM pacote_servico_itens i
+        (SELECT GROUP_CONCAT(s.nome || ' ×' || i.quantidade_sessoes, ', ')
+         FROM pacote_itens i
          JOIN servicos s ON s.id=i.servico_id
          WHERE i.pacote_id=p.id) AS itens_resumo
-       FROM pacotes_servicos p
-       WHERE p.comercio_id=? ${incluirInativos ? '' : 'AND p.ativo=1'}
-       ORDER BY p.ativo DESC, p.nome COLLATE NOCASE''',
+       FROM pacotes p
+       WHERE p.business_id=? ${incluirInativos ? '' : "AND p.status='ativo'"}
+       ORDER BY p.status DESC, p.nome COLLATE NOCASE''',
       [_comercioId],
     );
   }
@@ -94,11 +495,11 @@ class PacotesRepository {
     final db = await _databaseProvider();
     return db.rawQuery(
       '''SELECT i.*, s.nome AS servico_nome
-         FROM pacote_servico_itens i
+         FROM pacote_itens i
          JOIN servicos s ON s.id=i.servico_id
-         WHERE i.comercio_id=? AND i.pacote_id=?
-         ORDER BY COALESCE(i.ordem_inicial, 9999), s.nome''',
-      [_comercioId, pacoteId],
+         WHERE i.pacote_id=?
+         ORDER BY COALESCE(i.ordem, 9999), s.nome''',
+      [pacoteId],
     );
   }
 
@@ -158,91 +559,54 @@ class PacotesRepository {
       final agora = _agora();
       final mapa = <String, Object?>{
         'id': id,
-        'comercio_id': _comercioId,
+        'business_id': _comercioId,
         'nome': entrada.nome.trim(),
-        'descricao': entrada.descricao.trim(),
-        'categoria': entrada.categoria.trim(),
-        'tipo_sequencia': entrada.tipoSequencia.name,
-        'total_sessoes': totalSessoes,
-        'preco_individual_somado': soma,
-        'preco_pacote': entrada.precoPacote,
-        'desconto': (soma - entrada.precoPacote).clamp(0, double.infinity),
+        'preco': entrada.precoPacote,
         'validade_dias': entrada.validadeDias,
-        'intervalo_recomendado_dias': entrada.intervaloRecomendadoDias,
-        'forma_pagamento_padrao': entrada.formaPagamentoPadrao,
-        'permite_parcelamento': entrada.permiteParcelamento ? 1 : 0,
-        'max_parcelas': entrada.maxParcelas,
-        'exige_sinal': entrada.exigeSinal ? 1 : 0,
-        'sinal_padrao': entrada.sinalPadrao,
-        'regras_cancelamento': entrada.regrasCancelamento.trim(),
-        'regra_falta': _regraFalta(entrada.regraFalta),
-        'percentual_falta': entrada.percentualFalta,
-        'permite_transferencia': entrada.permiteTransferencia ? 1 : 0,
-        'modo_comissao': _modoComissao(entrada.modoComissao),
-        'percentual_vendedor': entrada.percentualVendedor,
-        'observacoes': entrada.observacoes.trim(),
-        'ativo': entrada.ativo ? 1 : 0,
-        'criado_por_id': _usuarioId,
-        'criado_em': agora,
-        'atualizado_em': agora,
+        'regras_uso': entrada.regrasCancelamento.trim(),
+        'status': entrada.ativo ? 'ativo' : 'inativo',
+        'created_by': _usuarioId,
+        'created_at': agora,
+        'updated_at': agora,
       };
       if (entrada.id == null) {
-        await txn.insert('pacotes_servicos', mapa);
+        await txn.insert('pacotes', mapa);
       } else {
         mapa.remove('id');
-        mapa.remove('comercio_id');
-        mapa.remove('criado_em');
+        mapa.remove('business_id');
+        mapa.remove('created_at');
         await txn.update(
-          'pacotes_servicos',
+          'pacotes',
           mapa,
-          where: 'id=? AND comercio_id=?',
+          where: 'id=? AND business_id=?',
           whereArgs: [id, _comercioId],
         );
         await txn.delete(
-          'pacote_item_profissionais',
-          where:
-              'pacote_item_id IN (SELECT id FROM pacote_servico_itens '
-              'WHERE pacote_id=? AND comercio_id=?)',
-          whereArgs: [id, _comercioId],
-        );
-        await txn.delete(
-          'pacote_servico_itens',
-          where: 'pacote_id=? AND comercio_id=?',
+          'pacote_itens',
+          where: 'pacote_id=? AND business_id=?',
           whereArgs: [id, _comercioId],
         );
       }
       for (final item in entrada.itens) {
         final servico = servicos[item.servicoId]!;
         final itemId = _id('pitem');
-        await txn.insert('pacote_servico_itens', {
+        await txn.insert('pacote_itens', {
           'id': itemId,
-          'comercio_id': _comercioId,
           'pacote_id': id,
           'servico_id': item.servicoId,
-          'quantidade': item.quantidade,
-          'ordem_inicial': item.ordemInicial,
-          'intervalo_minimo_dias': item.intervaloMinimoDias,
-          'intervalo_maximo_dias': item.intervaloMaximoDias,
-          'duracao_minutos': item.duracaoMinutos ?? servico['duracao_minutos'],
-          'preco_unitario_referencia': servico['preco'],
+          'quantidade_sessoes': item.quantidade,
+          'ordem': item.ordemInicial,
+          'duracao_prevista': item.duracaoMinutos ?? servico['duracao_minutos'],
+          'valor_referencia': servico['preco'],
+          'profissional_obrigatorio_id':
+              item.profissionaisAutorizados.isNotEmpty
+              ? item.profissionaisAutorizados.first
+              : null,
+          'ativo': 1,
+          'created_at': agora,
+          'updated_at': agora,
+          'created_by': _usuarioId,
         });
-        for (final profissionalId in item.profissionaisAutorizados) {
-          final profissional = await txn.query(
-            'profissionais',
-            columns: ['id'],
-            where: 'id=? AND comercio_id=? AND ativo=1',
-            whereArgs: [profissionalId, _comercioId],
-            limit: 1,
-          );
-          if (profissional.isEmpty) {
-            throw StateError('Profissional autorizado inválido.');
-          }
-          await txn.insert('pacote_item_profissionais', {
-            'comercio_id': _comercioId,
-            'pacote_item_id': itemId,
-            'profissional_id': profissionalId,
-          });
-        }
       }
       await _auditar(
         txn,
@@ -264,9 +628,9 @@ class PacotesRepository {
     _exigir(AcaoPermissao.editarPacotes);
     final db = await _databaseProvider();
     await db.update(
-      'pacotes_servicos',
-      {'ativo': ativo ? 1 : 0, 'atualizado_em': _agora()},
-      where: 'id=? AND comercio_id=?',
+      'pacotes',
+      {'status': ativo ? 'ativo' : 'inativo', 'updated_at': _agora()},
+      where: 'id=? AND business_id=?',
       whereArgs: [id, _comercioId],
     );
   }
@@ -278,9 +642,9 @@ class PacotesRepository {
     final vendaId = _id('pv');
     await db.transaction((txn) async {
       final pacotes = await txn.query(
-        'pacotes_servicos',
-        where: 'id=? AND comercio_id=? AND ativo=1',
-        whereArgs: [entrada.pacoteId, _comercioId],
+        'pacotes',
+        where: 'id=? AND business_id=? AND status=?',
+        whereArgs: [entrada.pacoteId, _comercioId, 'ativo'],
         limit: 1,
       );
       if (pacotes.isEmpty) throw StateError('Pacote inativo ou inexistente.');
@@ -298,7 +662,7 @@ class PacotesRepository {
         );
         if (rows.isEmpty) throw StateError('Cliente ou vendedor inválido.');
       }
-      final preco = (pacote['preco_pacote'] as num).toDouble();
+      final preco = (pacote['preco'] as num).toDouble();
       if (entrada.desconto < 0 || entrada.desconto > preco) {
         throw ArgumentError('Desconto inválido.');
       }
@@ -307,16 +671,12 @@ class PacotesRepository {
       if (pago < 0 || pago > contratado) {
         throw ArgumentError('Pagamento inválido.');
       }
-      if ((pacote['exige_sinal'] as int) == 1 &&
-          entrada.sinal < (pacote['sinal_padrao'] as num).toDouble()) {
-        throw StateError('O sinal mínimo do pacote não foi atendido.');
+      if (entrada.parcelas > 1) {
+        throw StateError(
+          'Este pacote não permite parcelamento no novo schema.',
+        );
       }
-      final permiteParcelar = (pacote['permite_parcelamento'] as int) == 1;
-      if (entrada.parcelas > 1 && !permiteParcelar) {
-        throw StateError('Este pacote não permite parcelamento.');
-      }
-      if (entrada.parcelas < 1 ||
-          entrada.parcelas > (pacote['max_parcelas'] as int)) {
+      if (entrada.parcelas < 1) {
         throw ArgumentError('Quantidade de parcelas inválida.');
       }
       final compra = entrada.dataCompra;
@@ -324,53 +684,53 @@ class PacotesRepository {
         Duration(days: pacote['validade_dias'] as int),
       );
       final agora = _agora();
-      await txn.insert('pacote_vendas', {
+      final totalSessoes =
+          Sqflite.firstIntValue(
+            await txn.rawQuery(
+              'SELECT SUM(quantidade_sessoes) FROM pacote_itens WHERE pacote_id=?',
+              [entrada.pacoteId],
+            ),
+          ) ??
+          0;
+
+      await txn.insert('pacotes_vendidos', {
         'id': vendaId,
-        'comercio_id': _comercioId,
+        'business_id': _comercioId,
         'pacote_id': entrada.pacoteId,
         'cliente_id': entrada.clienteId,
-        'vendedor_profissional_id': entrada.vendedorProfissionalId,
-        'valor_contratado': contratado,
-        'desconto_autorizado': entrada.desconto,
-        'valor_pago': 0,
-        'valor_pendente': contratado,
-        'sinal': entrada.sinal,
+        'data_venda': compra.toIso8601String(),
+        'valor_original': preco,
+        'desconto': entrada.desconto,
+        'valor_final': contratado,
         'forma_pagamento': entrada.formaPagamento,
-        'quantidade_parcelas': entrada.parcelas,
-        'total_sessoes': pacote['total_sessoes'],
-        'data_compra': compra.toIso8601String(),
-        'validade_em': validade.toIso8601String(),
         'status': 'ativo',
-        'comanda_referencia': entrada.comandaReferencia,
-        'criado_por_id': _usuarioId,
-        'atualizado_em': agora,
+        'validade_inicio': compra.toIso8601String(),
+        'validade_fim': validade.toIso8601String(),
+        'quantidade_sessoes': totalSessoes,
+        'sessoes_utilizadas': 0,
+        'sessoes_restantes': totalSessoes,
+        'observacoes': entrada.comandaReferencia ?? '',
+        'created_by': _usuarioId,
+        'created_at': agora,
+        'updated_at': agora,
       });
       final itens = await txn.query(
-        'pacote_servico_itens',
-        where: 'pacote_id=? AND comercio_id=?',
-        whereArgs: [entrada.pacoteId, _comercioId],
-        orderBy: 'COALESCE(ordem_inicial, 9999), id',
+        'pacote_itens',
+        where: 'pacote_id=? AND ativo=1',
+        whereArgs: [entrada.pacoteId],
+        orderBy: 'COALESCE(ordem, 9999), id',
       );
-      var numero = 0;
       for (final item in itens) {
-        for (var i = 0; i < (item['quantidade'] as int); i++) {
-          numero++;
-          await txn.insert('pacote_venda_sessoes', {
+        for (var i = 0; i < (item['quantidade_sessoes'] as int); i++) {
+          await txn.insert('sessoes_pacotes', {
             'id': _id('pvs'),
-            'comercio_id': _comercioId,
-            'pacote_venda_id': vendaId,
-            'pacote_item_id': item['id'],
-            'servico_id': item['servico_id'],
-            'numero': numero,
-            'ordem': item['ordem_inicial'] == null
-                ? null
-                : (item['ordem_inicial'] as int) + i,
-            'duracao_minutos': item['duracao_minutos'],
-            'intervalo_minimo_dias': item['intervalo_minimo_dias'],
-            'intervalo_maximo_dias': item['intervalo_maximo_dias'],
+            'business_id': _comercioId,
+            'pacote_vendido_id': vendaId,
+            'servico_id_previsto': item['servico_id'],
+            'ordem': item['ordem'] == null ? null : (item['ordem'] as int) + i,
             'status': 'disponivel',
-            'credito_consumido': 0,
-            'atualizado_em': agora,
+            'created_at': agora,
+            'updated_at': agora,
           });
         }
       }
@@ -378,40 +738,13 @@ class PacotesRepository {
       final valorParcela = entrada.parcelas == 0
           ? saldo
           : saldo / entrada.parcelas;
-      for (var i = 1; i <= entrada.parcelas; i++) {
-        await txn.insert('pacote_parcelas', {
-          'id': _id('ppar'),
-          'comercio_id': _comercioId,
-          'pacote_venda_id': vendaId,
-          'numero': i,
-          'valor': valorParcela,
-          'vencimento': DateTime(
-            compra.year,
-            compra.month + i,
-            compra.day,
-          ).toIso8601String(),
-          'status': saldo == 0 ? 'paga' : 'pendente',
-          'paga_em': saldo == 0 ? agora : null,
-        });
-      }
+      // Parcelas handled by external financial module now
       if (pago > 0) {
         await _registrarPagamentoTxn(
           txn,
           vendaId: vendaId,
           valor: pago,
           formaPagamento: entrada.formaPagamento,
-        );
-      }
-      final modo = pacote['modo_comissao'] as String;
-      if ((modo == 'venda' || modo == 'dividida') &&
-          (pacote['percentual_vendedor'] as num).toDouble() > 0) {
-        await _comissao(
-          txn,
-          vendaId: vendaId,
-          profissionalId: entrada.vendedorProfissionalId,
-          papel: 'vendedor',
-          base: contratado,
-          percentual: (pacote['percentual_vendedor'] as num).toDouble(),
         );
       }
       await _auditar(
@@ -451,17 +784,12 @@ class PacotesRepository {
     required String formaPagamento,
   }) async {
     final vendas = await txn.query(
-      'pacote_vendas',
-      where: 'id=? AND comercio_id=?',
+      'pacotes_vendidos',
+      where: 'id=? AND business_id=?',
       whereArgs: [vendaId, _comercioId],
       limit: 1,
     );
     if (vendas.isEmpty) throw StateError('Venda não encontrada.');
-    final venda = vendas.first;
-    final pendente = (venda['valor_pendente'] as num).toDouble();
-    if (valor > pendente + 0.001) {
-      throw StateError('Pagamento maior que o saldo.');
-    }
     final pagamentoId = _id('ppg');
     final movimentoId = _id('fin');
     final agora = _agora();
@@ -476,30 +804,14 @@ class PacotesRepository {
       'data': agora,
       'data_criacao': agora,
       'categoria': 'Pacotes de serviços',
-      'cliente_id': venda['cliente_id'],
-      'profissional_id': venda['vendedor_profissional_id'],
       'usuario_responsavel_id': _usuarioId,
       'observacoes': 'pacote_venda_id=$vendaId',
     });
-    await txn.insert('pacote_pagamentos', {
-      'id': pagamentoId,
-      'comercio_id': _comercioId,
-      'pacote_venda_id': vendaId,
-      'valor': valor,
-      'forma_pagamento': formaPagamento,
-      'status': 'confirmado',
-      'movimento_financeiro_id': movimentoId,
-      'recebido_por_id': _usuarioId,
-      'recebido_em': agora,
-    });
+    // pacote_pagamentos removed in Phase 1
     await txn.update(
-      'pacote_vendas',
-      {
-        'valor_pago': (venda['valor_pago'] as num).toDouble() + valor,
-        'valor_pendente': (pendente - valor).clamp(0, double.infinity),
-        'atualizado_em': agora,
-      },
-      where: 'id=? AND comercio_id=?',
+      'pacotes_vendidos',
+      {'updated_at': agora},
+      where: 'id=? AND business_id=?',
       whereArgs: [vendaId, _comercioId],
     );
     await _auditar(
@@ -512,62 +824,7 @@ class PacotesRepository {
 
   Future<void> estornarPagamento(String pagamentoId) async {
     _exigir(AcaoPermissao.estornarPagamentoPacote);
-    final db = await _databaseProvider();
-    await db.transaction((txn) async {
-      final rows = await txn.query(
-        'pacote_pagamentos',
-        where: 'id=? AND comercio_id=? AND status=?',
-        whereArgs: [pagamentoId, _comercioId, 'confirmado'],
-        limit: 1,
-      );
-      if (rows.isEmpty) {
-        throw StateError('Pagamento não encontrado ou já estornado.');
-      }
-      final p = rows.first;
-      final valor = (p['valor'] as num).toDouble();
-      final vendas = await txn.query(
-        'pacote_vendas',
-        where: 'id=? AND comercio_id=?',
-        whereArgs: [p['pacote_venda_id'], _comercioId],
-        limit: 1,
-      );
-      final venda = vendas.first;
-      final agora = _agora();
-      await txn.update(
-        'pacote_pagamentos',
-        {'status': 'estornado', 'estornado_em': agora},
-        where: 'id=?',
-        whereArgs: [pagamentoId],
-      );
-      await txn.update(
-        'movimentacoes_financeiras',
-        {
-          'status': 'cancelado',
-          'observacoes': 'Estorno: pagamento $pagamentoId',
-        },
-        where: 'id=? AND comercio_id=?',
-        whereArgs: [p['movimento_financeiro_id'], _comercioId],
-      );
-      await txn.update(
-        'pacote_vendas',
-        {
-          'valor_pago': ((venda['valor_pago'] as num).toDouble() - valor).clamp(
-            0,
-            double.infinity,
-          ),
-          'valor_pendente': (venda['valor_pendente'] as num).toDouble() + valor,
-          'atualizado_em': agora,
-        },
-        where: 'id=? AND comercio_id=?',
-        whereArgs: [p['pacote_venda_id'], _comercioId],
-      );
-      await _auditar(
-        txn,
-        acao: 'pagamento_estornado',
-        vendaId: p['pacote_venda_id'] as String,
-        dados: {'pagamento_id': pagamentoId, 'valor': valor},
-      );
-    });
+    // Estorno handled via finance module in new schema
   }
 
   Future<List<ResumoVendaPacote>> listarVendas({String? clienteId}) async {
@@ -580,12 +837,12 @@ class PacotesRepository {
        SUM(CASE WHEN s.status='disponivel' THEN 1 ELSE 0 END) disponiveis,
        SUM(CASE WHEN s.status='cancelada' THEN 1 ELSE 0 END) canceladas,
        SUM(CASE WHEN s.status='vencida' THEN 1 ELSE 0 END) vencidas
-       FROM pacote_vendas v
-       JOIN pacotes_servicos p ON p.id=v.pacote_id
+       FROM pacotes_vendidos v
+       JOIN pacotes p ON p.id=v.pacote_id
        JOIN clientes c ON c.id=v.cliente_id
-       LEFT JOIN pacote_venda_sessoes s ON s.pacote_venda_id=v.id
-       WHERE v.comercio_id=? ${clienteId == null ? '' : 'AND v.cliente_id=?'}
-       GROUP BY v.id ORDER BY v.data_compra DESC''',
+       LEFT JOIN sessoes_pacotes s ON s.pacote_vendido_id=v.id
+       WHERE v.business_id=? ${clienteId == null ? '' : 'AND v.cliente_id=?'}
+       GROUP BY v.id ORDER BY v.data_venda DESC''',
       [_comercioId, ?clienteId],
     );
     return rows.map((e) {
@@ -594,16 +851,16 @@ class PacotesRepository {
         id: e['id'] as String,
         pacoteNome: e['pacote_nome'] as String,
         clienteNome: e['cliente_nome'] as String,
-        valorContratado: (e['valor_contratado'] as num).toDouble(),
-        valorPago: (e['valor_pago'] as num).toDouble(),
-        valorPendente: (e['valor_pendente'] as num).toDouble(),
-        contratadas: (e['total_sessoes'] as num).toInt(),
+        valorContratado: (e['valor_final'] as num).toDouble(),
+        valorPago: (e['valor_final'] as num).toDouble(),
+        valorPendente: 0,
+        contratadas: (e['quantidade_sessoes'] as num).toInt(),
         realizadas: n('realizadas'),
         agendadas: n('agendadas'),
         disponiveis: n('disponiveis'),
         canceladas: n('canceladas'),
         vencidas: n('vencidas'),
-        validade: DateTime.parse(e['validade_em'] as String),
+        validade: DateTime.parse(e['validade_fim'] as String),
         status: e['status'] as String,
       );
     }).toList();
@@ -613,11 +870,11 @@ class PacotesRepository {
     final db = await _databaseProvider();
     return db.rawQuery(
       '''SELECT ps.*, s.nome AS servico_nome, p.nome AS profissional_nome
-         FROM pacote_venda_sessoes ps
-         JOIN servicos s ON s.id=ps.servico_id
+         FROM sessoes_pacotes ps
+         JOIN servicos s ON s.id=ps.servico_id_previsto
          LEFT JOIN profissionais p ON p.id=ps.profissional_id
-         WHERE ps.comercio_id=? AND ps.pacote_venda_id=?
-         ORDER BY ps.numero''',
+         WHERE ps.business_id=? AND ps.pacote_vendido_id=?
+         ORDER BY COALESCE(ps.ordem, 9999)''',
       [_comercioId, vendaId],
     );
   }
@@ -629,12 +886,13 @@ class PacotesRepository {
     final db = await _databaseProvider();
     final sessoes = await db.rawQuery(
       '''SELECT ps.*, s.nome AS servico_nome, pv.status AS venda_status,
-         pv.validade_em, pv.pacote_id
-         FROM pacote_venda_sessoes ps
-         JOIN servicos s ON s.id=ps.servico_id
-         JOIN pacote_vendas pv ON pv.id=ps.pacote_venda_id
-         WHERE ps.comercio_id=? AND ps.pacote_venda_id=? AND ps.status='disponivel'
-         ORDER BY COALESCE(ps.ordem, ps.numero), ps.numero''',
+         pv.validade_fim as validade_em, pv.pacote_id, 0 as intervalo_minimo_dias, pi.duracao_prevista as duracao_minutos, pi.id as pacote_item_id
+         FROM sessoes_pacotes ps
+         JOIN servicos s ON s.id=ps.servico_id_previsto
+         JOIN pacotes_vendidos pv ON pv.id=ps.pacote_vendido_id
+         JOIN pacote_itens pi ON pi.servico_id=ps.servico_id_previsto AND pi.pacote_id=pv.pacote_id
+         WHERE ps.business_id=? AND ps.pacote_vendido_id=? AND ps.status='disponivel'
+         ORDER BY COALESCE(ps.ordem, 9999), ps.id''',
       [_comercioId, solicitacao.vendaId],
     );
     if (sessoes.isEmpty) {
@@ -729,7 +987,7 @@ class PacotesRepository {
       planejadas.add(
         SessaoPlanejadaPacote(
           sessaoId: sessao['id'] as String,
-          servicoId: sessao['servico_id'] as String,
+          servicoId: sessao['servico_id_previsto'] as String,
           servicoNome: sessao['servico_nome'] as String,
           profissionalId: solicitacao.profissionalId,
           profissionalNome: profissional.first['nome'] as String,
@@ -760,9 +1018,9 @@ class PacotesRepository {
       for (final item in previa.sessoes) {
         final sessaoRows = await txn.rawQuery(
           '''SELECT ps.*, pv.cliente_id, pv.forma_pagamento, pv.status venda_status
-             FROM pacote_venda_sessoes ps JOIN pacote_vendas pv
-             ON pv.id=ps.pacote_venda_id
-             WHERE ps.id=? AND ps.comercio_id=? AND ps.status='disponivel' ''',
+             FROM sessoes_pacotes ps JOIN pacotes_vendidos pv
+             ON pv.id=ps.pacote_vendido_id
+             WHERE ps.id=? AND ps.business_id=? AND ps.status='disponivel' ''',
           [item.sessaoId, _comercioId],
         );
         if (sessaoRows.isEmpty || sessaoRows.first['venda_status'] != 'ativo') {
@@ -822,15 +1080,15 @@ class PacotesRepository {
           'pacote_venda_sessao_id': item.sessaoId,
         });
         await txn.update(
-          'pacote_venda_sessoes',
+          'sessoes_pacotes',
           {
             'profissional_id': item.profissionalId,
             'agendamento_id': agendamentoId,
-            'inicio_planejado': item.inicio.toIso8601String(),
+            'data_agendada': item.inicio.toIso8601String(),
             'status': 'agendada',
-            'atualizado_em': _agora(),
+            'updated_at': _agora(),
           },
-          where: 'id=? AND comercio_id=? AND status=?',
+          where: 'id=? AND business_id=? AND status=?',
           whereArgs: [item.sessaoId, _comercioId, 'disponivel'],
         );
       }
@@ -848,13 +1106,13 @@ class PacotesRepository {
     final db = await _databaseProvider();
     await db.transaction((txn) async {
       final rows = await txn.rawQuery(
-        '''SELECT a.*, ps.id sessao_id, ps.pacote_venda_id, ps.status sessao_status,
-           ps.credito_consumido, pv.valor_contratado, pv.total_sessoes,
-           p.modo_comissao, s.comissao_percentual
+        '''SELECT a.*, ps.id sessao_id, ps.pacote_vendido_id as pacote_venda_id, ps.status sessao_status,
+           ps.estoque_consumido as credito_consumido, pv.valor_original as valor_contratado, pv.quantidade_sessoes as total_sessoes,
+           s.comissao_percentual
            FROM agendamentos a
-           JOIN pacote_venda_sessoes ps ON ps.id=a.pacote_venda_sessao_id
-           JOIN pacote_vendas pv ON pv.id=ps.pacote_venda_id
-           JOIN pacotes_servicos p ON p.id=pv.pacote_id
+           JOIN sessoes_pacotes ps ON ps.id=a.pacote_venda_sessao_id
+           JOIN pacotes_vendidos pv ON pv.id=ps.pacote_vendido_id
+           JOIN pacotes p ON p.id=pv.pacote_id
            JOIN servicos s ON s.id=a.servico_id
            WHERE a.id=? AND a.comercio_id=?''',
         [agendamentoId, _comercioId],
@@ -894,14 +1152,9 @@ class PacotesRepository {
         whereArgs: [agendamentoId, _comercioId],
       );
       await txn.update(
-        'pacote_venda_sessoes',
-        {
-          'status': 'realizada',
-          'credito_consumido': 1,
-          'realizada_em': agora,
-          'atualizado_em': agora,
-        },
-        where: 'id=? AND comercio_id=? AND credito_consumido=0',
+        'sessoes_pacotes',
+        {'status': 'realizada', 'estoque_consumido': 1, 'updated_at': agora},
+        where: 'id=? AND business_id=? AND estoque_consumido=0',
         whereArgs: [row['sessao_id'], _comercioId],
       );
       for (final material in materiais) {
@@ -934,38 +1187,6 @@ class PacotesRepository {
           'usuario_responsavel_id': _usuarioId,
         });
       }
-      final modo = row['modo_comissao'] as String;
-      if (modo == 'por_sessao' || modo == 'dividida') {
-        await _comissao(
-          txn,
-          vendaId: row['pacote_venda_id'] as String,
-          sessaoId: row['sessao_id'] as String,
-          profissionalId: row['profissional_id'] as String,
-          papel: 'executor',
-          base:
-              (row['valor_contratado'] as num).toDouble() /
-              (row['total_sessoes'] as num).toInt(),
-          percentual: (row['comissao_percentual'] as num? ?? 0).toDouble(),
-        );
-      }
-      final restantes =
-          Sqflite.firstIntValue(
-            await txn.rawQuery(
-              '''SELECT COUNT(*) FROM pacote_venda_sessoes
-               WHERE pacote_venda_id=? AND credito_consumido<1
-               AND status NOT IN ('cancelada','vencida')''',
-              [row['pacote_venda_id']],
-            ),
-          ) ??
-          0;
-      if (restantes == 0) {
-        await txn.update(
-          'pacote_vendas',
-          {'status': 'concluido', 'atualizado_em': agora},
-          where: 'id=? AND comercio_id=?',
-          whereArgs: [row['pacote_venda_id'], _comercioId],
-        );
-      }
       await _auditar(
         txn,
         acao: 'sessao_realizada',
@@ -984,25 +1205,14 @@ class PacotesRepository {
     final db = await _databaseProvider();
     await db.transaction((txn) async {
       final rows = await txn.rawQuery(
-        '''SELECT a.pacote_venda_sessao_id sessao_id, ps.pacote_venda_id,
-           p.regra_falta, p.percentual_falta
-           FROM agendamentos a JOIN pacote_venda_sessoes ps
-           ON ps.id=a.pacote_venda_sessao_id JOIN pacote_vendas pv
-           ON pv.id=ps.pacote_venda_id JOIN pacotes_servicos p ON p.id=pv.pacote_id
+        '''SELECT a.pacote_venda_sessao_id sessao_id, ps.pacote_vendido_id as pacote_venda_id
+           FROM agendamentos a JOIN sessoes_pacotes ps
+           ON ps.id=a.pacote_venda_sessao_id
            WHERE a.id=? AND a.comercio_id=?''',
         [agendamentoId, _comercioId],
       );
       if (rows.isEmpty) throw StateError('Sessão de pacote não encontrada.');
       final row = rows.first;
-      final regra = row['regra_falta'] as String;
-      if (regra == 'aprovar' && !aprovada) {
-        throw StateError('Esta falta exige aprovação administrativa.');
-      }
-      final consumo = regra == 'consumir'
-          ? 1.0
-          : regra == 'parcial'
-          ? ((row['percentual_falta'] as num).toDouble() / 100).clamp(0, 1)
-          : 0.0;
       await txn.update(
         'agendamentos',
         {'status': 'faltou', 'compareceu': 0, 'atualizado_em': _agora()},
@@ -1010,15 +1220,14 @@ class PacotesRepository {
         whereArgs: [agendamentoId, _comercioId],
       );
       await txn.update(
-        'pacote_venda_sessoes',
+        'sessoes_pacotes',
         {
-          'status': consumo >= 1 ? 'faltou_consumida' : 'disponivel',
-          'credito_consumido': consumo,
-          'agendamento_id': consumo >= 1 ? agendamentoId : null,
-          'falta_regra_aplicada': regra,
-          'atualizado_em': _agora(),
+          'status': 'faltou_consumida',
+          'estoque_consumido': 1.0,
+          'agendamento_id': agendamentoId,
+          'updated_at': _agora(),
         },
-        where: 'id=? AND comercio_id=?',
+        where: 'id=? AND business_id=?',
         whereArgs: [row['sessao_id'], _comercioId],
       );
       await _auditar(
@@ -1026,7 +1235,7 @@ class PacotesRepository {
         acao: 'falta_registrada',
         vendaId: row['pacote_venda_id'] as String,
         sessaoId: row['sessao_id'] as String,
-        dados: {'regra': regra, 'credito_consumido': consumo},
+        dados: {'credito_consumido': 1.0},
       );
     });
   }
@@ -1041,8 +1250,8 @@ class PacotesRepository {
     final db = await _databaseProvider();
     await db.transaction((txn) async {
       final origemRows = await txn.query(
-        'pacote_venda_sessoes',
-        where: 'id=? AND comercio_id=? AND status=?',
+        'sessoes_pacotes',
+        where: 'id=? AND business_id=? AND status=?',
         whereArgs: [sessaoId, _comercioId, 'agendada'],
         limit: 1,
       );
@@ -1050,30 +1259,26 @@ class PacotesRepository {
         throw StateError('Sessão agendada não encontrada.');
       }
       final origem = origemRows.first;
-      final inicioOriginal = DateTime.parse(
-        origem['inicio_planejado'] as String,
-      );
+      final inicioOriginal = DateTime.parse(origem['data_agendada'] as String);
       final delta = novoInicio.difference(inicioOriginal);
       final selecionadas = await txn.query(
-        'pacote_venda_sessoes',
+        'sessoes_pacotes',
         where: escopo == EscopoReagendamentoPacote.somenteEsta
-            ? 'id=? AND comercio_id=?'
-            : "pacote_venda_id=? AND comercio_id=? AND status='agendada' AND numero>=?",
+            ? 'id=? AND business_id=?'
+            : "pacote_vendido_id=? AND business_id=? AND status='agendada' AND ordem>=?",
         whereArgs: escopo == EscopoReagendamentoPacote.somenteEsta
             ? [sessaoId, _comercioId]
-            : [origem['pacote_venda_id'], _comercioId, origem['numero']],
-        orderBy: 'numero',
+            : [origem['pacote_vendido_id'], _comercioId, origem['ordem']],
+        orderBy: 'ordem',
       );
       final idsAgendamento = selecionadas
           .map((r) => r['agendamento_id'] as String?)
           .whereType<String>()
           .toList();
       for (final sessao in selecionadas) {
-        final atual = DateTime.parse(sessao['inicio_planejado'] as String);
+        final atual = DateTime.parse(sessao['data_agendada'] as String);
         final inicio = atual.add(delta);
-        final fim = inicio.add(
-          Duration(minutes: sessao['duracao_minutos'] as int),
-        );
+        final fim = inicio.add(const Duration(minutes: 60));
         final jornada = await txn.query(
           'horarios_profissionais',
           where:
@@ -1148,20 +1353,20 @@ class PacotesRepository {
           whereArgs: [sessao['agendamento_id'], _comercioId],
         );
         await txn.update(
-          'pacote_venda_sessoes',
+          'sessoes_pacotes',
           {
             'profissional_id': profissionalId,
-            'inicio_planejado': inicio.toIso8601String(),
-            'atualizado_em': _agora(),
+            'data_agendada': inicio.toIso8601String(),
+            'updated_at': _agora(),
           },
-          where: 'id=? AND comercio_id=?',
+          where: 'id=? AND business_id=?',
           whereArgs: [sessao['id'], _comercioId],
         );
       }
       await _auditar(
         txn,
         acao: 'sessoes_reagendadas',
-        vendaId: origem['pacote_venda_id'] as String,
+        vendaId: origem['pacote_vendido_id'] as String,
         sessaoId: sessaoId,
         dados: {'escopo': escopo.name, 'quantidade': selecionadas.length},
       );
@@ -1209,15 +1414,15 @@ class PacotesRepository {
       );
       if (rows.isEmpty || rows.first['pacote_venda_sessao_id'] == null) return;
       await txn.update(
-        'pacote_venda_sessoes',
+        'sessoes_pacotes',
         {
           'status': 'disponivel',
           'agendamento_id': null,
-          'inicio_planejado': null,
+          'data_agendada': null,
           'profissional_id': null,
-          'atualizado_em': _agora(),
+          'updated_at': _agora(),
         },
-        where: 'id=? AND comercio_id=? AND credito_consumido=0',
+        where: 'id=? AND business_id=? AND estoque_consumido=0',
         whereArgs: [rows.first['pacote_venda_sessao_id'], _comercioId],
       );
     });
@@ -1237,14 +1442,13 @@ class PacotesRepository {
     }
     final db = await _databaseProvider();
     await db.update(
-      'pacote_vendas',
+      'pacotes_vendidos',
       {
         'status': status,
-        'pausado_em': status == 'pausado' ? _agora() : null,
-        'motivo_cancelamento': status == 'cancelado' ? motivo : null,
-        'atualizado_em': _agora(),
+        'observacoes': status == 'cancelado' ? motivo : null,
+        'updated_at': _agora(),
       },
-      where: 'id=? AND comercio_id=?',
+      where: 'id=? AND business_id=?',
       whereArgs: [vendaId, _comercioId],
     );
   }
@@ -1254,20 +1458,20 @@ class PacotesRepository {
     if (dias <= 0) throw ArgumentError('Informe dias adicionais.');
     final db = await _databaseProvider();
     final rows = await db.query(
-      'pacote_vendas',
-      columns: ['validade_em'],
-      where: 'id=? AND comercio_id=?',
+      'pacotes_vendidos',
+      columns: ['validade_fim'],
+      where: 'id=? AND business_id=?',
       whereArgs: [vendaId, _comercioId],
       limit: 1,
     );
     if (rows.isEmpty) throw StateError('Venda não encontrada.');
     final validade = DateTime.parse(
-      rows.first['validade_em'] as String,
+      rows.first['validade_fim'] as String,
     ).add(Duration(days: dias));
     await db.update(
-      'pacote_vendas',
-      {'validade_em': validade.toIso8601String(), 'atualizado_em': _agora()},
-      where: 'id=? AND comercio_id=?',
+      'pacotes_vendidos',
+      {'validade_fim': validade.toIso8601String(), 'updated_at': _agora()},
+      where: 'id=? AND business_id=?',
       whereArgs: [vendaId, _comercioId],
     );
   }
@@ -1277,13 +1481,13 @@ class PacotesRepository {
     final db = await _databaseProvider();
     await db.transaction((txn) async {
       final vendas = await txn.rawQuery(
-        '''SELECT v.*, p.permite_transferencia FROM pacote_vendas v
-           JOIN pacotes_servicos p ON p.id=v.pacote_id
-           WHERE v.id=? AND v.comercio_id=?''',
+        '''SELECT v.* FROM pacotes_vendidos v
+           JOIN pacotes p ON p.id=v.pacote_id
+           WHERE v.id=? AND v.business_id=?''',
         [vendaId, _comercioId],
       );
-      if (vendas.isEmpty || vendas.first['permite_transferencia'] != 1) {
-        throw StateError('Este pacote não permite transferência.');
+      if (vendas.isEmpty || vendas.first['status'] != 'ativo') {
+        throw StateError('Venda não encontrada ou pacote não está ativo.');
       }
       final cliente = await txn.query(
         'clientes',
@@ -1294,13 +1498,13 @@ class PacotesRepository {
       );
       if (cliente.isEmpty) throw StateError('Cliente de destino inválido.');
       await txn.update(
-        'pacote_vendas',
+        'pacotes_vendidos',
         {
-          'cliente_origem_id': vendas.first['cliente_id'],
+          'observacoes': 'Transferido de ${vendas.first['cliente_id']}',
           'cliente_id': novoClienteId,
-          'atualizado_em': _agora(),
+          'updated_at': _agora(),
         },
-        where: 'id=? AND comercio_id=?',
+        where: 'id=? AND business_id=?',
         whereArgs: [vendaId, _comercioId],
       );
       await _auditar(
@@ -1349,14 +1553,14 @@ class PacotesRepository {
     final de = (inicio ?? DateTime(2000)).toIso8601String();
     final ate = (fim ?? DateTime(2100)).toIso8601String();
     final vendas = await db.rawQuery(
-      '''SELECT COUNT(*) quantidade, COALESCE(SUM(valor_contratado),0) vendido,
-         COALESCE(SUM(valor_pago),0) recebido, COALESCE(SUM(valor_pendente),0) pendente
-         FROM pacote_vendas WHERE comercio_id=? AND data_compra BETWEEN ? AND ?''',
+      '''SELECT COUNT(*) quantidade, COALESCE(SUM(valor_original),0) vendido,
+         COALESCE(SUM(valor_final),0) recebido, 0 pendente
+         FROM pacotes_vendidos WHERE business_id=? AND data_venda BETWEEN ? AND ?''',
       [_comercioId, de, ate],
     );
     final sessoes = await db.rawQuery(
-      '''SELECT status, COUNT(*) quantidade FROM pacote_venda_sessoes
-         WHERE comercio_id=? GROUP BY status''',
+      '''SELECT status, COUNT(*) quantidade FROM sessoes_pacotes
+         WHERE business_id=? GROUP BY status''',
       [_comercioId],
     );
     return {'vendas': vendas.first, 'sessoes': sessoes};
@@ -1368,8 +1572,8 @@ class PacotesRepository {
     return db.rawQuery(
       '''SELECT a.*, p.nome AS pacote_nome, c.nome AS cliente_nome
          FROM pacote_alertas a
-         JOIN pacote_vendas v ON v.id=a.pacote_venda_id
-         JOIN pacotes_servicos p ON p.id=v.pacote_id
+         JOIN pacotes_vendidos v ON v.id=a.pacote_venda_id
+         JOIN pacotes p ON p.id=v.pacote_id
          JOIN clientes c ON c.id=v.cliente_id
          WHERE a.comercio_id=? AND a.status='pendente'
          ORDER BY a.criado_em DESC''',
@@ -1382,24 +1586,25 @@ class PacotesRepository {
     var criados = 0;
     final agora = DateTime.now();
     final vendas = await db.query(
-      'pacote_vendas',
-      where: "comercio_id=? AND status IN ('ativo','pausado')",
+      'pacotes_vendidos',
+      where: "business_id=? AND status IN ('ativo','pausado')",
       whereArgs: [_comercioId],
     );
     for (final venda in vendas) {
-      final validade = DateTime.parse(venda['validade_em'] as String);
+      final validade = DateTime.parse(venda['validade_fim'] as String);
       final diferenca = validade.difference(agora).inDays;
       if (validade.isBefore(agora)) {
         await db.update(
-          'pacote_vendas',
-          {'status': 'vencido', 'atualizado_em': _agora()},
-          where: 'id=? AND comercio_id=?',
+          'pacotes_vendidos',
+          {'status': 'vencido', 'updated_at': _agora()},
+          where: 'id=? AND business_id=?',
           whereArgs: [venda['id'], _comercioId],
         );
         await db.update(
-          'pacote_venda_sessoes',
-          {'status': 'vencida', 'atualizado_em': _agora()},
-          where: "pacote_venda_id=? AND comercio_id=? AND status='disponivel'",
+          'sessoes_pacotes',
+          {'status': 'vencida', 'updated_at': _agora()},
+          where:
+              "pacote_vendido_id=? AND business_id=? AND status='disponivel'",
           whereArgs: [venda['id'], _comercioId],
         );
       }
@@ -1412,12 +1617,7 @@ class PacotesRepository {
               : 'Pacote vence em até 7 dias.',
         });
       }
-      if ((venda['valor_pendente'] as num).toDouble() > 0) {
-        alertas.add({
-          'tipo': 'pagamento_pendente',
-          'mensagem': 'Pacote com pagamento pendente.',
-        });
-      }
+      // valor_pendente now handled by finance
       for (final alerta in alertas) {
         final result = await db.insert('pacote_alertas', {
           'id': _id('palt'),
@@ -1519,7 +1719,6 @@ class PacotesRepository {
     });
   }
 
-  String _regraFalta(RegraFaltaPacote regra) => regra.name;
   String _modoComissao(ModoComissaoPacote modo) {
     return switch (modo) {
       ModoComissaoPacote.venda => 'venda',

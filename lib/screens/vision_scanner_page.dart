@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import '../services/scanner/scanner_coordinator.dart';
 import '../services/scanner/mlkit_vision_provider.dart';

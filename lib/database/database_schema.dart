@@ -559,7 +559,7 @@ abstract final class DatabaseSchema {
         business_id TEXT NOT NULL,
         pacote_vendido_id TEXT NOT NULL,
         ordem INTEGER DEFAULT 0,
-        servico_id_previsto TEXT NOT NULL,
+        servico_id_previsto TEXT,
         servico_id_realizado TEXT,
         data_agendada TEXT,
         horario_inicio TEXT,
@@ -580,8 +580,8 @@ abstract final class DatabaseSchema {
         created_by TEXT,
         updated_by TEXT,
         FOREIGN KEY (pacote_vendido_id) REFERENCES pacotes_vendidos (id) ON DELETE CASCADE,
-        FOREIGN KEY (servico_id_previsto) REFERENCES servicos (id),
-        FOREIGN KEY (servico_id_realizado) REFERENCES servicos (id),
+        FOREIGN KEY (servico_id_previsto) REFERENCES servicos (id) ON DELETE SET NULL,
+        FOREIGN KEY (servico_id_realizado) REFERENCES servicos (id) ON DELETE SET NULL,
         FOREIGN KEY (profissional_id) REFERENCES profissionais (id),
         FOREIGN KEY (agendamento_id) REFERENCES agendamentos (id)
       )

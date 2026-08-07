@@ -277,7 +277,7 @@ class _SmartSelectorState<T> extends State<SmartSelector<T>> {
       controller: _scrollController,
       padding: const EdgeInsets.symmetric(vertical: 8),
       itemCount: _items.length + (_hasMore ? 1 : 0),
-      separatorBuilder: (_, __) => const Divider(height: 1),
+      separatorBuilder: (_, _) => const Divider(height: 1),
       itemBuilder: (context, index) {
         if (index == _items.length) {
           return const Padding(

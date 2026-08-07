@@ -1,7 +1,11 @@
 import '../../repositories/agenda_repository.dart';
 
 class AgendaConflictChecker {
-  static const _estadosBloqueantes = ['agendado', 'confirmado', 'emAtendimento'];
+  static const _estadosBloqueantes = [
+    'agendado',
+    'confirmado',
+    'emAtendimento',
+  ];
 
   /// Verifica se há conflito entre uma lista de [novos] agendamentos
   /// e a lista de [existentes] no banco.
@@ -21,7 +25,10 @@ class AgendaConflictChecker {
         // Sempre ignorar a si mesmo (em caso de edição)
         if (novo.id == existente.id) continue;
         // Ignorar de acordo com o Set explícito de ignorados (ex: remarcação de grupo)
-        if (ignoredAppointmentIds != null && ignoredAppointmentIds.contains(existente.id)) continue;
+        if (ignoredAppointmentIds != null &&
+            ignoredAppointmentIds.contains(existente.id)) {
+          continue;
+        }
 
         if (_isSobreposto(novo, existente)) {
           if (_temRecursoEmComum(novo, existente)) {
@@ -60,7 +67,7 @@ class AgendaConflictChecker {
     // ainda não estão mapeados no AgendamentoRegistro do Repositório de forma estrita.
     // Mas a lógica está preparada.
     if (a.profissionalId == b.profissionalId) return true;
-    
+
     // Futuro: se a.salaId != null && a.salaId == b.salaId return true;
     return false;
   }

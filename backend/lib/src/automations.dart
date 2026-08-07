@@ -380,6 +380,54 @@ final class PostgresMessageAutomationStore implements MessageAutomationStore {
     });
   }
 
+  Future<void> _updateSyncRecord(
+    TxSession tx,
+    String outboundMessageId,
+    String newStatus, {
+    String? newExternalId,
+  }) async {
+    final params = {'id': outboundMessageId, 'status': newStatus};
+    var query = '''
+        UPDATE sync_records sr
+        SET payload = jsonb_set(
+          payload,
+          '{status}',
+          to_jsonb(@status::text)
+        ),
+        server_version = server_version + 1,
+        updated_at = now()
+        FROM outbound_messages om
+        WHERE om.id = @id
+        AND sr.entity = 'whatsapp_fila'
+        AND sr.entity_id = om.metadata->>'whatsapp_fila_id'
+        AND sr.business_id = om.business_id
+    ''';
+    if (newExternalId != null) {
+      params['externalId'] = newExternalId;
+      query = '''
+        UPDATE sync_records sr
+        SET payload = jsonb_set(
+          jsonb_set(
+            payload,
+            '{status}',
+            to_jsonb(@status::text)
+          ),
+          '{provider_message_id}',
+          to_jsonb(@externalId::text)
+        ),
+        server_version = server_version + 1,
+        updated_at = now()
+        FROM outbound_messages om
+        WHERE om.id = @id
+        AND sr.entity = 'whatsapp_fila'
+        AND sr.entity_id = om.metadata->>'whatsapp_fila_id'
+        AND sr.business_id = om.business_id
+      ''';
+    }
+
+    await tx.execute(Sql.named(query), parameters: params);
+  }
+
   @override
   Future<void> markSent(
     String id, {
@@ -396,6 +444,7 @@ final class PostgresMessageAutomationStore implements MessageAutomationStore {
         parameters: {'id': id, 'externalId': externalId, 'sentAt': sentAt},
       );
       await _attempt(tx, id, 'sent', null);
+      await _updateSyncRecord(tx, id, 'enviada', newExternalId: externalId);
     });
   }
 
@@ -421,6 +470,7 @@ final class PostgresMessageAutomationStore implements MessageAutomationStore {
         },
       );
       await _attempt(tx, id, terminal ? 'error' : 'retry', error);
+      await _updateSyncRecord(tx, id, terminal ? 'falhou' : 'na_fila');
     });
   }
 
@@ -451,12 +501,13 @@ final class PostgresMessageAutomationStore implements MessageAutomationStore {
     }
     await _pool.runTx((tx) async {
       await _enableWorker(tx);
-      await tx.execute(
+      final updated = await tx.execute(
         Sql.named('''
           UPDATE outbound_messages SET status=@status, last_error=@error,
             delivered_at=CASE WHEN @status IN ('delivered','read')
               THEN now() ELSE delivered_at END, updated_at=now()
           WHERE external_id=@externalId
+          RETURNING id
         '''),
         parameters: {
           'externalId': externalId,
@@ -464,6 +515,17 @@ final class PostgresMessageAutomationStore implements MessageAutomationStore {
           'error': error,
         },
       );
+      if (updated.isNotEmpty) {
+        final id = updated.single.toColumnMap()['id'] as String;
+        final mappedStatus = status == 'error'
+            ? 'falhou'
+            : status == 'delivered'
+            ? 'entregue'
+            : status == 'read'
+            ? 'lida'
+            : 'enviada';
+        await _updateSyncRecord(tx, id, mappedStatus);
+      }
     });
   }
 

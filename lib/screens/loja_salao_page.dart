@@ -7,11 +7,9 @@ import '../repositories/loja_repository.dart';
 import '../services/session_controller.dart';
 import 'vision_scanner_page.dart';
 import 'catalogos_loja_page.dart';
-import 'central_reposicao_completa_page.dart';
 import 'comandas_loja_page.dart';
 import 'joias_consignadas_page.dart';
 import 'produtos_loja_page.dart';
-import 'produto_fornecedores_page.dart';
 import 'suprimentos_page.dart';
 import 'vendas_loja_page.dart';
 

@@ -27,10 +27,11 @@ class _VisionOcrCapturePageState extends State<VisionOcrCapturePage> {
 
   void _remove(bool isFront) {
     setState(() {
-      if (isFront)
+      if (isFront) {
         _frontPath = null;
-      else
+      } else {
         _backPath = null;
+      }
     });
   }
 

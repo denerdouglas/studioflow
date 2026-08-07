@@ -1,6 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
-import 'package:studioflow/models/domain/loja.dart';
 import 'package:studioflow/repositories/estoque_repository.dart';
 import 'package:studioflow/repositories/loja_repository.dart';
 

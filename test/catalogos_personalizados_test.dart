@@ -105,33 +105,36 @@ void main() {
     await expectLater(catalogos.excluir(catalogoId), throwsStateError);
   });
 
-  test('item individual pode ser criado sem código (Fase 3 relaxou a regra)', () async {
-    final id = await catalogos.criar(
-      nome: 'Joias',
-      tipoControle: TipoControleCatalogo.outros,
-    );
-    // Criação de produto sem código não lança mais erro na arquitetura atual
-    final pId = await catalogos.adicionarProduto(
-      catalogoId: id,
-      nome: 'Anel',
-      custo: 10,
-      preco: 30,
-      quantidade: 1,
-      estoqueMinimo: 0,
-    );
-    expect(pId, isNotEmpty);
-    
-    await catalogos.adicionarProduto(
-      catalogoId: id,
-      nome: 'Pulseira',
-      codigo: 'PULS-001',
-      custo: 10,
-      preco: 30,
-      quantidade: 1,
-      estoqueMinimo: 0,
-      lote: 'Maleta 8',
-    );
-  });
+  test(
+    'item individual pode ser criado sem código (Fase 3 relaxou a regra)',
+    () async {
+      final id = await catalogos.criar(
+        nome: 'Joias',
+        tipoControle: TipoControleCatalogo.outros,
+      );
+      // Criação de produto sem código não lança mais erro na arquitetura atual
+      final pId = await catalogos.adicionarProduto(
+        catalogoId: id,
+        nome: 'Anel',
+        custo: 10,
+        preco: 30,
+        quantidade: 1,
+        estoqueMinimo: 0,
+      );
+      expect(pId, isNotEmpty);
+
+      await catalogos.adicionarProduto(
+        catalogoId: id,
+        nome: 'Pulseira',
+        codigo: 'PULS-001',
+        custo: 10,
+        preco: 30,
+        quantidade: 1,
+        estoqueMinimo: 0,
+        lote: 'Maleta 8',
+      );
+    },
+  );
 
   test('uma comanda combina produtos de catálogos diferentes', () async {
     final bebidas = await catalogos.criar(

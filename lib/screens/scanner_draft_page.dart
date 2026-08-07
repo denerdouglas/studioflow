@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import '../models/domain/scanner_product_draft.dart';
-import '../models/domain/loja.dart';
-import '../services/scanner/scanner_coordinator.dart';
 
 class ScannerDraftPage extends StatefulWidget {
   final ScannerProductDraft draft;
@@ -68,7 +66,7 @@ class _ScannerDraftPageState extends State<ScannerDraftPage> {
         decoration: InputDecoration(
           labelText: label,
           filled: isLowConfidence,
-          fillColor: isLowConfidence ? Colors.orange.withOpacity(0.1) : null,
+          fillColor: isLowConfidence ? Colors.orange.withValues(alpha: 0.1) : null,
           helperText: fieldData != null
               ? 'Origem: ${fieldData.source}'
               : 'Preenchimento manual',
@@ -157,7 +155,7 @@ class _ScannerDraftPageState extends State<ScannerDraftPage> {
               style: TextStyle(fontWeight: FontWeight.bold),
             ),
             DropdownButtonFormField<String>(
-              value: _finalidadeSelecionada,
+              initialValue: _finalidadeSelecionada,
               decoration: const InputDecoration(border: OutlineInputBorder()),
               items: const [
                 DropdownMenuItem(value: 'venda', child: Text('Venda (Loja)')),

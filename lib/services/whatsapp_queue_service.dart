@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:sqflite/sqflite.dart';
-import '../core/utils/id_generator.dart';
 import '../database/database_service.dart';
+import '../repositories/whatsapp_fila_repository.dart';
 
 class WhatsappQueueService {
   final Future<Database> Function() _databaseProvider;
@@ -17,21 +17,23 @@ class WhatsappQueueService {
     required String template,
     required Map<String, dynamic> payload,
     String? agendamentoId,
+    String? idempotencyKey,
   }) async {
-    final db = txn ?? await _databaseProvider();
-    final now = DateTime.now().toUtc().toIso8601String();
+    final repo = WhatsappFilaRepository(
+      databaseProvider: () async =>
+          (txn as Database?) ?? await _databaseProvider(),
+      comercioId: comercioId,
+    );
 
-    await db.insert('whatsapp_fila', {
-      'id': 'wa_${IdGenerator.temporal()}',
-      'business_id': comercioId,
-      'destinatario': destinatario,
-      'template_id': template,
-      'payload': jsonEncode(payload),
-      'status': 'pendente',
-      'agendamento_id': agendamentoId,
-      'created_at': now,
-      'updated_at': now,
-    });
+    await repo.enfileirarMensagem(
+      destinatario: destinatario,
+      payload: jsonEncode(payload),
+      agendamentoId: agendamentoId,
+      templateId: template,
+      provider: 'system',
+      idempotencyKey: idempotencyKey,
+      txn: txn,
+    );
   }
 
   Future<void> enfileirarDireto({
@@ -40,20 +42,22 @@ class WhatsappQueueService {
     required String destinatario,
     required String texto,
     String? agendamentoId,
+    String? idempotencyKey,
   }) async {
-    final db = txn ?? await _databaseProvider();
-    final now = DateTime.now().toUtc().toIso8601String();
+    final repo = WhatsappFilaRepository(
+      databaseProvider: () async =>
+          (txn as Database?) ?? await _databaseProvider(),
+      comercioId: comercioId,
+    );
 
-    await db.insert('whatsapp_fila', {
-      'id': 'wa_${IdGenerator.temporal()}',
-      'business_id': comercioId,
-      'destinatario': destinatario,
-      'template_id': 'texto_livre',
-      'payload': jsonEncode({'texto': texto}),
-      'status': 'pendente',
-      'agendamento_id': agendamentoId,
-      'created_at': now,
-      'updated_at': now,
-    });
+    await repo.enfileirarMensagem(
+      destinatario: destinatario,
+      payload: jsonEncode({'texto': texto}),
+      agendamentoId: agendamentoId,
+      templateId: 'texto_livre',
+      provider: 'system',
+      idempotencyKey: idempotencyKey,
+      txn: txn,
+    );
   }
 }

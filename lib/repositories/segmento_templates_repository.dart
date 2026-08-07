@@ -1,6 +1,7 @@
 import 'package:sqflite/sqflite.dart';
 import '../../models/domain/segmento_template.dart';
 import '../database/database_service.dart';
+import '../services/segmento_seeder.dart';
 
 /// Repositório para gerenciar os templates de segmento disponíveis no sistema.
 class SegmentoTemplatesRepository {
@@ -19,6 +20,15 @@ class SegmentoTemplatesRepository {
       where: 'status = ? AND deleted_at IS NULL',
       whereArgs: ['ativo'],
     );
+    if (results.isEmpty) {
+      await SegmentoSeeder(repo: this).seedTemplates();
+      final retryResults = await db.query(
+        'segmento_templates',
+        where: 'status = ? AND deleted_at IS NULL',
+        whereArgs: ['ativo'],
+      );
+      return retryResults.map((e) => SegmentoTemplate.fromMap(e)).toList();
+    }
     return results.map((e) => SegmentoTemplate.fromMap(e)).toList();
   }
 

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../models/domain/acesso.dart';
 import '../../repositories/cliente_repository.dart';
 import '../smart_selector.dart';
 import '../../screens/clientes_page.dart';
@@ -7,13 +6,17 @@ import '../../screens/clientes_page.dart';
 class ClienteSmartSelector {
   static Future<ClienteRegistro?> show(BuildContext context) async {
     final repository = ClienteRepository();
-    
+
     return SmartSelector.show<ClienteRegistro>(
       context: context,
       title: 'Selecionar Cliente',
       searchHint: 'Buscar por nome, celular...',
       onSearch: (query, offset, limit) async {
-        return repository.buscarPesquisando(query, limit: limit, offset: offset);
+        return repository.buscarPesquisando(
+          query,
+          limit: limit,
+          offset: offset,
+        );
       },
       itemBuilder: (context, cliente) {
         return ListTile(
@@ -41,7 +44,9 @@ class ClienteSmartSelector {
             await repository.inserir(novoCliente);
             if (ctx.mounted) {
               ScaffoldMessenger.of(ctx).showSnackBar(
-                const SnackBar(content: Text('Cliente cadastrado com sucesso.')),
+                const SnackBar(
+                  content: Text('Cliente cadastrado com sucesso.'),
+                ),
               );
             }
             return novoCliente;

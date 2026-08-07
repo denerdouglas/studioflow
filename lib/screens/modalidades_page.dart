@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../repositories/modalidades_repository.dart';
+import '../repositories/segmento_templates_repository.dart';
+import '../repositories/modalidade_importacao_repository.dart';
 
 class ModalidadesPage extends StatefulWidget {
   const ModalidadesPage({super.key});
@@ -264,11 +266,116 @@ class _ModalidadesPageState extends State<ModalidadesPage> {
     _ => Icons.category_outlined,
   };
 
+  void _showAddOptions() {
+    showModalBottomSheet(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.add),
+              title: const Text('Adicionar modalidade manualmente'),
+              onTap: () {
+                Navigator.pop(context);
+                _edit();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.download),
+              title: const Text('Importar do catálogo (Recomendado)'),
+              subtitle: const Text(
+                'Carrega configurações prontas para o seu segmento.',
+              ),
+              onTap: () {
+                Navigator.pop(context);
+                _importFromCatalog();
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _importFromCatalog() async {
+    final templates = await SegmentoTemplatesRepository().getAllActive();
+    if (templates.isEmpty) {
+      if (mounted) _message('O catálogo de segmentos está vazio.');
+      return;
+    }
+
+    final selected = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Selecione um segmento'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: templates.length,
+            itemBuilder: (context, index) {
+              final template = templates[index];
+              return ListTile(
+                title: Text(template.nome),
+                onTap: () => Navigator.pop(context, template.slug),
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
+        ],
+      ),
+    );
+
+    if (selected == null) return;
+
+    final templateName = templates.firstWhere((t) => t.slug == selected).nome;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Importar configurações?'),
+        content: Text(
+          'Isso adicionará os profissionais e serviços padrão do segmento '
+          '$templateName ao seu estabelecimento.\n'
+          'Se você já tiver itens com o mesmo nome, eles não serão duplicados.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Importar'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      setState(() => _loading = true);
+      try {
+        await ModalidadeImportacaoRepository().importar(selected);
+        if (mounted) _message('Importação concluída com sucesso.');
+        await _load();
+      } catch (e) {
+        if (mounted) _message('Erro na importação: $e');
+        if (mounted) setState(() => _loading = false);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text('Modalidades do estabelecimento')),
     floatingActionButton: FloatingActionButton.extended(
-      onPressed: _edit,
+      onPressed: _showAddOptions,
       icon: const Icon(Icons.add),
       label: const Text('Adicionar modalidade'),
     ),

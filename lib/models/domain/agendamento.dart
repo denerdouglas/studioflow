@@ -39,6 +39,10 @@ class Agendamento {
 
   final String? observacoes;
 
+  final String? consumoPrevistoJson;
+  final String? consumoRealizadoJson;
+  final bool estoqueConsumido;
+
   final DateTime dataCriacao;
 
   const Agendamento({
@@ -56,6 +60,9 @@ class Agendamento {
     this.confirmado = false,
     this.compareceu = false,
     this.observacoes,
+    this.consumoPrevistoJson,
+    this.consumoRealizadoJson,
+    this.estoqueConsumido = false,
     required this.dataCriacao,
   });
 
@@ -115,6 +122,9 @@ class Agendamento {
       confirmado: confirmado ?? this.confirmado,
       compareceu: compareceu ?? this.compareceu,
       observacoes: observacoes ?? this.observacoes,
+      consumoPrevistoJson: consumoPrevistoJson,
+      consumoRealizadoJson: consumoRealizadoJson,
+      estoqueConsumido: estoqueConsumido,
       dataCriacao: dataCriacao,
     );
   }

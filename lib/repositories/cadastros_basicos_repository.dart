@@ -71,96 +71,11 @@ class CadastrosBasicosRepository {
   String get _comercioId => SessionController.instance.usuario!.comercioId;
 
   Future<void> garantirDadosIniciais() async {
-    final Database db = await _databaseService.database;
-
-    final profissionais = await db.query(
-      'profissionais',
-      columns: ['id'],
-      where: 'comercio_id = ?',
-      whereArgs: [_comercioId],
-      limit: 1,
-    );
-
-    if (profissionais.isEmpty) {
-      final agora = DateTime.now().toIso8601String();
-
-      await db.insert('profissionais', {
-        'id': '${_comercioId}_profissional_rafa',
-        'nome': 'Rafa',
-        'whatsapp': '',
-        'cargo': 'Manicure',
-        'ativo': 1,
-        'percentual_comissao': 50,
-        'meta_mensal': 7000,
-        'faturamento_mes': 0,
-        'data_cadastro': agora,
-        'comercio_id': _comercioId,
-      });
-
-      await db.insert('profissionais', {
-        'id': '${_comercioId}_profissional_ana',
-        'nome': 'Ana',
-        'whatsapp': '',
-        'cargo': 'Profissional',
-        'ativo': 1,
-        'percentual_comissao': 50,
-        'meta_mensal': 5000,
-        'faturamento_mes': 0,
-        'data_cadastro': agora,
-        'comercio_id': _comercioId,
-      });
-    }
-
-    final servicos = await db.query(
-      'servicos',
-      columns: ['id'],
-      where: 'comercio_id = ?',
-      whereArgs: [_comercioId],
-      limit: 1,
-    );
-
-    if (servicos.isEmpty) {
-      final agora = DateTime.now().toIso8601String();
-
-      await db.insert('servicos', {
-        'id': '${_comercioId}_servico_mao',
-        'nome': 'Mão',
-        'categoria': 'Manicure',
-        'descricao': '',
-        'preco': 40,
-        'duracao_minutos': 60,
-        'ativo': 1,
-        'custo_estimado': 0,
-        'data_cadastro': agora,
-        'comercio_id': _comercioId,
-      });
-
-      await db.insert('servicos', {
-        'id': '${_comercioId}_servico_pe',
-        'nome': 'Pé',
-        'categoria': 'Manicure',
-        'descricao': '',
-        'preco': 40,
-        'duracao_minutos': 60,
-        'ativo': 1,
-        'custo_estimado': 0,
-        'data_cadastro': agora,
-        'comercio_id': _comercioId,
-      });
-
-      await db.insert('servicos', {
-        'id': '${_comercioId}_servico_pe_mao',
-        'nome': 'Pé e mão',
-        'categoria': 'Manicure',
-        'descricao': '',
-        'preco': 80,
-        'duracao_minutos': 120,
-        'ativo': 1,
-        'custo_estimado': 0,
-        'data_cadastro': agora,
-        'comercio_id': _comercioId,
-      });
-    }
+    // Hardcodes globais removidos.
+    // A inicialização de novas contas será feita através da seleção
+    // de segmento/modalidade (SegmentoTemplatesRepository).
+    // O sistema manterá as contas existentes intactas pois a lógica
+    // não apaga registros de profissionais/serviços existentes.
   }
 
   Future<List<ProfissionalBasicoRegistro>> listarProfissionais() async {

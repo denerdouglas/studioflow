@@ -6,6 +6,8 @@ import '../repositories/modalidades_repository.dart';
 import '../services/session_controller.dart';
 import '../services/dashboard_summary_service.dart';
 import '../widgets/shared/premium_card.dart';
+import '../registry/widget_registry.dart';
+import '../registry/dashboard_configuration.dart';
 import 'ia_local_page.dart';
 import 'modalidades_page.dart';
 import 'configuracoes_page.dart';
@@ -29,6 +31,9 @@ class HomePremiumPage extends StatefulWidget {
 class _HomePremiumPageState extends State<HomePremiumPage> {
   final DashboardSummaryService _summaryService = DashboardSummaryService();
   final ModalidadesRepository _modalidadesRepository = ModalidadesRepository();
+  final WidgetRegistry _registry = WidgetRegistry();
+  final DashboardConfiguration _config = DashboardConfiguration.defaultLayout();
+
   DashboardSummary? _summary;
   List<ModalidadeRegistro> _modalidades = const [];
   bool _isLoading = true;
@@ -37,7 +42,63 @@ class _HomePremiumPageState extends State<HomePremiumPage> {
   @override
   void initState() {
     super.initState();
+    _registerWidgets();
     _loadData();
+  }
+
+  void _registerWidgets() {
+    _registry.register('ia_panel', (context, data) => _buildIaPanel());
+    _registry.register('modalidades', (context, data) {
+      if (_modalidades.isEmpty) return const SizedBox.shrink();
+      return Column(
+        children: [const SizedBox(height: 20), _buildModalidades()],
+      );
+    });
+    _registry.register(
+      'caixa',
+      (context, data) => Column(
+        children: [
+          const SizedBox(height: 24),
+          _buildSectionTitle('Caixa'),
+          const SizedBox(height: 12),
+          _buildCaixa(),
+        ],
+      ),
+    );
+    _registry.register(
+      'agenda',
+      (context, data) => Column(
+        children: [
+          const SizedBox(height: 24),
+          _buildSectionTitle('Agenda de Hoje'),
+          const SizedBox(height: 12),
+          _buildAgenda(),
+        ],
+      ),
+    );
+    _registry.register(
+      'estoque_alerts',
+      (context, data) => Column(
+        children: [
+          const SizedBox(height: 24),
+          _buildSectionTitle('Alertas de Estoque'),
+          const SizedBox(height: 12),
+          _buildEstoqueAlerts(),
+        ],
+      ),
+    );
+    _registry.register(
+      'indicadores',
+      (context, data) => Column(
+        children: [
+          const SizedBox(height: 24),
+          _buildSectionTitle('Indicadores'),
+          const SizedBox(height: 12),
+          _buildIndicadores(),
+          const SizedBox(height: 40),
+        ],
+      ),
+    );
   }
 
   Future<void> _loadData() async {
@@ -211,30 +272,10 @@ class _HomePremiumPageState extends State<HomePremiumPage> {
     return SliverPadding(
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
       sliver: SliverList(
-        delegate: SliverChildListDelegate([
-          _buildIaPanel(),
-          if (_modalidades.isNotEmpty) ...[
-            const SizedBox(height: 20),
-            _buildModalidades(),
-          ],
-          const SizedBox(height: 24),
-          _buildSectionTitle('Caixa'),
-          const SizedBox(height: 12),
-          _buildCaixa(),
-          const SizedBox(height: 24),
-          _buildSectionTitle('Agenda de Hoje'),
-          const SizedBox(height: 12),
-          _buildAgenda(),
-          const SizedBox(height: 24),
-          _buildSectionTitle('Alertas de Estoque'),
-          const SizedBox(height: 12),
-          _buildEstoqueAlerts(),
-          const SizedBox(height: 24),
-          _buildSectionTitle('Indicadores'),
-          const SizedBox(height: 12),
-          _buildIndicadores(),
-          const SizedBox(height: 40),
-        ]),
+        delegate: SliverChildBuilderDelegate((context, index) {
+          final type = _config.layout[index];
+          return _registry.buildWidget(context, type);
+        }, childCount: _config.layout.length),
       ),
     );
   }

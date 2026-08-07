@@ -38,6 +38,8 @@ dependencies:
   qr_flutter: ^4.1.0
   uuid: ^4.6.0
 
+  sqflite_common: any
+  intl: any
 dev_dependencies:
   flutter_test:
     sdk: flutter

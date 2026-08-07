@@ -862,6 +862,34 @@ final class StudioFlowApi {
                 'Agendamento cancelado no StudioFlow.',
           );
         }
+        if (mutation.entity == 'whatsapp_fila' &&
+            mutation.operation == 'criar') {
+          final payload = mutation.payload;
+          try {
+            await automation.enqueue(
+              OutboundMessage(
+                id: _uuid.v4(),
+                businessId: actor.businessId!,
+                kind: payload['template_id']?.toString() ?? 'whatsapp_fila',
+                dedupeKey:
+                    payload['idempotency_key']?.toString() ?? mutation.entityId,
+                channel: 'whatsapp',
+                destination: payload['destinatario']?.toString() ?? '',
+                body: payload['payload'] is String
+                    ? payload['payload'] as String
+                    : jsonEncode(payload['payload']),
+                scheduledAt: DateTime.now().toUtc(),
+                status: 'queued',
+                attempts: 0,
+                appointmentId: payload['agendamento_id']?.toString(),
+                clientId: payload['cliente_id']?.toString(),
+                metadata: {'whatsapp_fila_id': mutation.entityId},
+              ),
+            );
+          } catch (e) {
+            print('Erro ao enfileirar whatsapp_fila: $e');
+          }
+        }
       }
     }
     final catalogService = catalog;

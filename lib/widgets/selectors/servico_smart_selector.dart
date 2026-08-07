@@ -6,22 +6,33 @@ import '../../screens/servicos_page.dart';
 class ServicoSmartSelector {
   static Future<ServicoRegistro?> show(BuildContext context) async {
     final repository = ServicosRepository();
-    
+
     return SmartSelector.show<ServicoRegistro>(
       context: context,
       title: 'Selecionar Serviço',
       searchHint: 'Buscar por nome, categoria...',
       onSearch: (query, offset, limit) async {
-        return repository.pesquisar(query, incluirInativos: false, limit: limit, offset: offset);
+        return repository.pesquisar(
+          query,
+          incluirInativos: false,
+          limit: limit,
+          offset: offset,
+        );
       },
       itemBuilder: (context, servico) {
         return ListTile(
           leading: CircleAvatar(
             backgroundColor: const Color(0xFFF0EBF7),
-            child: const Icon(Icons.content_cut, color: Color(0xFF70569A), size: 20),
+            child: const Icon(
+              Icons.content_cut,
+              color: Color(0xFF70569A),
+              size: 20,
+            ),
           ),
           title: Text(servico.nome),
-          subtitle: Text('${servico.categoria} • ${servico.duracaoMinutos} min'),
+          subtitle: Text(
+            '${servico.categoria} • ${servico.duracaoMinutos} min',
+          ),
           trailing: Text(
             'R\$ ${servico.preco.toStringAsFixed(2).replaceAll('.', ',')}',
             style: const TextStyle(fontWeight: FontWeight.bold),
@@ -41,7 +52,9 @@ class ServicoSmartSelector {
             await repository.salvar(novoServico);
             if (ctx.mounted) {
               ScaffoldMessenger.of(ctx).showSnackBar(
-                const SnackBar(content: Text('Serviço cadastrado com sucesso.')),
+                const SnackBar(
+                  content: Text('Serviço cadastrado com sucesso.'),
+                ),
               );
             }
             return novoServico;

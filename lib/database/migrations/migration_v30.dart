@@ -29,14 +29,24 @@ abstract final class MigrationV30 {
 
     // 2. Adicionar campos em agendamentos
     await _addColumn(db, 'agendamentos', 'grupo_agendamento_id', 'TEXT');
-    await _addColumn(db, 'agendamentos', 'ordem_no_grupo', 'INTEGER NOT NULL DEFAULT 0');
+    await _addColumn(
+      db,
+      'agendamentos',
+      'ordem_no_grupo',
+      'INTEGER NOT NULL DEFAULT 0',
+    );
 
     await db.execute('''
       CREATE INDEX IF NOT EXISTS idx_agendamentos_grupo ON agendamentos(business_id, grupo_agendamento_id)
     ''');
   }
 
-  static Future<void> _addColumn(Database db, String table, String column, String type) async {
+  static Future<void> _addColumn(
+    Database db,
+    String table,
+    String column,
+    String type,
+  ) async {
     final columns = await db.rawQuery('PRAGMA table_info($table)');
     final exists = columns.any((c) => c['name'] == column);
     if (!exists) {

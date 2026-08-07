@@ -33,11 +33,8 @@ class _ItemServico {
   DateTime? fimPrevisto;
 
   _ItemServico({
-    this.servico,
     this.profissional,
-    this.inicioPrevisto,
-    this.fimPrevisto,
-  });
+  }) : servico = null : inicioPrevisto : fimPrevisto;
 }
 
 class _NovoAgendamentoSheetState extends State<NovoAgendamentoSheet> {
@@ -68,9 +65,13 @@ class _NovoAgendamentoSheetState extends State<NovoAgendamentoSheet> {
 
   void _adicionarItem() {
     setState(() {
-      _itens.add(_ItemServico(
-        profissional: widget.profissionais.isNotEmpty ? widget.profissionais.first : null,
-      ));
+      _itens.add(
+        _ItemServico(
+          profissional: widget.profissionais.isNotEmpty
+              ? widget.profissionais.first
+              : null,
+        ),
+      );
       _recalcularHorarios();
     });
   }
@@ -121,7 +122,8 @@ class _NovoAgendamentoSheetState extends State<NovoAgendamentoSheet> {
 
       final grupo = AgendamentoGrupoRegistro(
         id: grupoId,
-        businessId: '', // O repository injeta o comercioId real, podemos deixar vazio aqui e o banco fará se o repositório suportar, ou preenchemos. 
+        businessId:
+            '', // O repository injeta o comercioId real, podemos deixar vazio aqui e o banco fará se o repositório suportar, ou preenchemos.
         // Na verdade o inserirGrupo no AgendaRepository já ignora o business_id da classe e injeta o _comercioId da sessão.
         clienteId: _clienteSelecionado!.id,
         status: 'agendado',
@@ -133,35 +135,37 @@ class _NovoAgendamentoSheetState extends State<NovoAgendamentoSheet> {
       final listaAgendamentos = <AgendamentoRegistro>[];
       for (var i = 0; i < _itens.length; i++) {
         final item = _itens[i];
-        listaAgendamentos.add(AgendamentoRegistro(
-          id: '${grupoId}_$i',
-          clienteId: _clienteSelecionado!.id,
-          clienteNome: _clienteSelecionado!.nome,
-          profissionalId: item.profissional!.id,
-          profissionalNome: item.profissional!.nome,
-          servicoId: item.servico!.id,
-          servicoNome: item.servico!.nome,
-          inicio: item.inicioPrevisto!,
-          fim: item.fimPrevisto!,
-          status: 'agendado',
-          valorServico: item.servico!.preco,
-          desconto: 0,
-          valorRecebido: 0,
-          confirmado: false,
-          compareceu: false,
-          grupoAgendamentoId: grupoId,
-          ordemNoGrupo: i,
-          observacoes: '',
-          dataCriacao: agora,
-        ));
+        listaAgendamentos.add(
+          AgendamentoRegistro(
+            id: '${grupoId}_$i',
+            clienteId: _clienteSelecionado!.id,
+            clienteNome: _clienteSelecionado!.nome,
+            profissionalId: item.profissional!.id,
+            profissionalNome: item.profissional!.nome,
+            servicoId: item.servico!.id,
+            servicoNome: item.servico!.nome,
+            inicio: item.inicioPrevisto!,
+            fim: item.fimPrevisto!,
+            status: 'agendado',
+            valorServico: item.servico!.preco,
+            desconto: 0,
+            valorRecebido: 0,
+            confirmado: false,
+            compareceu: false,
+            grupoAgendamentoId: grupoId,
+            ordemNoGrupo: i,
+            observacoes: '',
+            dataCriacao: agora,
+          ),
+        );
       }
 
       await _agendaRepository.inserirGrupo(grupo, listaAgendamentos);
-      
+
       // Registrar log (só o grupo ou só o principal, aqui faremos p/ o primeiro)
       final agendaCompleta = AgendaCompletaRepository();
       for (var item in listaAgendamentos) {
-         await agendaCompleta.registrarStatus(
+        await agendaCompleta.registrarStatus(
           agendamentoId: item.id,
           status: 'agendado',
           detalhes: 'Agendamento criado via grupo.',
@@ -212,7 +216,10 @@ class _NovoAgendamentoSheetState extends State<NovoAgendamentoSheet> {
               child: Container(
                 width: 48,
                 height: 5,
-                decoration: BoxDecoration(color: const Color(0xFFD6CDDD), borderRadius: BorderRadius.circular(10)),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFD6CDDD),
+                  borderRadius: BorderRadius.circular(10),
+                ),
               ),
             ),
             const SizedBox(height: 20),
@@ -221,7 +228,11 @@ class _NovoAgendamentoSheetState extends State<NovoAgendamentoSheet> {
               children: [
                 const Text(
                   'Novo Agendamento',
-                  style: TextStyle(fontSize: 25, fontWeight: FontWeight.bold, color: Color(0xFF2D2140)),
+                  style: TextStyle(
+                    fontSize: 25,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF2D2140),
+                  ),
                 ),
                 TextButton.icon(
                   onPressed: _adicionarItem,
@@ -239,8 +250,18 @@ class _NovoAgendamentoSheetState extends State<NovoAgendamentoSheet> {
                 }
               },
               child: InputDecorator(
-                decoration: const InputDecoration(labelText: 'Cliente', prefixIcon: Icon(Icons.person_outline)),
-                child: Text(_clienteSelecionado?.nome ?? 'Selecione um cliente...', style: TextStyle(color: _clienteSelecionado == null ? Colors.grey : Colors.black)),
+                decoration: const InputDecoration(
+                  labelText: 'Cliente',
+                  prefixIcon: Icon(Icons.person_outline),
+                ),
+                child: Text(
+                  _clienteSelecionado?.nome ?? 'Selecione um cliente...',
+                  style: TextStyle(
+                    color: _clienteSelecionado == null
+                        ? Colors.grey
+                        : Colors.black,
+                  ),
+                ),
               ),
             ),
             const SizedBox(height: 14),
@@ -264,8 +285,13 @@ class _NovoAgendamentoSheetState extends State<NovoAgendamentoSheet> {
                       }
                     },
                     child: InputDecorator(
-                      decoration: const InputDecoration(labelText: 'Data', prefixIcon: Icon(Icons.calendar_today)),
-                      child: Text(DateFormat('dd/MM/yyyy').format(_dataSelecionada)),
+                      decoration: const InputDecoration(
+                        labelText: 'Data',
+                        prefixIcon: Icon(Icons.calendar_today),
+                      ),
+                      child: Text(
+                        DateFormat('dd/MM/yyyy').format(_dataSelecionada),
+                      ),
                     ),
                   ),
                 ),
@@ -273,7 +299,10 @@ class _NovoAgendamentoSheetState extends State<NovoAgendamentoSheet> {
                 Expanded(
                   child: InkWell(
                     onTap: () async {
-                      final horario = await showTimePicker(context: context, initialTime: _horarioSelecionado);
+                      final horario = await showTimePicker(
+                        context: context,
+                        initialTime: _horarioSelecionado,
+                      );
                       if (horario != null) {
                         setState(() {
                           _horarioSelecionado = horario;
@@ -282,7 +311,10 @@ class _NovoAgendamentoSheetState extends State<NovoAgendamentoSheet> {
                       }
                     },
                     child: InputDecorator(
-                      decoration: const InputDecoration(labelText: 'Horário Início', prefixIcon: Icon(Icons.access_time)),
+                      decoration: const InputDecoration(
+                        labelText: 'Horário Início',
+                        prefixIcon: Icon(Icons.access_time),
+                      ),
                       child: Text(_horarioSelecionado.format(context)),
                     ),
                   ),
@@ -290,7 +322,7 @@ class _NovoAgendamentoSheetState extends State<NovoAgendamentoSheet> {
               ],
             ),
             const SizedBox(height: 20),
-            
+
             // Reorderable list of services
             ReorderableListView.builder(
               shrinkWrap: true,
@@ -320,7 +352,8 @@ class _NovoAgendamentoSheetState extends State<NovoAgendamentoSheet> {
                             Expanded(
                               child: InkWell(
                                 onTap: () async {
-                                  final servico = await ServicoSmartSelector.show(context);
+                                  final servico =
+                                      await ServicoSmartSelector.show(context);
                                   if (servico != null) {
                                     setState(() {
                                       item.servico = servico;
@@ -329,14 +362,23 @@ class _NovoAgendamentoSheetState extends State<NovoAgendamentoSheet> {
                                   }
                                 },
                                 child: InputDecorator(
-                                  decoration: const InputDecoration(labelText: 'Serviço', isDense: true, contentPadding: EdgeInsets.all(8)),
-                                  child: Text(item.servico?.nome ?? 'Selecionar...'),
+                                  decoration: const InputDecoration(
+                                    labelText: 'Serviço',
+                                    isDense: true,
+                                    contentPadding: EdgeInsets.all(8),
+                                  ),
+                                  child: Text(
+                                    item.servico?.nome ?? 'Selecionar...',
+                                  ),
                                 ),
                               ),
                             ),
                             if (_itens.length > 1)
                               IconButton(
-                                icon: const Icon(Icons.delete, color: Colors.red),
+                                icon: const Icon(
+                                  Icons.delete,
+                                  color: Colors.red,
+                                ),
                                 onPressed: () => _removerItem(index),
                               ),
                           ],
@@ -346,12 +388,27 @@ class _NovoAgendamentoSheetState extends State<NovoAgendamentoSheet> {
                           children: [
                             const SizedBox(width: 32),
                             Expanded(
-                              child: DropdownButtonFormField<ProfissionalBasicoRegistro>(
-                                decoration: const InputDecoration(labelText: 'Profissional', isDense: true, contentPadding: EdgeInsets.all(8)),
-                                value: item.profissional,
-                                items: widget.profissionais.map((p) => DropdownMenuItem(value: p, child: Text(p.nome))).toList(),
-                                onChanged: (p) => setState(() => item.profissional = p),
-                              ),
+                              child:
+                                  DropdownButtonFormField<
+                                    ProfissionalBasicoRegistro
+                                  >(
+                                    decoration: const InputDecoration(
+                                      labelText: 'Profissional',
+                                      isDense: true,
+                                      contentPadding: EdgeInsets.all(8),
+                                    ),
+                                    initialValue: item.profissional,
+                                    items: widget.profissionais
+                                        .map(
+                                          (p) => DropdownMenuItem(
+                                            value: p,
+                                            child: Text(p.nome),
+                                          ),
+                                        )
+                                        .toList(),
+                                    onChanged: (p) =>
+                                        setState(() => item.profissional = p),
+                                  ),
                             ),
                           ],
                         ),
@@ -362,7 +419,10 @@ class _NovoAgendamentoSheetState extends State<NovoAgendamentoSheet> {
                               alignment: Alignment.centerLeft,
                               child: Text(
                                 '${DateFormat('HH:mm').format(item.inicioPrevisto!)} às ${DateFormat('HH:mm').format(item.fimPrevisto!)}',
-                                style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold),
+                                style: const TextStyle(
+                                  color: Colors.green,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                             ),
                           ),
@@ -376,22 +436,43 @@ class _NovoAgendamentoSheetState extends State<NovoAgendamentoSheet> {
             const SizedBox(height: 20),
             Container(
               padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(color: const Color(0xFFF0EBF7), borderRadius: BorderRadius.circular(12)),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF0EBF7),
+                borderRadius: BorderRadius.circular(12),
+              ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('Duração Total', style: TextStyle(color: Color(0xFF70569A))),
-                      Text('${duracaoTotal.inHours}h ${duracaoTotal.inMinutes.remainder(60)}m', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                      const Text(
+                        'Duração Total',
+                        style: TextStyle(color: Color(0xFF70569A)),
+                      ),
+                      Text(
+                        '${duracaoTotal.inHours}h ${duracaoTotal.inMinutes.remainder(60)}m',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
                     ],
                   ),
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      const Text('Total Previsto', style: TextStyle(color: Color(0xFF70569A))),
-                      Text('R\$ ${valorTotal.toStringAsFixed(2).replaceAll('.', ',')}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                      const Text(
+                        'Total Previsto',
+                        style: TextStyle(color: Color(0xFF70569A)),
+                      ),
+                      Text(
+                        'R\$ ${valorTotal.toStringAsFixed(2).replaceAll('.', ',')}',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
                     ],
                   ),
                 ],
@@ -404,13 +485,22 @@ class _NovoAgendamentoSheetState extends State<NovoAgendamentoSheet> {
               height: 54,
               child: ElevatedButton(
                 onPressed: _salvando ? null : _salvar,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF5D408B),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF5D408B),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
                 ),
                 child: _salvando
                     ? const CircularProgressIndicator(color: Colors.white)
-                    : const Text('Confirmar Agendamento', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+                    : const Text(
+                        'Confirmar Agendamento',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
               ),
             ),
           ],

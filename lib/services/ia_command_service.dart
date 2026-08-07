@@ -592,12 +592,13 @@ class IaCommandService {
         ignored++;
         continue;
       }
+      final agendamentoId = row['id'] as String;
+      final idempotency = '${agendamentoId}_lembrete_hoje';
       final duplicate = await tx.query(
         'whatsapp_fila',
         columns: ['id'],
-        where:
-            "business_id=? AND agendamento_id=? AND template_id='lembrete_ia_hoje' AND status NOT IN ('falhou','cancelado')",
-        whereArgs: [user.comercioId, row['id']],
+        where: "business_id=? AND provider='system' AND idempotency_key=?",
+        whereArgs: [user.comercioId, idempotency],
         limit: 1,
       );
       if (duplicate.isNotEmpty) {
@@ -614,6 +615,7 @@ class IaCommandService {
           destinatario: phone!,
           template: 'lembrete_ia_hoje',
           agendamentoId: row['id'] as String,
+          idempotencyKey: idempotency,
           payload: {
             'cliente': row['nome'],
             'hora': hour,
@@ -633,7 +635,7 @@ class IaCommandService {
       commandId: preview.id,
       recordId: preview.id,
       message:
-          'Lembretes processados: $pending pendente(s), $failures falha(s), $ignored ignorado(s).',
+          'Preparei $pending lembrete(s) e coloquei na fila. O envio ainda não foi confirmado. ($failures falhas, $ignored ignorados).',
       pending: pending,
       failures: failures,
       ignored: ignored,

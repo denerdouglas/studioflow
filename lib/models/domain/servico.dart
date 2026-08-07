@@ -91,4 +91,20 @@ class ConsumoMaterial {
     required this.quantidade,
     required this.unidade,
   });
+
+  Map<String, dynamic> toJson() {
+    return {
+      'produto_id': produtoId,
+      'quantidade': quantidade,
+      'unidade': unidade,
+    };
+  }
+
+  factory ConsumoMaterial.fromJson(Map<String, dynamic> json) {
+    return ConsumoMaterial(
+      produtoId: json['produto_id'] as String,
+      quantidade: (json['quantidade'] as num).toDouble(),
+      unidade: json['unidade'] as String,
+    );
+  }
 }

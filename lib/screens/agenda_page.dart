@@ -263,7 +263,7 @@ class _AgendaPageState extends State<AgendaPage> {
           rotuloBotao: 'Cancelar grupo',
         );
         if (motivo == null) return;
-        
+
         await _agendaRepository.cancelarGrupo(agendamento.grupoAgendamentoId!);
       }
 
@@ -385,13 +385,19 @@ class _AgendaPageState extends State<AgendaPage> {
       salao: comercio.nomeExibicao,
       profissional: agendamento.profissionalNome,
       servico: agendamento.servicoNome,
-      formaPagamento: 'Conforme registrado no caixa',
+      formaPagamento: agendamento.formaPagamento == 'Pacote'
+          ? 'Pacote'
+          : 'Conforme registrado no caixa',
       valorPago: valorRecebido,
       servicos: [
         ItemResumoMensagem(
-          nome: agendamento.servicoNome,
+          nome: agendamento.formaPagamento == 'Pacote'
+              ? 'Sessão de Pacote [${agendamento.servicoNome}]'
+              : agendamento.servicoNome,
           profissional: agendamento.profissionalNome,
-          valorUnitario: agendamento.valorServico,
+          valorUnitario: agendamento.formaPagamento == 'Pacote'
+              ? 0.0
+              : agendamento.valorServico,
           desconto: agendamento.desconto,
         ),
       ],
@@ -406,7 +412,10 @@ class _AgendaPageState extends State<AgendaPage> {
     );
   }
 
-  Future<void> _reagendarAgendamento(AgendamentoRegistro agendamento, {bool reagendarGrupo = false}) async {
+  Future<void> _reagendarAgendamento(
+    AgendamentoRegistro agendamento, {
+    bool reagendarGrupo = false,
+  }) async {
     var data = agendamento.inicio;
     var horario = TimeOfDay.fromDateTime(agendamento.inicio);
     final motivo = TextEditingController();
@@ -414,7 +423,11 @@ class _AgendaPageState extends State<AgendaPage> {
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setLocal) => AlertDialog(
-          title: Text(reagendarGrupo ? 'Reagendar grupo completo' : 'Reagendar atendimento'),
+          title: Text(
+            reagendarGrupo
+                ? 'Reagendar grupo completo'
+                : 'Reagendar atendimento',
+          ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -473,7 +486,10 @@ class _AgendaPageState extends State<AgendaPage> {
     );
     try {
       if (reagendarGrupo) {
-        await _agendaRepository.remarcarGrupo(agendamento.grupoAgendamentoId!, inicio);
+        await _agendaRepository.remarcarGrupo(
+          agendamento.grupoAgendamentoId!,
+          inicio,
+        );
       } else {
         await _agendaCompletaRepository.reagendar(
           agendamentoId: agendamento.id,
@@ -482,7 +498,7 @@ class _AgendaPageState extends State<AgendaPage> {
           motivo: motivo.text.trim(),
         );
       }
-      
+
       _dataSelecionada = inicio;
       await _carregarTudo();
       if (mounted) {
@@ -495,7 +511,10 @@ class _AgendaPageState extends State<AgendaPage> {
         await _mostrarResolucaoConflito(erro, (novoInicio, novoFim) async {
           try {
             if (reagendarGrupo) {
-              await _agendaRepository.remarcarGrupo(agendamento.grupoAgendamentoId!, novoInicio);
+              await _agendaRepository.remarcarGrupo(
+                agendamento.grupoAgendamentoId!,
+                novoInicio,
+              );
             } else {
               await _agendaCompletaRepository.reagendar(
                 agendamentoId: agendamento.id,
@@ -1311,7 +1330,8 @@ class OpcoesAgendamentoSheet extends StatelessWidget {
                 ),
                 if (agendamento.grupoAgendamentoId != null)
                   _OpcaoAgendamento(
-                    titulo: 'Reagendar o atendimento completo (todos os serviços)',
+                    titulo:
+                        'Reagendar o atendimento completo (todos os serviços)',
                     icone: Icons.calendar_month,
                     cor: const Color(0xFF5D408B),
                     onTap: () {
@@ -1344,7 +1364,8 @@ class OpcoesAgendamentoSheet extends StatelessWidget {
                 ),
                 if (agendamento.grupoAgendamentoId != null)
                   _OpcaoAgendamento(
-                    titulo: 'Cancelar o atendimento completo (todos os serviços)',
+                    titulo:
+                        'Cancelar o atendimento completo (todos os serviços)',
                     icone: Icons.cancel,
                     cor: const Color(0xFFC76C12),
                     onTap: () {
@@ -1503,4 +1524,3 @@ class _ConcluirAgendamentoDialogState extends State<ConcluirAgendamentoDialog> {
     );
   }
 }
-

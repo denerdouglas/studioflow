@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:sqflite/sqflite.dart';
 
 import '../database/database_service.dart';
@@ -47,6 +48,11 @@ class AgendamentoRegistro {
   final int ordemNoGrupo;
 
   final String observacoes;
+  final String? formaPagamento;
+
+  final String? consumoPrevistoJson;
+  final String? consumoRealizadoJson;
+  final bool estoqueConsumido;
 
   final DateTime dataCriacao;
 
@@ -67,9 +73,13 @@ class AgendamentoRegistro {
     required this.confirmado,
     required this.compareceu,
     this.encaixe = false,
+    this.formaPagamento,
     this.grupoAgendamentoId,
     this.ordemNoGrupo = 0,
     this.observacoes = '',
+    this.consumoPrevistoJson,
+    this.consumoRealizadoJson,
+    this.estoqueConsumido = false,
     required this.dataCriacao,
   });
 
@@ -91,6 +101,9 @@ class AgendamentoRegistro {
       'grupo_agendamento_id': grupoAgendamentoId,
       'ordem_no_grupo': ordemNoGrupo,
       'observacoes': observacoes,
+      'consumo_previsto_json': consumoPrevistoJson,
+      'consumo_realizado_json': consumoRealizadoJson,
+      'estoque_consumido': estoqueConsumido ? 1 : 0,
       'data_criacao': dataCriacao.toIso8601String(),
     };
   }
@@ -114,8 +127,12 @@ class AgendamentoRegistro {
       compareceu: (mapa['compareceu'] as int? ?? 0) == 1,
       encaixe: (mapa['encaixe'] as int? ?? 0) == 1,
       grupoAgendamentoId: mapa['grupo_agendamento_id'] as String?,
-      ordemNoGrupo: (mapa['ordem_no_grupo'] as int? ?? 0),
+      ordemNoGrupo: (mapa['ordem_no_grupo'] as num?)?.toInt() ?? 0,
       observacoes: mapa['observacoes'] as String? ?? '',
+      formaPagamento: mapa['forma_pagamento'] as String?,
+      consumoPrevistoJson: mapa['consumo_previsto_json'] as String?,
+      consumoRealizadoJson: mapa['consumo_realizado_json'] as String?,
+      estoqueConsumido: (mapa['estoque_consumido'] as num?)?.toInt() == 1,
       dataCriacao: DateTime.parse(mapa['data_criacao'] as String),
     );
   }
@@ -241,7 +258,9 @@ class AgendaRepository {
     return registros.map(AgendamentoRegistro.doMapa).toList();
   }
 
-  Future<List<AgendamentoRegistro>> listarPorGrupo(String grupoAgendamentoId) async {
+  Future<List<AgendamentoRegistro>> listarPorGrupo(
+    String grupoAgendamentoId,
+  ) async {
     final Database db = await _databaseService.database;
 
     final registros = await db.rawQuery(
@@ -298,8 +317,14 @@ class AgendaRepository {
     }
 
     await db.transaction((txn) async {
+      final consumoPrevisto = await _calcularConsumoPrevisto(
+        txn,
+        agendamento.servicoId,
+      );
+
       await txn.insert('agendamentos', {
         ...agendamento.paraMapa(),
+        'consumo_previsto_json': consumoPrevisto,
         'comercio_id': _comercioId,
       }, conflictAlgorithm: ConflictAlgorithm.abort);
 
@@ -315,17 +340,33 @@ class AgendaRepository {
 
     // Buscar todos os agendamentos existentes no dia para os profissionais envolvidos
     final profissionalIds = agendamentos.map((e) => e.profissionalId).toSet();
-    final inicioMenor = agendamentos.map((e) => e.inicio).reduce((a, b) => a.isBefore(b) ? a : b);
-    final fimMaior = agendamentos.map((e) => e.fim).reduce((a, b) => a.isAfter(b) ? a : b);
+    final inicioMenor = agendamentos
+        .map((e) => e.inicio)
+        .reduce((a, b) => a.isBefore(b) ? a : b);
+    final fimMaior = agendamentos
+        .map((e) => e.fim)
+        .reduce((a, b) => a.isAfter(b) ? a : b);
 
-    final inicioDia = DateTime(inicioMenor.year, inicioMenor.month, inicioMenor.day);
-    final fimDia = DateTime(fimMaior.year, fimMaior.month, fimMaior.day).add(const Duration(days: 1));
+    final inicioDia = DateTime(
+      inicioMenor.year,
+      inicioMenor.month,
+      inicioMenor.day,
+    );
+    final fimDia = DateTime(
+      fimMaior.year,
+      fimMaior.month,
+      fimMaior.day,
+    ).add(const Duration(days: 1));
 
     final profIdsParams = profissionalIds.map((_) => '?').join(',');
-    final args = [_comercioId, inicioDia.toIso8601String(), fimDia.toIso8601String(), ...profissionalIds];
+    final args = [
+      _comercioId,
+      inicioDia.toIso8601String(),
+      fimDia.toIso8601String(),
+      ...profissionalIds,
+    ];
 
-    final registrosDb = await db.rawQuery(
-      '''
+    final registrosDb = await db.rawQuery('''
       SELECT a.*, c.nome AS cliente_nome, p.nome AS profissional_nome, s.nome AS servico_nome
       FROM agendamentos a
       INNER JOIN clientes c ON c.id = a.cliente_id
@@ -336,9 +377,7 @@ class AgendaRepository {
         AND a.inicio >= ?
         AND a.inicio < ?
         AND a.profissional_id IN ($profIdsParams)
-      ''',
-      args,
-    );
+      ''', args);
 
     final existentes = registrosDb.map(AgendamentoRegistro.doMapa).toList();
 
@@ -361,8 +400,14 @@ class AgendaRepository {
 
       // 2. Inserir cada serviço associado
       for (var item in agendamentos) {
+        final consumoPrevisto = await _calcularConsumoPrevisto(
+          txn,
+          item.servicoId,
+        );
+
         await txn.insert('agendamentos', {
           ...item.paraMapa(),
+          'consumo_previsto_json': consumoPrevisto,
           'comercio_id': _comercioId,
         }, conflictAlgorithm: ConflictAlgorithm.abort);
 
@@ -371,7 +416,10 @@ class AgendaRepository {
     });
   }
 
-  Future<void> _enfileirarWhatsapp(Transaction txn, AgendamentoRegistro agendamento) async {
+  Future<void> _enfileirarWhatsapp(
+    Transaction txn,
+    AgendamentoRegistro agendamento,
+  ) async {
     final cliente = await txn.query(
       'clientes',
       columns: ['whatsapp'],
@@ -392,6 +440,28 @@ class AgendaRepository {
         );
       }
     }
+  }
+
+  Future<String?> _calcularConsumoPrevisto(
+    Transaction txn,
+    String servicoId,
+  ) async {
+    final materiais = await txn.query(
+      'servico_materiais',
+      where: 'servico_id = ? AND comercio_id = ?',
+      whereArgs: [servicoId, _comercioId],
+    );
+    if (materiais.isEmpty) return null;
+
+    final listaJson = materiais.map((m) {
+      return {
+        'produto_id': m['estoque_id'],
+        'quantidade': m['quantidade'],
+        'unidade': m['unidade_medida'],
+      };
+    }).toList();
+
+    return jsonEncode(listaJson);
   }
 
   Future<void> atualizar(AgendamentoRegistro agendamento) async {
@@ -435,40 +505,58 @@ class AgendaRepository {
     }
   }
 
-  Future<void> remarcarGrupo(String grupoAgendamentoId, DateTime novoInicio) async {
+  Future<void> remarcarGrupo(
+    String grupoAgendamentoId,
+    DateTime novoInicio,
+  ) async {
     final Database db = await _databaseService.database;
     final grupo = await listarPorGrupo(grupoAgendamentoId);
     if (grupo.isEmpty) throw StateError('Grupo não encontrado.');
 
     // Encontrar o menor inicio atual para calcular a diferença
-    final inicioMenor = grupo.map((e) => e.inicio).reduce((a, b) => a.isBefore(b) ? a : b);
+    final inicioMenor = grupo
+        .map((e) => e.inicio)
+        .reduce((a, b) => a.isBefore(b) ? a : b);
     final offset = novoInicio.difference(inicioMenor);
 
     // Ajustar todos os agendamentos do grupo com o mesmo offset
     final grupoAtualizado = grupo.map((e) {
-      return e.copiarCom(
-        inicio: e.inicio.add(offset),
-        fim: e.fim.add(offset),
-      );
+      return e.copiarCom(inicio: e.inicio.add(offset), fim: e.fim.add(offset));
     }).toList();
 
     // Validar conflitos puros
     // (Apenas buscaríamos existentes se estivéssemos no método de inserirGrupo;
-    // aqui para simplificar, vamos reutilizar a mesma lógica de busca de existentes 
+    // aqui para simplificar, vamos reutilizar a mesma lógica de busca de existentes
     // mas com os novos horários)
-    
-    final profissionalIds = grupoAtualizado.map((e) => e.profissionalId).toSet();
+
+    final profissionalIds = grupoAtualizado
+        .map((e) => e.profissionalId)
+        .toSet();
     final inicioMenorAtualizado = novoInicio;
-    final fimMaiorAtualizado = grupoAtualizado.map((e) => e.fim).reduce((a, b) => a.isAfter(b) ? a : b);
-    
-    final inicioDia = DateTime(inicioMenorAtualizado.year, inicioMenorAtualizado.month, inicioMenorAtualizado.day);
-    final fimDia = DateTime(fimMaiorAtualizado.year, fimMaiorAtualizado.month, fimMaiorAtualizado.day).add(const Duration(days: 1));
+    final fimMaiorAtualizado = grupoAtualizado
+        .map((e) => e.fim)
+        .reduce((a, b) => a.isAfter(b) ? a : b);
+
+    final inicioDia = DateTime(
+      inicioMenorAtualizado.year,
+      inicioMenorAtualizado.month,
+      inicioMenorAtualizado.day,
+    );
+    final fimDia = DateTime(
+      fimMaiorAtualizado.year,
+      fimMaiorAtualizado.month,
+      fimMaiorAtualizado.day,
+    ).add(const Duration(days: 1));
 
     final profIdsParams = profissionalIds.map((_) => '?').join(',');
-    final args = [_comercioId, inicioDia.toIso8601String(), fimDia.toIso8601String(), ...profissionalIds];
+    final args = [
+      _comercioId,
+      inicioDia.toIso8601String(),
+      fimDia.toIso8601String(),
+      ...profissionalIds,
+    ];
 
-    final registrosDb = await db.rawQuery(
-      '''
+    final registrosDb = await db.rawQuery('''
       SELECT a.*, c.nome AS cliente_nome, p.nome AS profissional_nome, s.nome AS servico_nome
       FROM agendamentos a
       INNER JOIN clientes c ON c.id = a.cliente_id
@@ -479,9 +567,7 @@ class AgendaRepository {
         AND a.inicio >= ?
         AND a.inicio < ?
         AND a.profissional_id IN ($profIdsParams)
-      ''',
-      args,
-    );
+      ''', args);
     final existentes = registrosDb.map(AgendamentoRegistro.doMapa).toList();
 
     AgendaConflictChecker.validar(
@@ -516,7 +602,7 @@ class AgendaRepository {
           whereArgs: [item.id, _comercioId],
         );
       }
-      
+
       await txn.update(
         'agendamento_grupos',
         {'status': 'cancelado', 'updated_at': DateTime.now().toIso8601String()},
@@ -633,6 +719,126 @@ class AgendaRepository {
     return AgendamentoRegistro.doMapa(registros.first);
   }
 
+  Future<void> concluirAtendimentoComEstoque({
+    required String agendamentoId,
+    required double valorRecebido,
+    required List<Map<String, dynamic>> consumoEfetivo,
+    required String profissionalId,
+  }) async {
+    final Database db = await _databaseService.database;
+
+    await db.transaction((txn) async {
+      final agendamentoRow = await txn.query(
+        'agendamentos',
+        where: 'id = ? AND comercio_id = ? AND excluido = 0',
+        whereArgs: [agendamentoId, _comercioId],
+      );
+
+      if (agendamentoRow.isEmpty) {
+        throw StateError('Agendamento nÃ£o encontrado.');
+      }
+
+      final agendamento = agendamentoRow.first;
+      final bool estoqueConsumido =
+          (agendamento['estoque_consumido'] as num?)?.toInt() == 1;
+
+      if (!estoqueConsumido) {
+        for (final item in consumoEfetivo) {
+          final produtoId = item['produto_id'] as String;
+          final quantidade = (item['quantidade'] as num).toDouble();
+
+          if (quantidade <= 0) continue;
+
+          final saldoAtual = await txn.query(
+            'estoque_saldos',
+            columns: ['quantidade_atual'],
+            where: 'estoque_id = ? AND business_id = ? AND finalidade = ?',
+            whereArgs: [produtoId, _comercioId, 'uso_interno'],
+          );
+
+          final qteAnterior = saldoAtual.isNotEmpty
+              ? (saldoAtual.first['quantidade_atual'] as num).toDouble()
+              : 0.0;
+          final qtePosterior = qteAnterior - quantidade;
+
+          final idempotencyKey =
+              '${_comercioId}_${agendamentoId}_${produtoId}_uso_interno';
+
+          final mov = await txn.query(
+            'movimentacoes_estoque',
+            columns: ['id'],
+            where: 'idempotency_key = ?',
+            whereArgs: [idempotencyKey],
+          );
+
+          if (mov.isEmpty) {
+            await txn.insert('movimentacoes_estoque', {
+              'id':
+                  '${DateTime.now().microsecondsSinceEpoch}_$produtoId',
+              'item_estoque_id': produtoId,
+              'tipo': 'saida',
+              'finalidade': 'uso_interno',
+              'quantidade': quantidade,
+              'quantidade_anterior': qteAnterior,
+              'quantidade_posterior': qtePosterior,
+              'data': DateTime.now().toIso8601String(),
+              'motivo': 'Consumo no atendimento',
+              'agendamento_id': agendamentoId,
+              'profissional_id': profissionalId,
+              'idempotency_key': idempotencyKey,
+            });
+
+            if (saldoAtual.isEmpty) {
+              await txn.insert('estoque_saldos', {
+                'id':
+                    '${DateTime.now().microsecondsSinceEpoch}_$produtoId',
+                'business_id': _comercioId,
+                'estoque_id': produtoId,
+                'finalidade': 'uso_interno',
+                'quantidade_atual': qtePosterior,
+                'created_at': DateTime.now().toIso8601String(),
+                'updated_at': DateTime.now().toIso8601String(),
+              });
+            } else {
+              await txn.update(
+                'estoque_saldos',
+                {
+                  'quantidade_atual': qtePosterior,
+                  'updated_at': DateTime.now().toIso8601String(),
+                },
+                where: 'estoque_id = ? AND business_id = ? AND finalidade = ?',
+                whereArgs: [produtoId, _comercioId, 'uso_interno'],
+              );
+            }
+          }
+        }
+      }
+
+      final consumoRealizadoJson = jsonEncode(consumoEfetivo);
+
+      await txn.update(
+        'agendamentos',
+        {
+          'status': 'concluido',
+          'confirmado': 1,
+          'compareceu': 1,
+          'valor_recebido': valorRecebido,
+          'estoque_consumido': 1,
+          'consumo_realizado_json': consumoRealizadoJson,
+        },
+        where: 'id = ? AND comercio_id = ? AND excluido = 0',
+        whereArgs: [agendamentoId, _comercioId],
+      );
+
+      // Suporte legado
+      if (agendamento['pacote_venda_sessao_id'] != null) {
+        // Isso invoca outra connection fora da transaÃ§Ã£o. NÃ£o Ã© o ideal.
+        // Na Etapa 4.4 removeremos pacote_venda_sessao_id daqui.
+        PacotesRepository().concluirAgendamentoPacote(agendamentoId).ignore();
+      }
+    });
+  }
+
   Future<void> concluirAgendamento({
     required String agendamentoId,
     required double valorRecebido,
@@ -641,12 +847,12 @@ class AgendaRepository {
 
     final pacote = await db.query(
       'agendamentos',
-      columns: ['pacote_venda_sessao_id'],
+      columns: ['forma_pagamento'],
       where: 'id = ? AND comercio_id = ? AND excluido = 0',
       whereArgs: [agendamentoId, _comercioId],
       limit: 1,
     );
-    if (pacote.isNotEmpty && pacote.first['pacote_venda_sessao_id'] != null) {
+    if (pacote.isNotEmpty && pacote.first['forma_pagamento'] == 'Pacote') {
       await PacotesRepository().concluirAgendamentoPacote(agendamentoId);
       return;
     }

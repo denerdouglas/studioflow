@@ -225,20 +225,20 @@ class ComprasRepository {
       limit: 1,
     );
     if (produto.isEmpty) throw StateError('Produto recebido não encontrado.');
-    
+
     final saldoQuery = await txn.query(
       'estoque_saldos',
       where: "estoque_id = ? AND business_id = ? AND finalidade = 'venda'",
       whereArgs: [produtoId, u.comercioId],
       limit: 1,
     );
-    
-    final anterior = saldoQuery.isNotEmpty 
-      ? (saldoQuery.first['quantidade_atual'] as num).toDouble() 
-      : (produto.first['quantidade_atual'] as num).toDouble();
-      
+
+    final anterior = saldoQuery.isNotEmpty
+        ? (saldoQuery.first['quantidade_atual'] as num).toDouble()
+        : (produto.first['quantidade_atual'] as num).toDouble();
+
     final posterior = anterior + quantidade;
-    
+
     if (saldoQuery.isNotEmpty) {
       await txn.update(
         'estoque_saldos',
@@ -250,7 +250,7 @@ class ComprasRepository {
         whereArgs: [produtoId, u.comercioId],
       );
     }
-    
+
     await txn.update(
       'estoque',
       {

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/domain/pacote_servico.dart';
 import '../repositories/pacotes_repository.dart';
+import 'pacotes/venda_pacote_page.dart';
 
 class PacotesPage extends StatefulWidget {
   const PacotesPage({super.key});
@@ -22,6 +23,7 @@ class _PacotesPageState extends State<PacotesPage>
   void initState() {
     super.initState();
     _tabs = TabController(length: 2, vsync: this);
+    _tabs.addListener(() => setState(() {}));
     _carregar();
   }
 
@@ -29,6 +31,16 @@ class _PacotesPageState extends State<PacotesPage>
   void dispose() {
     _tabs.dispose();
     super.dispose();
+  }
+
+  Future<void> _venderPacote() async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const VendaPacotePage()),
+    );
+    if (result == true && mounted) {
+      _carregar();
+    }
   }
 
   Future<void> _carregar() async {
@@ -87,9 +99,9 @@ class _PacotesPageState extends State<PacotesPage>
       ),
       floatingActionButton: FloatingActionButton.extended(
         heroTag: null,
-        onPressed: _novoModelo,
-        icon: const Icon(Icons.add),
-        label: const Text('Novo pacote'),
+        onPressed: _tabs.index == 0 ? _novoModelo : _venderPacote,
+        icon: Icon(_tabs.index == 0 ? Icons.add : Icons.shopping_cart),
+        label: Text(_tabs.index == 0 ? 'Novo pacote' : 'Vender pacote'),
       ),
       body: _carregando
           ? const Center(child: CircularProgressIndicator())

@@ -6,7 +6,10 @@ void main() {
   group('AgendaConflictChecker', () {
     test('Nenhum conflito entre novos vazios', () {
       expect(
-        () => AgendaConflictChecker.validar(novos: <AgendamentoRegistro>[], existentes: <AgendamentoRegistro>[]),
+        () => AgendaConflictChecker.validar(
+          novos: <AgendamentoRegistro>[],
+          existentes: <AgendamentoRegistro>[],
+        ),
         returnsNormally,
       );
     });
@@ -40,57 +43,106 @@ void main() {
 
     test('Deve detectar sobreposição com agendamento existente', () {
       final existentes = [
-        criarDummy(id: '1', profissionalId: 'p1', inicio: DateTime(2025, 1, 1, 10, 0), fim: DateTime(2025, 1, 1, 11, 0)),
+        criarDummy(
+          id: '1',
+          profissionalId: 'p1',
+          inicio: DateTime(2025, 1, 1, 10, 0),
+          fim: DateTime(2025, 1, 1, 11, 0),
+        ),
       ];
 
       final novos = [
-        criarDummy(id: 'novo', profissionalId: 'p1', inicio: DateTime(2025, 1, 1, 10, 30), fim: DateTime(2025, 1, 1, 11, 30)),
+        criarDummy(
+          id: 'novo',
+          profissionalId: 'p1',
+          inicio: DateTime(2025, 1, 1, 10, 30),
+          fim: DateTime(2025, 1, 1, 11, 30),
+        ),
       ];
 
       expect(
-        () => AgendaConflictChecker.validar(novos: novos, existentes: existentes),
+        () =>
+            AgendaConflictChecker.validar(novos: novos, existentes: existentes),
         throwsA(isA<ConflitoAgendaException>()),
       );
     });
 
     test('Não deve detectar sobreposição se horários forem consecutivos', () {
       final existentes = [
-        criarDummy(id: '1', profissionalId: 'p1', inicio: DateTime(2025, 1, 1, 10, 0), fim: DateTime(2025, 1, 1, 11, 0)),
+        criarDummy(
+          id: '1',
+          profissionalId: 'p1',
+          inicio: DateTime(2025, 1, 1, 10, 0),
+          fim: DateTime(2025, 1, 1, 11, 0),
+        ),
       ];
 
       final novos = [
-        criarDummy(id: 'novo', profissionalId: 'p1', inicio: DateTime(2025, 1, 1, 11, 0), fim: DateTime(2025, 1, 1, 12, 0)),
+        criarDummy(
+          id: 'novo',
+          profissionalId: 'p1',
+          inicio: DateTime(2025, 1, 1, 11, 0),
+          fim: DateTime(2025, 1, 1, 12, 0),
+        ),
       ];
 
       expect(
-        () => AgendaConflictChecker.validar(novos: novos, existentes: existentes),
+        () =>
+            AgendaConflictChecker.validar(novos: novos, existentes: existentes),
         returnsNormally,
       );
     });
 
-    test('Deve detectar sobreposição dentro dos próprios novos agendamentos', () {
-      final novos = [
-        criarDummy(id: 'novo1', profissionalId: 'p1', inicio: DateTime(2025, 1, 1, 10, 0), fim: DateTime(2025, 1, 1, 11, 0)),
-        criarDummy(id: 'novo2', profissionalId: 'p1', inicio: DateTime(2025, 1, 1, 10, 30), fim: DateTime(2025, 1, 1, 11, 30)),
-      ];
+    test(
+      'Deve detectar sobreposição dentro dos próprios novos agendamentos',
+      () {
+        final novos = [
+          criarDummy(
+            id: 'novo1',
+            profissionalId: 'p1',
+            inicio: DateTime(2025, 1, 1, 10, 0),
+            fim: DateTime(2025, 1, 1, 11, 0),
+          ),
+          criarDummy(
+            id: 'novo2',
+            profissionalId: 'p1',
+            inicio: DateTime(2025, 1, 1, 10, 30),
+            fim: DateTime(2025, 1, 1, 11, 30),
+          ),
+        ];
 
-      expect(
-        () => AgendaConflictChecker.validar(novos: novos, existentes: <AgendamentoRegistro>[]),
-        throwsA(isA<ConflitoAgendaException>()),
-      );
-    });
-    
+        expect(
+          () => AgendaConflictChecker.validar(
+            novos: novos,
+            existentes: <AgendamentoRegistro>[],
+          ),
+          throwsA(isA<ConflitoAgendaException>()),
+        );
+      },
+    );
+
     test('Ignorar si mesmo na edição', () {
       final existentes = [
-        criarDummy(id: '1', profissionalId: 'p1', inicio: DateTime(2025, 1, 1, 10, 0), fim: DateTime(2025, 1, 1, 11, 0)),
+        criarDummy(
+          id: '1',
+          profissionalId: 'p1',
+          inicio: DateTime(2025, 1, 1, 10, 0),
+          fim: DateTime(2025, 1, 1, 11, 0),
+        ),
       ];
 
       final novos = [
-        criarDummy(id: '1', profissionalId: 'p1', inicio: DateTime(2025, 1, 1, 10, 30), fim: DateTime(2025, 1, 1, 11, 30)),
+        criarDummy(
+          id: '1',
+          profissionalId: 'p1',
+          inicio: DateTime(2025, 1, 1, 10, 30),
+          fim: DateTime(2025, 1, 1, 11, 30),
+        ),
       ];
 
       expect(
-        () => AgendaConflictChecker.validar(novos: novos, existentes: existentes),
+        () =>
+            AgendaConflictChecker.validar(novos: novos, existentes: existentes),
         returnsNormally,
       );
     });
