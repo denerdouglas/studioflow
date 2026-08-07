@@ -2,7 +2,10 @@ import '../../models/domain/scanner_product_draft.dart';
 
 abstract class ScannerProvider {
   Future<ScannerProductDraft?> searchBarcode(String gtin);
-  Future<ScannerProductDraft?> analyzeImage(String imagePath, {bool isFront = true});
+  Future<ScannerProductDraft?> analyzeImage(
+    String imagePath, {
+    bool isFront = true,
+  });
 }
 
 class ScannerCoordinator {
@@ -10,7 +13,7 @@ class ScannerCoordinator {
   // Local repository injection would go here (e.g. EstoqueRepository)
 
   ScannerCoordinator({List<ScannerProvider>? externalProviders})
-      : _externalProviders = externalProviders ?? [];
+    : _externalProviders = externalProviders ?? [];
 
   /// Realiza o fluxo de orquestração:
   /// 1. Tenta buscar no banco local (não implementado no coordinator abstrato, feito na UI/ViewModel)
@@ -27,18 +30,28 @@ class ScannerCoordinator {
     }
     // Retorna um draft apenas com o código se não achou nada externo
     return ScannerProductDraft(
-      gtin: ScannerField(gtin, source: 'barcode', confidence: ScannerConfidence.alta),
+      gtin: ScannerField(
+        gtin,
+        source: 'barcode',
+        confidence: ScannerConfidence.alta,
+      ),
     );
   }
 
   /// Analisa frente e verso (se disponível) para criar um único Draft.
-  Future<ScannerProductDraft> analyzeImages(String frontPath, {String? backPath}) async {
+  Future<ScannerProductDraft> analyzeImages(
+    String frontPath, {
+    String? backPath,
+  }) async {
     ScannerProductDraft finalDraft = const ScannerProductDraft();
-    
+
     // Tenta os provedores para a frente
     for (var provider in _externalProviders) {
       try {
-        final frontDraft = await provider.analyzeImage(frontPath, isFront: true);
+        final frontDraft = await provider.analyzeImage(
+          frontPath,
+          isFront: true,
+        );
         if (frontDraft != null) {
           finalDraft = frontDraft;
           break;
@@ -50,7 +63,10 @@ class ScannerCoordinator {
     if (backPath != null) {
       for (var provider in _externalProviders) {
         try {
-          final backDraft = await provider.analyzeImage(backPath, isFront: false);
+          final backDraft = await provider.analyzeImage(
+            backPath,
+            isFront: false,
+          );
           if (backDraft != null) {
             // Em uma implementação real profunda, faríamos um merge campo a campo
             // Aqui preservamos o principal da frente e enriquecemos.

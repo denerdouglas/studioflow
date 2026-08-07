@@ -9,13 +9,16 @@ class MlKitVisionProvider implements ScannerProvider {
   }
 
   @override
-  Future<ScannerProductDraft?> analyzeImage(String imagePath, {bool isFront = true}) async {
+  Future<ScannerProductDraft?> analyzeImage(
+    String imagePath, {
+    bool isFront = true,
+  }) async {
     final recognizer = TextRecognizer(script: TextRecognitionScript.latin);
     try {
       final result = await recognizer.processImage(
         InputImage.fromFilePath(imagePath),
       );
-      
+
       return _parseText(result.text, isFront);
     } catch (e) {
       return null;
@@ -30,13 +33,13 @@ class MlKitVisionProvider implements ScannerProvider {
         .map((line) => line.trim())
         .where((line) => line.isNotEmpty)
         .toList();
-        
+
     String? codigo;
     String? nome;
     String? marca;
-    
+
     final codePattern = RegExp(r'^\d{4,14}$');
-    
+
     for (final line in lines) {
       final compact = line.replaceAll(RegExp(r'[\s-]'), '');
       if (codigo == null && codePattern.hasMatch(compact)) {
@@ -66,9 +69,27 @@ class MlKitVisionProvider implements ScannerProvider {
     }
 
     return ScannerProductDraft(
-      gtin: codigo != null ? ScannerField(codigo, source: 'mlkit_ocr', confidence: ScannerConfidence.baixa) : null,
-      nome: nome != null ? ScannerField(nome, source: 'mlkit_ocr', confidence: ScannerConfidence.baixa) : null,
-      marca: marca != null ? ScannerField(marca, source: 'mlkit_ocr', confidence: ScannerConfidence.baixa) : null,
+      gtin: codigo != null
+          ? ScannerField(
+              codigo,
+              source: 'mlkit_ocr',
+              confidence: ScannerConfidence.baixa,
+            )
+          : null,
+      nome: nome != null
+          ? ScannerField(
+              nome,
+              source: 'mlkit_ocr',
+              confidence: ScannerConfidence.baixa,
+            )
+          : null,
+      marca: marca != null
+          ? ScannerField(
+              marca,
+              source: 'mlkit_ocr',
+              confidence: ScannerConfidence.baixa,
+            )
+          : null,
     );
   }
 }

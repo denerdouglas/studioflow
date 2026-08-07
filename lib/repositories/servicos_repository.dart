@@ -146,25 +146,80 @@ class ServicosRepository {
   Future<List<ServicoRegistro>> pesquisar(
     String texto, {
     bool incluirInativos = true,
+    int limit = 20,
+    int offset = 0,
   }) async {
     final Database db = await _databaseService.database;
+    if (texto.trim().isEmpty) {
+      final baseQuery = '''
+        SELECT s.*, GROUP_CONCAT(ps.profissional_id) as profissionais_autorizados
+        FROM servicos s
+        LEFT JOIN profissional_servicos ps ON ps.servico_id = s.id
+        WHERE s.comercio_id = ?
+      ''';
+      final query = incluirInativos
+          ? '$baseQuery GROUP BY s.id ORDER BY s.nome COLLATE NOCASE ASC LIMIT ? OFFSET ?'
+          : '$baseQuery AND s.ativo = 1 GROUP BY s.id ORDER BY s.nome COLLATE NOCASE ASC LIMIT ? OFFSET ?';
+      final resultado = await db.rawQuery(query, [_comercioId, limit, offset]);
+      return resultado.map(ServicoRegistro.doMapa).toList();
+    }
 
-    final termo = '%${texto.toLowerCase()}%';
+    final termo = _removerAcentos(texto.toLowerCase().trim());
+    final termos = termo
+        .split(RegExp(r'\s+'))
+        .where((t) => t.isNotEmpty)
+        .toList();
 
-    final baseQuery = '''
+    String normalizedNomeSql = '''
+      LOWER(
+        REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
+        s.nome,
+        'á','a'),'à','a'),'ã','a'),'â','a'),
+        'é','e'),'ê','e'),
+        'í','i'),
+        'ó','o'),'õ','o'),'ô','o'),
+        'ú','u'),'ç','c'),
+        'Á','a')
+      )
+    ''';
+
+    final conditions = <String>[];
+    final args = <Object?>[_comercioId];
+
+    for (final t in termos) {
+      conditions.add('($normalizedNomeSql LIKE ?)');
+      args.add('%$t%');
+    }
+
+    final condicoesSql = conditions.join(' AND ');
+
+    final baseQuery =
+        '''
       SELECT s.*, GROUP_CONCAT(ps.profissional_id) as profissionais_autorizados
       FROM servicos s
       LEFT JOIN profissional_servicos ps ON ps.servico_id = s.id
-      WHERE s.comercio_id = ? AND LOWER(s.nome) LIKE ?
+      WHERE s.comercio_id = ? AND ($condicoesSql)
     ''';
 
     final query = incluirInativos
-        ? '$baseQuery GROUP BY s.id ORDER BY s.nome COLLATE NOCASE ASC'
-        : '$baseQuery AND s.ativo = 1 GROUP BY s.id ORDER BY s.nome COLLATE NOCASE ASC';
+        ? '$baseQuery GROUP BY s.id ORDER BY s.nome COLLATE NOCASE ASC LIMIT ? OFFSET ?'
+        : '$baseQuery AND s.ativo = 1 GROUP BY s.id ORDER BY s.nome COLLATE NOCASE ASC LIMIT ? OFFSET ?';
 
-    final resultado = await db.rawQuery(query, [_comercioId, termo]);
+    args.addAll([limit, offset]);
+    final resultado = await db.rawQuery(query, args);
 
     return resultado.map(ServicoRegistro.doMapa).toList();
+  }
+
+  String _removerAcentos(String str) {
+    var comAcento =
+        'ÀÁÂÃÄÅàáâãäåÒÓÔÕÕÖØòóôõöøÈÉÊËèéêëðÇçÐÌÍÎÏìíîïÙÚÛÜùúûüÑñŠšŸÿýŽž';
+    var semAcento =
+        'AAAAAAaaaaaaOOOOOOOooooooEEEEeeeeeCcDIIIIiiiiUUUUuuuuNnSsYyyZz';
+    for (int i = 0; i < comAcento.length; i++) {
+      str = str.replaceAll(comAcento[i], semAcento[i]);
+    }
+    return str;
   }
 
   Future<ServicoRegistro?> buscarPorId(String id) async {

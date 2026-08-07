@@ -7,7 +7,10 @@ class MockScannerProvider implements ScannerProvider {
   ScannerProductDraft? draftToReturn;
 
   @override
-  Future<ScannerProductDraft?> analyzeImage(String imagePath, {bool isFront = true}) async {
+  Future<ScannerProductDraft?> analyzeImage(
+    String imagePath, {
+    bool isFront = true,
+  }) async {
     if (shouldThrow) throw Exception('Provider error');
     return draftToReturn;
   }
@@ -25,7 +28,10 @@ void main() {
       final mock = MockScannerProvider()..shouldThrow = true;
       final coordinator = ScannerCoordinator(externalProviders: [mock]);
 
-      final result = await coordinator.analyzeImages('front.jpg', backPath: 'back.jpg');
+      final result = await coordinator.analyzeImages(
+        'front.jpg',
+        backPath: 'back.jpg',
+      );
 
       // Draft deve retornar as imagens, mas campos vazios devido a falha (fallback manual)
       expect(result.imagemFrente, 'front.jpg');
@@ -36,8 +42,16 @@ void main() {
     test('Deve mesclar informações de provedores válidos', () async {
       final mock = MockScannerProvider()
         ..draftToReturn = ScannerProductDraft(
-          gtin: ScannerField('1234567890', source: 'mock', confidence: ScannerConfidence.baixa),
-          nome: ScannerField('Produto Teste', source: 'mock', confidence: ScannerConfidence.alta),
+          gtin: ScannerField(
+            '1234567890',
+            source: 'mock',
+            confidence: ScannerConfidence.baixa,
+          ),
+          nome: ScannerField(
+            'Produto Teste',
+            source: 'mock',
+            confidence: ScannerConfidence.alta,
+          ),
         );
       final coordinator = ScannerCoordinator(externalProviders: [mock]);
 

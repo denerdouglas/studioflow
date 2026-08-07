@@ -228,4 +228,3 @@ UsuarioAcesso _owner() => UsuarioAcesso(
   permissoes: ModuloPermissao.values.toSet(),
   acoes: AcaoPermissao.values.toSet(),
 );
-

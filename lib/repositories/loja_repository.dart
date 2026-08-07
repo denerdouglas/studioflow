@@ -43,16 +43,16 @@ class LojaRepository {
   }) async {
     final u = _exigir(AcaoPermissao.visualizarEstoque);
     final db = await _databaseProvider();
-    final where = <String>[
-      'e.comercio_id = ?',
-    ];
-    
+    final where = <String>['e.comercio_id = ?'];
+
     if (somenteAtivos) {
       where.add("e.tipo_produto = 'ativo_imobilizado'");
     } else if (somenteUsoInterno) {
       where.add("(e.tipo_produto = 'uso_interno' OR e.tipo_produto = 'ambos')");
     } else {
-      where.add("(e.tipo_produto = 'venda' OR e.tipo_produto = 'ambos' OR e.estoque_destino = 'loja')");
+      where.add(
+        "(e.tipo_produto = 'venda' OR e.tipo_produto = 'ambos' OR e.estoque_destino = 'loja')",
+      );
     }
 
     final args = <Object?>[u.comercioId];
@@ -336,13 +336,14 @@ class LojaRepository {
     }
     final maps = await txn.query(
       'estoque_saldos',
-      where:
-          "estoque_id = ? AND business_id = ? AND finalidade = ?",
+      where: "estoque_id = ? AND business_id = ? AND finalidade = ?",
       whereArgs: [produtoId, u.comercioId, finalidade],
       limit: 1,
     );
     if (maps.isEmpty) {
-      throw StateError('Produto não encontrado ou saldo não inicializado para esta finalidade.');
+      throw StateError(
+        'Produto não encontrado ou saldo não inicializado para esta finalidade.',
+      );
     }
     final anterior = (maps.first['quantidade_atual'] as num).toDouble();
     final posterior = tipo == TipoMovimentoLoja.ajuste
@@ -351,7 +352,7 @@ class LojaRepository {
     if (posterior < 0 && !permitirNegativo) {
       throw StateError('Estoque insuficiente. A operação foi cancelada.');
     }
-    
+
     // Fallback: se a finalidade for venda, ainda atualizamos o legado no estoque para manter telas velhas funcionando.
     if (finalidade == 'venda') {
       await txn.update(

@@ -75,7 +75,13 @@ class _EstoquePageState extends State<EstoquePage> {
     );
   }
 
-  Widget _buildItem(String titulo, String subtitulo, IconData icone, AcaoPermissao permissao, VoidCallback acao) {
+  Widget _buildItem(
+    String titulo,
+    String subtitulo,
+    IconData icone,
+    AcaoPermissao permissao,
+    VoidCallback acao,
+  ) {
     if (!SessionController.instance.usuario!.podeAcao(permissao)) {
       return const SizedBox.shrink();
     }
@@ -135,7 +141,10 @@ class _EstoquePageState extends State<EstoquePage> {
       backgroundColor: _fundo,
       appBar: AppBar(
         backgroundColor: _fundo,
-        title: const Text('Estoque do Salão', style: TextStyle(fontWeight: FontWeight.bold, color: _texto)),
+        title: const Text(
+          'Estoque do Salão',
+          style: TextStyle(fontWeight: FontWeight.bold, color: _texto),
+        ),
         actions: [
           IconButton(
             tooltip: 'Atualizar',
@@ -147,35 +156,78 @@ class _EstoquePageState extends State<EstoquePage> {
           ),
         ],
       ),
-      body: _carregando 
-        ? const Center(child: CircularProgressIndicator())
-        : ListView(
-            padding: const EdgeInsets.only(bottom: 24),
-            children: [
-              _construirResumo(),
-              
-              _buildGroupTitle('OPERAÇÕES'),
-              _buildItem('Produtos de uso interno', 'Itens não destinados à venda', Icons.inventory, AcaoPermissao.visualizarEstoque, () => abrir(const ProdutosLojaPage(somenteUsoInterno: true))),
-              _buildItem('Movimentações', 'Entradas, saídas e histórico', Icons.swap_vert, AcaoPermissao.movimentarEstoque, () => abrir(const ProdutosLojaPage(somenteUsoInterno: true))),
-              _buildItem('Perdas e avarias', 'Registros de dano ou validade', Icons.delete_outline, AcaoPermissao.movimentarEstoque, () => abrir(const ProdutosLojaPage(somenteUsoInterno: true))), // Ideal seria uma tela de histórico focada
-              _buildItem('Estoque baixo', 'Reposição necessária', Icons.warning_amber, AcaoPermissao.visualizarEstoque, () => abrir(const ProdutosLojaPage(somenteBaixo: true, somenteUsoInterno: true))),
-              
-              _buildGroupTitle('COMPRAS E IMOBILIZADOS'),
-              _buildItem('Compras e fornecedores', 'Gerenciar aquisições', Icons.local_shipping_outlined, AcaoPermissao.cadastrarFornecedor, () => abrir(const ProdutoFornecedoresPage())),
-              _buildItem('Ativos imobilizados', 'Móveis, equipamentos e bens', Icons.chair_alt, AcaoPermissao.visualizarEstoque, () => abrir(const ProdutosLojaPage(somenteAtivos: true))),
-              
-              const Padding(
-                padding: EdgeInsets.all(12),
-                child: Card(
-                  child: ListTile(
-                    leading: Icon(Icons.info_outline),
-                    title: Text('Consumo por serviço'),
-                    subtitle: Text('A baixa automática por agendamento será ativada na próxima fase.'),
+      body: _carregando
+          ? const Center(child: CircularProgressIndicator())
+          : ListView(
+              padding: const EdgeInsets.only(bottom: 24),
+              children: [
+                _construirResumo(),
+
+                _buildGroupTitle('OPERAÇÕES'),
+                _buildItem(
+                  'Produtos de uso interno',
+                  'Itens não destinados à venda',
+                  Icons.inventory,
+                  AcaoPermissao.visualizarEstoque,
+                  () => abrir(const ProdutosLojaPage(somenteUsoInterno: true)),
+                ),
+                _buildItem(
+                  'Movimentações',
+                  'Entradas, saídas e histórico',
+                  Icons.swap_vert,
+                  AcaoPermissao.movimentarEstoque,
+                  () => abrir(const ProdutosLojaPage(somenteUsoInterno: true)),
+                ),
+                _buildItem(
+                  'Perdas e avarias',
+                  'Registros de dano ou validade',
+                  Icons.delete_outline,
+                  AcaoPermissao.movimentarEstoque,
+                  () => abrir(const ProdutosLojaPage(somenteUsoInterno: true)),
+                ), // Ideal seria uma tela de histórico focada
+                _buildItem(
+                  'Estoque baixo',
+                  'Reposição necessária',
+                  Icons.warning_amber,
+                  AcaoPermissao.visualizarEstoque,
+                  () => abrir(
+                    const ProdutosLojaPage(
+                      somenteBaixo: true,
+                      somenteUsoInterno: true,
+                    ),
                   ),
                 ),
-              ),
-            ],
-          ),
+
+                _buildGroupTitle('COMPRAS E IMOBILIZADOS'),
+                _buildItem(
+                  'Compras e fornecedores',
+                  'Gerenciar aquisições',
+                  Icons.local_shipping_outlined,
+                  AcaoPermissao.cadastrarFornecedor,
+                  () => abrir(const ProdutoFornecedoresPage()),
+                ),
+                _buildItem(
+                  'Ativos imobilizados',
+                  'Móveis, equipamentos e bens',
+                  Icons.chair_alt,
+                  AcaoPermissao.visualizarEstoque,
+                  () => abrir(const ProdutosLojaPage(somenteAtivos: true)),
+                ),
+
+                const Padding(
+                  padding: EdgeInsets.all(12),
+                  child: Card(
+                    child: ListTile(
+                      leading: Icon(Icons.info_outline),
+                      title: Text('Consumo por serviço'),
+                      subtitle: Text(
+                        'A baixa automática por agendamento será ativada na próxima fase.',
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
     );
   }
 }

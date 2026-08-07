@@ -32,7 +32,8 @@ extension TipoMovimentoLojaDados on TipoMovimentoLoja {
     TipoMovimentoLoja.devolucao,
     TipoMovimentoLoja.recebimentoConsignado,
     TipoMovimentoLoja.cancelamentoVenda,
-    TipoMovimentoLoja.inventario, // inventário pode ser entrada ou saída, mas default entrada se positivo (lógica no backend)
+    TipoMovimentoLoja
+        .inventario, // inventário pode ser entrada ou saída, mas default entrada se positivo (lógica no backend)
   }.contains(this);
 }
 

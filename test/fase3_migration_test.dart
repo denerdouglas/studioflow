@@ -4,7 +4,6 @@ import 'package:studioflow/core/enums/tipo_produto.dart';
 import 'package:studioflow/database/migrations/migration_v29.dart';
 import 'package:studioflow/models/domain/ativo_imobilizado.dart';
 
-
 void main() {
   late Database db;
 
@@ -43,7 +42,7 @@ void main() {
         updated_at TEXT
       )
     ''');
-    
+
     await db.execute('''
       CREATE TABLE cardapio_itens (
         id TEXT PRIMARY KEY,
@@ -64,7 +63,9 @@ void main() {
   test('Deve aplicar migration v29 sem erros (ativos_imobilizados)', () async {
     await MigrationV29.executar(db);
 
-    final tables = await db.rawQuery("SELECT name FROM sqlite_master WHERE type='table' AND name='ativos_imobilizados'");
+    final tables = await db.rawQuery(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name='ativos_imobilizados'",
+    );
     expect(tables.length, 1);
   });
 
@@ -72,12 +73,15 @@ void main() {
     expect(TipoProduto.fromStorage('venda'), TipoProduto.venda);
     expect(TipoProduto.fromStorage('uso_interno'), TipoProduto.usoInterno);
     expect(TipoProduto.fromStorage('ambos'), TipoProduto.ambos);
-    expect(TipoProduto.fromStorage('ativo_imobilizado'), TipoProduto.ativoImobilizado);
-    
+    expect(
+      TipoProduto.fromStorage('ativo_imobilizado'),
+      TipoProduto.ativoImobilizado,
+    );
+
     // Fallback default
     expect(TipoProduto.fromStorage('qualquer_coisa'), TipoProduto.venda);
   });
-  
+
   test('AtivoImobilizado modelização de dados correta', () {
     final ativo = AtivoImobilizado(
       id: 'atv_1',
@@ -86,11 +90,11 @@ void main() {
       valorAquisicao: 1500.0,
       condicao: 'bom',
     );
-    
+
     expect(ativo.id, 'atv_1');
     expect(ativo.condicao, 'bom');
     expect(ativo.valorAquisicao, 1500.0);
-    
+
     final map = ativo.toMap();
     expect(map['business_id'], 'bus_1');
     expect(map['estoque_id'], 'est_1');
@@ -131,15 +135,21 @@ void main() {
 
     final allCatalogos = await db.query('catalogos_loja');
     print('Catalogos: $allCatalogos');
-    
+
     final allConfig = await db.query('configuracoes');
     print('Configuracoes: $allConfig');
 
-    final catalogos = await db.query('catalogos_loja', where: "comercio_id = 'bus_1'");
+    final catalogos = await db.query(
+      'catalogos_loja',
+      where: "comercio_id = 'bus_1'",
+    );
     expect(catalogos.length, 1);
     expect(catalogos.first['nome'], 'Cardápio Legado');
-    
-    final config = await db.query('configuracoes', where: "chave = 'cardapio_migrado_bus_1'");
+
+    final config = await db.query(
+      'configuracoes',
+      where: "chave = 'cardapio_migrado_bus_1'",
+    );
     expect(config.length, 1);
 
     final itens = await db.query('estoque', where: "comercio_id = 'bus_1'");
@@ -148,7 +158,10 @@ void main() {
 
     // Segunda execução - não deve duplicar o catálogo
     await MigrationV29.executar(db);
-    final catalogos2 = await db.query('catalogos_loja', where: "comercio_id = 'bus_1'");
+    final catalogos2 = await db.query(
+      'catalogos_loja',
+      where: "comercio_id = 'bus_1'",
+    );
     expect(catalogos2.length, 1); // Continua 1
   });
 }

@@ -22,10 +22,10 @@ enum TipoMovimento {
   String get chave => name;
 
   bool get isEntrada => const {
-        TipoMovimento.entrada,
-        TipoMovimento.inventario, // inventário default
-        TipoMovimento.devolucao,
-        TipoMovimento.recebimentoConsignado,
-        TipoMovimento.cancelamentoVenda,
-      }.contains(this);
+    TipoMovimento.entrada,
+    TipoMovimento.inventario, // inventário default
+    TipoMovimento.devolucao,
+    TipoMovimento.recebimentoConsignado,
+    TipoMovimento.cancelamentoVenda,
+  }.contains(this);
 }

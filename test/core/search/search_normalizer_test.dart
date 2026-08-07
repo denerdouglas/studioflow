@@ -16,7 +16,10 @@ void main() {
     });
 
     test('deve reduzir espaços múltiplos', () {
-      expect(SearchNormalizer.normalize('  Corte   de    Cabelo  '), 'corte de cabelo');
+      expect(
+        SearchNormalizer.normalize('  Corte   de    Cabelo  '),
+        'corte de cabelo',
+      );
     });
 
     test('deve retornar vazio se a string for vazia', () {

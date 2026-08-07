@@ -33,15 +33,17 @@ class _LojaSalaoPageState extends State<LojaSalaoPage> {
       MaterialPageRoute(builder: (_) => const VisionScannerPage()),
     );
     if (!mounted || result == null) return;
-    
+
     try {
       final ScannerProductDraft draft = result['draft'];
       final String finalidade = result['finalidade'];
-      
+
       final String? codigo = draft.gtin?.value;
       if (codigo == null || codigo.isEmpty) {
         // Criar produto totalmente manual baseado no draft
-        await abrir(ProdutoFormPage(draftInicial: draft, finalidadeInicial: finalidade));
+        await abrir(
+          ProdutoFormPage(draftInicial: draft, finalidadeInicial: finalidade),
+        );
         return;
       }
 
@@ -49,7 +51,13 @@ class _LojaSalaoPageState extends State<LojaSalaoPage> {
       if (!mounted) return;
       if (produto == null) {
         // Criar produto novo
-        await abrir(ProdutoFormPage(codigoInicial: codigo, draftInicial: draft, finalidadeInicial: finalidade));
+        await abrir(
+          ProdutoFormPage(
+            codigoInicial: codigo,
+            draftInicial: draft,
+            finalidadeInicial: finalidade,
+          ),
+        );
       } else {
         await abrir(ProdutoDetalhePage(produtoId: produto.id));
       }
@@ -77,7 +85,13 @@ class _LojaSalaoPageState extends State<LojaSalaoPage> {
     );
   }
 
-  Widget _buildItem(String titulo, String subtitulo, IconData icone, AcaoPermissao permissao, VoidCallback acao) {
+  Widget _buildItem(
+    String titulo,
+    String subtitulo,
+    IconData icone,
+    AcaoPermissao permissao,
+    VoidCallback acao,
+  ) {
     if (!SessionController.instance.usuario!.podeAcao(permissao)) {
       return const SizedBox.shrink();
     }
@@ -111,36 +125,121 @@ class _LojaSalaoPageState extends State<LojaSalaoPage> {
                   children: [
                     Text(
                       'Venda e reposição em um só fluxo',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     SizedBox(height: 4),
-                    Text('Produto → estoque → alerta → comparação → ordem → recebimento.'),
+                    Text(
+                      'Produto → estoque → alerta → comparação → ordem → recebimento.',
+                    ),
                   ],
                 ),
               ),
             ),
           ),
-          
+
           _buildGroupTitle('PRODUTOS E CATÁLOGOS'),
-          _buildItem('Catálogos', 'Agrupe produtos para facilitar a venda', Icons.storefront_outlined, AcaoPermissao.visualizarEstoque, () => abrir(const CatalogosLojaPage())),
-          _buildItem('Produtos à venda', 'Cadastro, pesquisa e detalhes', Icons.inventory_2_outlined, AcaoPermissao.visualizarEstoque, () => abrir(const ProdutosLojaPage())),
-          _buildItem('Ler produto', 'Localizar ou cadastrar rapidamente', Icons.barcode_reader, AcaoPermissao.visualizarEstoque, scanner),
+          _buildItem(
+            'Catálogos',
+            'Agrupe produtos para facilitar a venda',
+            Icons.storefront_outlined,
+            AcaoPermissao.visualizarEstoque,
+            () => abrir(const CatalogosLojaPage()),
+          ),
+          _buildItem(
+            'Produtos à venda',
+            'Cadastro, pesquisa e detalhes',
+            Icons.inventory_2_outlined,
+            AcaoPermissao.visualizarEstoque,
+            () => abrir(const ProdutosLojaPage()),
+          ),
+          _buildItem(
+            'Ler produto',
+            'Localizar ou cadastrar rapidamente',
+            Icons.barcode_reader,
+            AcaoPermissao.visualizarEstoque,
+            scanner,
+          ),
 
           _buildGroupTitle('VENDAS'),
-          _buildItem('Nova venda', 'Carrinho, desconto e pagamento', Icons.point_of_sale, AcaoPermissao.realizarVenda, () => abrir(const VendasLojaPage())),
-          _buildItem('Comandas', 'Venda em andamento', Icons.receipt_long, AcaoPermissao.realizarVenda, () => abrir(const ComandasLojaPage())),
-          _buildItem('Contas a receber', 'Pendentes e vencidas', Icons.account_balance_wallet_outlined, AcaoPermissao.acessarFinanceiro, () => abrir(const ContasReceberPage())),
-          _buildItem('Histórico de vendas', 'Resumo e estorno', Icons.receipt_long_outlined, AcaoPermissao.realizarVenda, () => abrir(const HistoricoVendasPage())),
+          _buildItem(
+            'Nova venda',
+            'Carrinho, desconto e pagamento',
+            Icons.point_of_sale,
+            AcaoPermissao.realizarVenda,
+            () => abrir(const VendasLojaPage()),
+          ),
+          _buildItem(
+            'Comandas',
+            'Venda em andamento',
+            Icons.receipt_long,
+            AcaoPermissao.realizarVenda,
+            () => abrir(const ComandasLojaPage()),
+          ),
+          _buildItem(
+            'Contas a receber',
+            'Pendentes e vencidas',
+            Icons.account_balance_wallet_outlined,
+            AcaoPermissao.acessarFinanceiro,
+            () => abrir(const ContasReceberPage()),
+          ),
+          _buildItem(
+            'Histórico de vendas',
+            'Resumo e estorno',
+            Icons.receipt_long_outlined,
+            AcaoPermissao.realizarVenda,
+            () => abrir(const HistoricoVendasPage()),
+          ),
 
           _buildGroupTitle('CONSIGNAÇÃO'),
-          _buildItem('Produtos consignados', 'Itens próprios de terceiros', Icons.handshake_outlined, AcaoPermissao.acessarConsignacao, () => abrir(const ProdutosLojaPage(modalidade: ModalidadeProduto.consignado))),
-          _buildItem('Lotes e acertos', 'Maletas e devoluções', Icons.assignment_turned_in_outlined, AcaoPermissao.acessarConsignacao, () => abrir(const JoiasConsignadasPage())),
+          _buildItem(
+            'Produtos consignados',
+            'Itens próprios de terceiros',
+            Icons.handshake_outlined,
+            AcaoPermissao.acessarConsignacao,
+            () => abrir(
+              const ProdutosLojaPage(modalidade: ModalidadeProduto.consignado),
+            ),
+          ),
+          _buildItem(
+            'Lotes e acertos',
+            'Maletas e devoluções',
+            Icons.assignment_turned_in_outlined,
+            AcaoPermissao.acessarConsignacao,
+            () => abrir(const JoiasConsignadasPage()),
+          ),
 
           _buildGroupTitle('REPOSIÇÃO'),
-          _buildItem('Fornecedores', 'Cadastro e condições', Icons.local_shipping_outlined, AcaoPermissao.cadastrarFornecedor, () => abrir(const FornecedoresPage())),
-          _buildItem('Estoque baixo', 'Alertas de quantidade', Icons.warning_amber, AcaoPermissao.visualizarEstoque, () => abrir(const ProdutosLojaPage(somenteBaixo: true))),
-          _buildItem('Ordens de compra', 'Aprovação e recebimento', Icons.shopping_cart_checkout, AcaoPermissao.criarPedido, () => abrir(const OrdensCompraPage())),
-          _buildItem('Comparador de reposição', 'Ofertas salvas', Icons.compare_arrows, AcaoPermissao.visualizarEstoque, () => abrir(const ComparadorReposicaoPage())),
+          _buildItem(
+            'Fornecedores',
+            'Cadastro e condições',
+            Icons.local_shipping_outlined,
+            AcaoPermissao.cadastrarFornecedor,
+            () => abrir(const FornecedoresPage()),
+          ),
+          _buildItem(
+            'Estoque baixo',
+            'Alertas de quantidade',
+            Icons.warning_amber,
+            AcaoPermissao.visualizarEstoque,
+            () => abrir(const ProdutosLojaPage(somenteBaixo: true)),
+          ),
+          _buildItem(
+            'Ordens de compra',
+            'Aprovação e recebimento',
+            Icons.shopping_cart_checkout,
+            AcaoPermissao.criarPedido,
+            () => abrir(const OrdensCompraPage()),
+          ),
+          _buildItem(
+            'Comparador de reposição',
+            'Ofertas salvas',
+            Icons.compare_arrows,
+            AcaoPermissao.visualizarEstoque,
+            () => abrir(const ComparadorReposicaoPage()),
+          ),
 
           const Padding(
             padding: EdgeInsets.all(12),
@@ -148,7 +247,9 @@ class _LojaSalaoPageState extends State<LojaSalaoPage> {
               child: ListTile(
                 leading: Icon(Icons.info_outline),
                 title: Text('Marketplaces externos'),
-                subtitle: Text('A compra é concluída externamente. O StudioFlow não armazena senhas nem executa compra automática.'),
+                subtitle: Text(
+                  'A compra é concluída externamente. O StudioFlow não armazena senhas nem executa compra automática.',
+                ),
               ),
             ),
           ),

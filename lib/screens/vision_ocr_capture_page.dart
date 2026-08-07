@@ -27,8 +27,10 @@ class _VisionOcrCapturePageState extends State<VisionOcrCapturePage> {
 
   void _remove(bool isFront) {
     setState(() {
-      if (isFront) _frontPath = null;
-      else _backPath = null;
+      if (isFront)
+        _frontPath = null;
+      else
+        _backPath = null;
     });
   }
 
@@ -54,7 +56,10 @@ class _VisionOcrCapturePageState extends State<VisionOcrCapturePage> {
                   TextButton.icon(
                     onPressed: () => _remove(isFront),
                     icon: const Icon(Icons.delete, color: Colors.red),
-                    label: const Text('Remover', style: TextStyle(color: Colors.red)),
+                    label: const Text(
+                      'Remover',
+                      style: TextStyle(color: Colors.red),
+                    ),
                   ),
                 ],
               ),
@@ -89,11 +94,18 @@ class _VisionOcrCapturePageState extends State<VisionOcrCapturePage> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          const Text('Capture a foto da frente (obrigatório) e do verso (opcional). Ambas as imagens serão analisadas para preencher o rascunho.', style: TextStyle(fontSize: 15)),
+          const Text(
+            'Capture a foto da frente (obrigatório) e do verso (opcional). Ambas as imagens serão analisadas para preencher o rascunho.',
+            style: TextStyle(fontSize: 15),
+          ),
           const SizedBox(height: 24),
           _buildPhotoSlot('Frente (Principal)', true, _frontPath),
           const SizedBox(height: 16),
-          _buildPhotoSlot('Verso (Ingredientes, código, etc)', false, _backPath),
+          _buildPhotoSlot(
+            'Verso (Ingredientes, código, etc)',
+            false,
+            _backPath,
+          ),
         ],
       ),
       bottomNavigationBar: SafeArea(
@@ -112,7 +124,10 @@ class _VisionOcrCapturePageState extends State<VisionOcrCapturePage> {
                 child: FilledButton(
                   onPressed: _frontPath == null
                       ? null
-                      : () => Navigator.pop(context, {'front': _frontPath, 'back': _backPath}),
+                      : () => Navigator.pop(context, {
+                          'front': _frontPath,
+                          'back': _backPath,
+                        }),
                   child: const Text('Analisar Imagens'),
                 ),
               ),

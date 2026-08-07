@@ -168,6 +168,82 @@ class ClienteRepository {
     return registros.map(ClienteRegistro.doMapa).toList();
   }
 
+  Future<List<ClienteRegistro>> buscarPesquisando(
+    String query, {
+    int limit = 20,
+    int offset = 0,
+  }) async {
+    final db = await _databaseProvider();
+    if (query.trim().isEmpty) {
+      final registros = await db.query(
+        'clientes',
+        where: 'ativo = 1 AND comercio_id = ?',
+        whereArgs: [_comercioId],
+        orderBy: 'nome COLLATE NOCASE ASC',
+        limit: limit,
+        offset: offset,
+      );
+      return registros.map(ClienteRegistro.doMapa).toList();
+    }
+
+    final queryNormalizada = _removerAcentos(query.toLowerCase().trim());
+    final termos = queryNormalizada
+        .split(RegExp(r'\s+'))
+        .where((t) => t.isNotEmpty)
+        .toList();
+
+    String normalizedNomeSql = '''
+      LOWER(
+        REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
+        nome,
+        'á','a'),'à','a'),'ã','a'),'â','a'),
+        'é','e'),'ê','e'),
+        'í','i'),
+        'ó','o'),'õ','o'),'ô','o'),
+        'ú','u'),'ç','c'),
+        'Á','a')
+      )
+    ''';
+
+    // SQLite não é bom com arrays, então montamos as condições LIKE manualmente para cada termo
+    final whereClauses = <String>[];
+    final whereArgs = <Object?>[];
+
+    whereClauses.add('ativo = 1 AND comercio_id = ?');
+    whereArgs.add(_comercioId);
+
+    for (final termo in termos) {
+      whereClauses.add(
+        '($normalizedNomeSql LIKE ? OR whatsapp LIKE ? OR telefone LIKE ?)',
+      );
+      whereArgs.add('%$termo%');
+      whereArgs.add('%$termo%');
+      whereArgs.add('%$termo%');
+    }
+
+    final registros = await db.query(
+      'clientes',
+      where: whereClauses.join(' AND '),
+      whereArgs: whereArgs,
+      orderBy: 'nome COLLATE NOCASE ASC',
+      limit: limit,
+      offset: offset,
+    );
+
+    return registros.map(ClienteRegistro.doMapa).toList();
+  }
+
+  String _removerAcentos(String str) {
+    var comAcento =
+        'ÀÁÂÃÄÅàáâãäåÒÓÔÕÕÖØòóôõöøÈÉÊËèéêëðÇçÐÌÍÎÏìíîïÙÚÛÜùúûüÑñŠšŸÿýŽž';
+    var semAcento =
+        'AAAAAAaaaaaaOOOOOOOooooooEEEEeeeeeCcDIIIIiiiiUUUUuuuuNnSsYyyZz';
+    for (int i = 0; i < comAcento.length; i++) {
+      str = str.replaceAll(comAcento[i], semAcento[i]);
+    }
+    return str;
+  }
+
   Future<ClienteRegistro?> buscarPorId(String clienteId) async {
     final db = await _databaseProvider();
     final registros = await db.query(

@@ -1,15 +1,15 @@
-enum ScannerConfidence {
-  alta,
-  media,
-  baixa,
-}
+enum ScannerConfidence { alta, media, baixa }
 
 class ScannerField<T> {
   final T? value;
   final String source;
   final ScannerConfidence confidence;
 
-  const ScannerField(this.value, {this.source = 'manual', this.confidence = ScannerConfidence.baixa});
+  const ScannerField(
+    this.value, {
+    this.source = 'manual',
+    this.confidence = ScannerConfidence.baixa,
+  });
 }
 
 class ScannerProductDraft {

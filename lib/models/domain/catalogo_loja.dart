@@ -43,8 +43,10 @@ extension TipoControleCatalogoDados on TipoControleCatalogo {
     if (chave == 'produto_comum') return TipoControleCatalogo.outros;
     if (chave == 'alimento_bebida') return TipoControleCatalogo.comidas;
     if (chave == 'outro') return TipoControleCatalogo.outros;
-    
-    return TipoControleCatalogo.values.where((e) => e.chave == chave).firstOrNull;
+
+    return TipoControleCatalogo.values
+        .where((e) => e.chave == chave)
+        .firstOrNull;
   }
 
   static TipoControleCatalogo pelaChave(String? value) =>

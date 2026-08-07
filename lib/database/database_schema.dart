@@ -160,16 +160,6 @@ abstract final class DatabaseSchema {
 
         observacoes TEXT,
         data_criacao TEXT NOT NULL,
-
-        FOREIGN KEY (cliente_id)
-          REFERENCES clientes (id),
-
-        FOREIGN KEY (profissional_id)
-          REFERENCES profissionais (id),
-
-        FOREIGN KEY (servico_id)
-          REFERENCES servicos (id),
-
         unidade_id TEXT,
         filial_id TEXT,
         sala_id TEXT,
@@ -187,7 +177,16 @@ abstract final class DatabaseSchema {
         updated_at TEXT,
         deleted_at TEXT,
         created_by TEXT,
-        updated_by TEXT
+        updated_by TEXT,
+
+        FOREIGN KEY (cliente_id)
+          REFERENCES clientes (id),
+
+        FOREIGN KEY (profissional_id)
+          REFERENCES profissionais (id),
+
+        FOREIGN KEY (servico_id)
+          REFERENCES servicos (id)
       )
     ''');
 

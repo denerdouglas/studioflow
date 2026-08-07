@@ -40,19 +40,24 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
     if (!mounted) return;
 
     // Tenta buscar o gtin externamente
-    final coordinator = ScannerCoordinator(externalProviders: [MlKitVisionProvider()]);
-    final draft = await coordinator.searchExternalBarcode(codigo) ?? 
-      ScannerProductDraft(gtin: ScannerField(codigo, source: 'barcode', confidence: ScannerConfidence.alta));
-      
+    final coordinator = ScannerCoordinator(
+      externalProviders: [MlKitVisionProvider()],
+    );
+    final draft =
+        await coordinator.searchExternalBarcode(codigo) ??
+        ScannerProductDraft(
+          gtin: ScannerField(
+            codigo,
+            source: 'barcode',
+            confidence: ScannerConfidence.alta,
+          ),
+        );
+
     if (!mounted) return;
 
     final result = await Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (_) => ScannerDraftPage(
-          draft: draft,
-        ),
-      ),
+      MaterialPageRoute(builder: (_) => ScannerDraftPage(draft: draft)),
     );
 
     if (!mounted) return;
@@ -113,7 +118,7 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
     );
 
     if (resultPaths == null || resultPaths['front'] == null) return;
-    
+
     final frontPath = resultPaths['front']!;
     final backPath = resultPaths['back'];
 
@@ -123,9 +128,14 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
     });
 
     try {
-      final coordinator = ScannerCoordinator(externalProviders: [MlKitVisionProvider()]);
-      final draft = await coordinator.analyzeImages(frontPath, backPath: backPath);
-      
+      final coordinator = ScannerCoordinator(
+        externalProviders: [MlKitVisionProvider()],
+      );
+      final draft = await coordinator.analyzeImages(
+        frontPath,
+        backPath: backPath,
+      );
+
       if (!mounted) return;
 
       final result = await Navigator.push(

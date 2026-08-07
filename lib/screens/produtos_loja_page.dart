@@ -15,7 +15,7 @@ class ProdutosLojaPage extends StatefulWidget {
   final ModalidadeProduto? modalidade;
   final bool somenteUsoInterno;
   final bool somenteAtivos;
-  
+
   const ProdutosLojaPage({
     super.key,
     this.somenteBaixo = false,
@@ -236,8 +236,12 @@ class _ProdutosLojaPageState extends State<ProdutosLojaPage> {
                                 title: Text(
                                   '${p.nome}${p.tipoProduto == 'uso_interno' ? ' (NÃO DESTINADO À VENDA)' : ''}${p.tipoProduto == 'ambos' ? ' (POSSUI SALDO COMERCIAL)' : ''}',
                                   style: TextStyle(
-                                    color: p.tipoProduto == 'uso_interno' ? Colors.red : null,
-                                    fontWeight: p.tipoProduto == 'uso_interno' ? FontWeight.bold : null,
+                                    color: p.tipoProduto == 'uso_interno'
+                                        ? Colors.red
+                                        : null,
+                                    fontWeight: p.tipoProduto == 'uso_interno'
+                                        ? FontWeight.bold
+                                        : null,
                                   ),
                                 ),
                                 subtitle: Text(
@@ -276,7 +280,6 @@ class _ProdutosLojaPageState extends State<ProdutosLojaPage> {
     );
   }
 }
-
 
 class ProdutoFormPage extends StatefulWidget {
   final ProdutoLoja? produto;
@@ -322,19 +325,56 @@ class _ProdutoFormPageState extends State<ProdutoFormPage> {
     modalidade = p?.modalidade ?? ModalidadeProduto.proprio;
     ativo = p?.ativo ?? true;
     revisaoModelagemEstoque = p?.revisaoModelagemEstoque ?? false;
-    _c('nome', widget.produto?.nome ?? widget.catalogProduct?.name ?? widget.draftInicial?.nome?.value ?? '');
-    _c('descricao', widget.produto?.descricao ?? widget.catalogProduct?.description ?? widget.draftInicial?.descricao?.value ?? '');
-    _c('categoria', widget.produto?.categoria ?? widget.catalogProduct?.category ?? widget.draftInicial?.categoriaSugerida?.value ?? 'Cosméticos');
-    _c('marca', widget.produto?.marca ?? widget.catalogProduct?.brand ?? widget.draftInicial?.marca?.value ?? '');
+    _c(
+      'nome',
+      widget.produto?.nome ??
+          widget.catalogProduct?.name ??
+          widget.draftInicial?.nome?.value ??
+          '',
+    );
+    _c(
+      'descricao',
+      widget.produto?.descricao ??
+          widget.catalogProduct?.description ??
+          widget.draftInicial?.descricao?.value ??
+          '',
+    );
+    _c(
+      'categoria',
+      widget.produto?.categoria ??
+          widget.catalogProduct?.category ??
+          widget.draftInicial?.categoriaSugerida?.value ??
+          'Cosméticos',
+    );
+    _c(
+      'marca',
+      widget.produto?.marca ??
+          widget.catalogProduct?.brand ??
+          widget.draftInicial?.marca?.value ??
+          '',
+    );
     _c('interno', p?.codigoInterno ?? '');
-    _c('barras', p?.codigoBarras ?? widget.codigoInicial ?? widget.catalogProduct?.gtin ?? widget.draftInicial?.gtin?.value ?? '');
+    _c(
+      'barras',
+      p?.codigoBarras ??
+          widget.codigoInicial ??
+          widget.catalogProduct?.gtin ??
+          widget.draftInicial?.gtin?.value ??
+          '',
+    );
     _c('tipo', p?.tipo ?? 'produto');
     _c('custo', p?.custo.toStringAsFixed(2) ?? '0');
     _c('preco', p?.precoVenda.toStringAsFixed(2) ?? '0');
     _c('quantidade', p?.quantidadeAtual.toString() ?? '0');
     _c('minimo', p?.estoqueMinimo.toString() ?? '0');
     _c('sugerida', p?.quantidadeSugerida.toString() ?? '0');
-    _c('unidade', p?.unidade ?? catalog?.physicalUnit ?? widget.draftInicial?.unidade?.value ?? 'un');
+    _c(
+      'unidade',
+      p?.unidade ??
+          catalog?.physicalUnit ??
+          widget.draftInicial?.unidade?.value ??
+          'un',
+    );
     _c(
       'conteudo',
       p?.conteudoPorUnidade.toString() ??

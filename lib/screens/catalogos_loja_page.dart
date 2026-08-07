@@ -485,7 +485,8 @@ class _CatalogoProdutosPageState extends State<CatalogoProdutosPage> {
                 keyboardType: TextInputType.number,
                 decoration: const InputDecoration(labelText: 'Estoque mínimo'),
               ),
-              if (widget.catalog.tipoControle == TipoControleCatalogo.outros) ...[
+              if (widget.catalog.tipoControle ==
+                  TipoControleCatalogo.outros) ...[
                 TextField(
                   controller: supplier,
                   decoration: const InputDecoration(labelText: 'Fornecedor'),

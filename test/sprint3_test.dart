@@ -351,4 +351,3 @@ FornecedorLoja _fornecedor(UsuarioAcesso dono, String id) => FornecedorLoja(
   prazoDias: 3,
   entrega: true,
 );
-

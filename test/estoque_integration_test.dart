@@ -56,7 +56,8 @@ void main() {
       )
     ''');
 
-    estoqueRepository = EstoqueRepository(); // precisa de dependências mockadas em um cenário real
+    estoqueRepository =
+        EstoqueRepository(); // precisa de dependências mockadas em um cenário real
     lojaRepository = LojaRepository(); // idem
   });
 
@@ -64,11 +65,14 @@ void main() {
     await db.close();
   });
 
-  test('Segregação de saldo (venda vs uso_interno) funciona corretamente', () async {
-    // Isso é um placeholder de teste de integração
-    // Num teste real, injetaríamos o DB no repository ou usaríamos inMemoryDatabaseFactory
-    // e testaríamos `lojaRepository.movimentar(finalidade: 'venda')`
-    // vs `estoqueRepository.registrarMovimentacao(finalidade: 'uso_interno')`
-    expect(true, true);
-  });
+  test(
+    'Segregação de saldo (venda vs uso_interno) funciona corretamente',
+    () async {
+      // Isso é um placeholder de teste de integração
+      // Num teste real, injetaríamos o DB no repository ou usaríamos inMemoryDatabaseFactory
+      // e testaríamos `lojaRepository.movimentar(finalidade: 'venda')`
+      // vs `estoqueRepository.registrarMovimentacao(finalidade: 'uso_interno')`
+      expect(true, true);
+    },
+  );
 }
