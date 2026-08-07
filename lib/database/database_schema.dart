@@ -682,5 +682,37 @@ abstract final class DatabaseSchema {
       ON whatsapp_fila (business_id, provider, idempotency_key) 
       WHERE idempotency_key IS NOT NULL AND deleted_at IS NULL
     ''');
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS ativos_imobilizados (
+        id TEXT PRIMARY KEY,
+        business_id TEXT NOT NULL,
+        estoque_id TEXT NOT NULL,
+        data_aquisicao TEXT,
+        valor_aquisicao REAL DEFAULT 0 CHECK (valor_aquisicao >= 0),
+        numero_serie TEXT,
+        patrimonio TEXT,
+        localizacao TEXT,
+        condicao TEXT,
+        garantia_ate TEXT,
+        observacoes TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        deleted_at TEXT,
+        created_by TEXT,
+        updated_by TEXT,
+        FOREIGN KEY (estoque_id) REFERENCES estoque (id) ON DELETE RESTRICT
+      )
+    ''');
+
+    await db.execute('''
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_ativos_imob_estoque_uniq 
+      ON ativos_imobilizados (business_id, estoque_id) 
+      WHERE deleted_at IS NULL
+    ''');
+
+    await db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_ativos_imob_business 
+      ON ativos_imobilizados (business_id)
+    ''');
   }
 }

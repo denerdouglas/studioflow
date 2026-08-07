@@ -38,49 +38,73 @@ class LojaRepository {
     ModalidadeProduto? modalidade,
     bool somenteBaixo = false,
     bool incluirInativos = false,
+    bool somenteUsoInterno = false,
+    bool somenteAtivos = false,
   }) async {
     final u = _exigir(AcaoPermissao.visualizarEstoque);
     final db = await _databaseProvider();
-    final where = <String>['comercio_id = ?', "estoque_destino = 'loja'"];
+    final where = <String>[
+      'e.comercio_id = ?',
+    ];
+    
+    if (somenteAtivos) {
+      where.add("e.tipo_produto = 'ativo_imobilizado'");
+    } else if (somenteUsoInterno) {
+      where.add("(e.tipo_produto = 'uso_interno' OR e.tipo_produto = 'ambos')");
+    } else {
+      where.add("(e.tipo_produto = 'venda' OR e.tipo_produto = 'ambos' OR e.estoque_destino = 'loja')");
+    }
+
     final args = <Object?>[u.comercioId];
     if (!incluirInativos) {
-      where.add('ativo = 1');
+      where.add('e.ativo = 1');
     }
     if (pesquisa.trim().isNotEmpty) {
-      where.add('''(nome LIKE ? OR codigo_barras LIKE ? OR codigo_interno LIKE ?
-        OR marca LIKE ?)''');
+      where.add(
+        '''(e.nome LIKE ? OR e.codigo_barras LIKE ? OR e.codigo_interno LIKE ?
+        OR e.marca LIKE ?)''',
+      );
       final termo = '%${pesquisa.trim()}%';
       args.addAll([termo, termo, termo, termo]);
     }
     if (categoria != null && categoria.isNotEmpty) {
-      where.add('categoria = ?');
+      where.add('e.categoria = ?');
       args.add(categoria);
     }
     if (modalidade != null) {
-      where.add('modalidade = ?');
+      where.add('e.modalidade = ?');
       args.add(modalidade.name);
     }
-    if (somenteBaixo) where.add('quantidade_atual <= estoque_minimo');
-    final maps = await db.query(
-      'estoque',
-      where: where.join(' AND '),
-      whereArgs: args,
-      orderBy: somenteBaixo
-          ? 'quantidade_atual ASC, nome COLLATE NOCASE'
-          : 'ativo DESC, nome COLLATE NOCASE',
-    );
+    if (somenteBaixo) {
+      where.add(
+        'COALESCE(s.quantidade_atual, e.quantidade_atual) <= COALESCE(s.estoque_minimo, e.estoque_minimo)',
+      );
+    }
+
+    final query =
+        '''
+      SELECT e.*, COALESCE(s.quantidade_atual, e.quantidade_atual) as quantidade_atual, COALESCE(s.estoque_minimo, e.estoque_minimo) as estoque_minimo
+      FROM estoque e
+      LEFT JOIN estoque_saldos s ON e.id = s.estoque_id AND s.finalidade = 'venda'
+      WHERE ${where.join(' AND ')}
+      ORDER BY ${somenteBaixo ? 'quantidade_atual ASC, e.nome COLLATE NOCASE' : 'e.ativo DESC, e.nome COLLATE NOCASE'}
+    ''';
+
+    final maps = await db.rawQuery(query, args);
     return maps.map(ProdutoLoja.fromMap).toList();
   }
 
   Future<ProdutoLoja?> buscarProduto(String id) async {
     final u = _exigir(AcaoPermissao.visualizarEstoque);
     final db = await _databaseProvider();
-    final maps = await db.query(
-      'estoque',
-      where: "id = ? AND comercio_id = ? AND estoque_destino = 'loja'",
-      whereArgs: [id, u.comercioId],
-      limit: 1,
-    );
+    final query = '''
+      SELECT e.*, COALESCE(s.quantidade_atual, e.quantidade_atual) as quantidade_atual, COALESCE(s.estoque_minimo, e.estoque_minimo) as estoque_minimo
+      FROM estoque e
+      LEFT JOIN estoque_saldos s ON e.id = s.estoque_id AND s.finalidade = 'venda'
+      WHERE e.id = ? AND e.comercio_id = ? AND (e.tipo_produto = 'venda' OR e.tipo_produto = 'ambos' OR e.estoque_destino = 'loja')
+      LIMIT 1
+    ''';
+    final maps = await db.rawQuery(query, [id, u.comercioId]);
     return maps.isEmpty ? null : ProdutoLoja.fromMap(maps.first);
   }
 
@@ -108,6 +132,7 @@ class LojaRepository {
         comercioId: u.comercioId,
         nome: p['nome'] as String,
         categoria: 'Peça Única',
+        tipoProduto: 'venda',
         tipo: 'peca_unica',
         modalidade: ModalidadeProduto.proprio,
         custo: (p['custo'] as num).toDouble(),
@@ -124,13 +149,14 @@ class LojaRepository {
       );
     }
 
-    final maps = await db.query(
-      'estoque',
-      where:
-          "comercio_id = ? AND codigo_barras = ? AND estoque_destino = 'loja'",
-      whereArgs: [u.comercioId, valor],
-      limit: 1,
-    );
+    final query = '''
+      SELECT e.*, COALESCE(s.quantidade_atual, e.quantidade_atual) as quantidade_atual, COALESCE(s.estoque_minimo, e.estoque_minimo) as estoque_minimo
+      FROM estoque e
+      LEFT JOIN estoque_saldos s ON e.id = s.estoque_id AND s.finalidade = 'venda'
+      WHERE e.comercio_id = ? AND e.codigo_barras = ? AND (e.tipo_produto = 'venda' OR e.tipo_produto = 'ambos' OR e.estoque_destino = 'loja')
+      LIMIT 1
+    ''';
+    final maps = await db.rawQuery(query, [u.comercioId, valor]);
     return maps.isEmpty ? null : ProdutoLoja.fromMap(maps.first);
   }
 
@@ -151,7 +177,8 @@ class LojaRepository {
     final existente = await db.query(
       'estoque',
       columns: ['id'],
-      where: "id = ? AND comercio_id = ? AND estoque_destino = 'loja'",
+      where:
+          "id = ? AND comercio_id = ? AND (tipo_produto = 'venda' OR tipo_produto = 'ambos' OR estoque_destino = 'loja')",
       whereArgs: [produto.id, u.comercioId],
       limit: 1,
     );
@@ -165,7 +192,7 @@ class LojaRepository {
         'estoque',
         columns: ['id'],
         where:
-            "comercio_id = ? AND codigo_barras = ? AND id != ? AND estoque_destino = 'loja'",
+            "comercio_id = ? AND codigo_barras = ? AND id != ? AND (tipo_produto = 'venda' OR tipo_produto = 'ambos' OR estoque_destino = 'loja')",
         whereArgs: [u.comercioId, produto.codigoBarras!.trim(), produto.id],
         limit: 1,
       );
@@ -176,7 +203,8 @@ class LojaRepository {
     await db.transaction((txn) async {
       final atual = await txn.query(
         'estoque',
-        where: "id = ? AND comercio_id = ? AND estoque_destino = 'loja'",
+        where:
+            "id = ? AND comercio_id = ? AND (tipo_produto = 'venda' OR tipo_produto = 'ambos' OR estoque_destino = 'loja')",
         whereArgs: [produto.id, u.comercioId],
         limit: 1,
       );
@@ -200,23 +228,36 @@ class LojaRepository {
             source: produto.origemCatalogo,
           );
         }
-        if (quantidadeInicial > 0) {
-          await _movimentarTxn(
-            txn,
-            produtoId: produto.id,
-            tipo: TipoMovimentoLoja.entradaManual,
-            quantidade: quantidadeInicial,
-            origem: 'cadastro_produto',
-            observacao: 'Estoque inicial do cadastro',
-          );
-        }
+
+        final agoraStr = DateTime.now().toUtc().toIso8601String();
+        await txn.insert('estoque_saldos', {
+          'id': DateTime.now().microsecondsSinceEpoch.toString(),
+          'business_id': u.comercioId,
+          'estoque_id': produto.id,
+          'finalidade': 'venda',
+          'quantidade_atual': quantidadeInicial,
+          'estoque_minimo': produto.estoqueMinimo,
+          'created_at': agoraStr,
+          'updated_at': agoraStr,
+        });
       } else {
         mapa.remove('quantidade_atual');
         mapa.remove('data_cadastro');
         await txn.update(
           'estoque',
           mapa,
-          where: "id = ? AND comercio_id = ? AND estoque_destino = 'loja'",
+          where: "id = ? AND comercio_id = ?",
+          whereArgs: [produto.id, u.comercioId],
+        );
+
+        await txn.update(
+          'estoque_saldos',
+          {
+            'quantidade_atual': produto.quantidadeAtual,
+            'estoque_minimo': produto.estoqueMinimo,
+            'updated_at': DateTime.now().toUtc().toIso8601String(),
+          },
+          where: "estoque_id = ? AND business_id = ? AND finalidade = 'venda'",
           whereArgs: [produto.id, u.comercioId],
         );
       }
@@ -233,7 +274,8 @@ class LojaRepository {
         'ativo': ativo ? 1 : 0,
         'atualizado_em': DateTime.now().toIso8601String(),
       },
-      where: "id = ? AND comercio_id = ? AND estoque_destino = 'loja'",
+      where:
+          "id = ? AND comercio_id = ? AND (tipo_produto = 'venda' OR tipo_produto = 'ambos' OR estoque_destino = 'loja')",
       whereArgs: [id, u.comercioId],
     );
   }
@@ -243,6 +285,7 @@ class LojaRepository {
     required TipoMovimentoLoja tipo,
     required double quantidade,
     required String origem,
+    String finalidade = 'venda',
     String? observacao,
     String? referenciaId,
     bool permitirNegativo = false,
@@ -263,12 +306,15 @@ class LojaRepository {
         tipo: tipo,
         quantidade: quantidade,
         origem: origem,
+        finalidade: finalidade,
         observacao: observacao,
         referenciaId: referenciaId,
         permitirNegativo: permitirNegativo,
         justificativaNegativo: justificativaNegativo,
       );
-      await _sincronizarReposicaoTxn(txn, produtoId);
+      if (finalidade == 'venda') {
+        await _sincronizarReposicaoTxn(txn, produtoId);
+      }
     });
   }
 
@@ -278,6 +324,7 @@ class LojaRepository {
     required TipoMovimentoLoja tipo,
     required double quantidade,
     required String origem,
+    String finalidade = 'venda',
     String? observacao,
     String? referenciaId,
     bool permitirNegativo = false,
@@ -288,13 +335,14 @@ class LojaRepository {
       throw StateError('Quantidade deve ser maior que zero.');
     }
     final maps = await txn.query(
-      'estoque',
-      where: "id = ? AND comercio_id = ? AND estoque_destino = 'loja'",
-      whereArgs: [produtoId, u.comercioId],
+      'estoque_saldos',
+      where:
+          "estoque_id = ? AND business_id = ? AND finalidade = ?",
+      whereArgs: [produtoId, u.comercioId, finalidade],
       limit: 1,
     );
     if (maps.isEmpty) {
-      throw StateError('Produto não encontrado neste comércio.');
+      throw StateError('Produto não encontrado ou saldo não inicializado para esta finalidade.');
     }
     final anterior = (maps.first['quantidade_atual'] as num).toDouble();
     final posterior = tipo == TipoMovimentoLoja.ajuste
@@ -303,14 +351,28 @@ class LojaRepository {
     if (posterior < 0 && !permitirNegativo) {
       throw StateError('Estoque insuficiente. A operação foi cancelada.');
     }
+    
+    // Fallback: se a finalidade for venda, ainda atualizamos o legado no estoque para manter telas velhas funcionando.
+    if (finalidade == 'venda') {
+      await txn.update(
+        'estoque',
+        {
+          'quantidade_atual': posterior,
+          'atualizado_em': DateTime.now().toIso8601String(),
+        },
+        where: "id = ? AND comercio_id = ?",
+        whereArgs: [produtoId, u.comercioId],
+      );
+    }
+
     await txn.update(
-      'estoque',
+      'estoque_saldos',
       {
         'quantidade_atual': posterior,
-        'atualizado_em': DateTime.now().toIso8601String(),
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
       },
-      where: "id = ? AND comercio_id = ? AND estoque_destino = 'loja'",
-      whereArgs: [produtoId, u.comercioId],
+      where: "estoque_id = ? AND business_id = ? AND finalidade = ?",
+      whereArgs: [produtoId, u.comercioId, finalidade],
     );
     await txn.insert('movimentacoes_estoque', {
       'id': IdGenerator.temporal(),
@@ -320,6 +382,7 @@ class LojaRepository {
       'quantidade': quantidade,
       'quantidade_anterior': anterior,
       'quantidade_posterior': posterior,
+      'finalidade': finalidade,
       'data': DateTime.now().toIso8601String(),
       'motivo': observacao,
       'usuario_responsavel_id': u.id,
@@ -614,7 +677,7 @@ class LojaRepository {
     final maps = await txn.query(
       'estoque',
       where:
-          "id = ? AND comercio_id = ? AND ativo = 1 AND estoque_destino = 'loja'",
+          "id = ? AND comercio_id = ? AND ativo = 1 AND (tipo_produto = 'venda' OR tipo_produto = 'ambos' OR estoque_destino = 'loja')",
       whereArgs: [produtoId, u.comercioId],
       limit: 1,
     );
@@ -654,7 +717,7 @@ class LojaRepository {
       e.quantidade_atual, e.estoque_minimo, f.nome fornecedor_nome
       FROM reposicoes r JOIN estoque e ON e.id = r.produto_id
       LEFT JOIN fornecedores f ON f.id = r.fornecedor_id
-      WHERE r.comercio_id = ? AND e.estoque_destino = 'loja' ORDER BY r.atualizado_em DESC''',
+      WHERE r.comercio_id = ? AND (e.tipo_produto = 'venda' OR e.tipo_produto = 'ambos' OR e.estoque_destino = 'loja') ORDER BY r.atualizado_em DESC''',
       [u.comercioId],
     );
   }

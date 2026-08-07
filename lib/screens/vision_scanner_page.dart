@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
-import '../services/vision_ocr_service.dart';
-import 'vision_scanner_preview_page.dart';
+import '../services/scanner/scanner_coordinator.dart';
+import '../services/scanner/mlkit_vision_provider.dart';
+import '../models/domain/scanner_product_draft.dart';
+import 'scanner_draft_page.dart';
+import 'vision_ocr_capture_page.dart';
 
 class VisionScannerPage extends StatefulWidget {
   const VisionScannerPage({super.key});
@@ -36,23 +39,27 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
     await _controller.stop();
     if (!mounted) return;
 
-    // Navigate to preview page with the code
+    // Tenta buscar o gtin externamente
+    final coordinator = ScannerCoordinator(externalProviders: [MlKitVisionProvider()]);
+    final draft = await coordinator.searchExternalBarcode(codigo) ?? 
+      ScannerProductDraft(gtin: ScannerField(codigo, source: 'barcode', confidence: ScannerConfidence.alta));
+      
+    if (!mounted) return;
+
     final result = await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => VisionScannerPreviewPage(
-          data: ExtractedTagData(), // No extra info extracted from pure barcode
-          scannedCode: codigo,
+        builder: (_) => ScannerDraftPage(
+          draft: draft,
         ),
       ),
     );
 
     if (!mounted) return;
 
-    if (result is ExtractedTagData && result.codigo != null) {
-      Navigator.pop(context, result.codigo);
+    if (result != null) {
+      Navigator.pop(context, result);
     } else {
-      // Cancelled, resume scanner
       setState(() => _processando = false);
       _controller.start();
     }
@@ -100,32 +107,15 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
   }
 
   Future<void> _usarOcr() async {
-    final picker = ImagePicker();
-    final xfile = await showDialog<XFile?>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Capturar Etiqueta'),
-        content: const Text('Deseja usar a câmera ou escolher da galeria?'),
-        actions: [
-          TextButton(
-            onPressed: () async {
-              final file = await picker.pickImage(source: ImageSource.gallery);
-              if (context.mounted) Navigator.pop(context, file);
-            },
-            child: const Text('Galeria'),
-          ),
-          FilledButton(
-            onPressed: () async {
-              final file = await picker.pickImage(source: ImageSource.camera);
-              if (context.mounted) Navigator.pop(context, file);
-            },
-            child: const Text('Câmera'),
-          ),
-        ],
-      ),
+    final resultPaths = await Navigator.push<Map<String, String?>>(
+      context,
+      MaterialPageRoute(builder: (_) => const VisionOcrCapturePage()),
     );
 
-    if (xfile == null) return;
+    if (resultPaths == null || resultPaths['front'] == null) return;
+    
+    final frontPath = resultPaths['front']!;
+    final backPath = resultPaths['back'];
 
     setState(() {
       _processando = true;
@@ -133,21 +123,26 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
     });
 
     try {
-      final ExtractedTagData data = await VisionOcrService.processImage(
-        xfile.path,
-      );
-
+      final coordinator = ScannerCoordinator(externalProviders: [MlKitVisionProvider()]);
+      final draft = await coordinator.analyzeImages(frontPath, backPath: backPath);
+      
       if (!mounted) return;
 
       final result = await Navigator.push(
         context,
-        MaterialPageRoute(builder: (_) => VisionScannerPreviewPage(data: data)),
+        MaterialPageRoute(
+          builder: (_) => ScannerDraftPage(
+            draft: draft,
+            frontImagePath: frontPath,
+            backImagePath: backPath,
+          ),
+        ),
       );
 
       if (!mounted) return;
 
-      if (result is ExtractedTagData && result.codigo != null) {
-        Navigator.pop(context, result.codigo);
+      if (result != null) {
+        Navigator.pop(context, result);
       } else {
         setState(() => _processando = false);
         _controller.start();
@@ -155,7 +150,7 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
     } catch (e) {
       if (mounted) {
         setState(() {
-          _erro = 'Falha ao ler texto da imagem: $e';
+          _erro = 'Falha ao processar imagem: $e';
           _processando = false;
         });
       }

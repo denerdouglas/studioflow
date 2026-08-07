@@ -15,7 +15,6 @@ import 'gestao_equipe_servicos_page.dart';
 import 'commercial_center_page.dart';
 import 'ia_local_page.dart';
 import 'loja_salao_page.dart';
-import 'cardapio_page.dart';
 import 'privacy_page.dart';
 import 'configuracoes_page.dart';
 import 'producao_page.dart';
@@ -99,15 +98,7 @@ class MaisPremiumPage extends StatelessWidget {
               subtitle: 'Produtos, vendas, estoque',
               destination: const LojaSalaoPage(),
             ),
-          if (usuario.pode(ModuloPermissao.lojaSalao))
-            _buildMenuItem(
-              context: context,
-              icon: Icons.restaurant_menu,
-              color: const Color(0xFFD64D64),
-              title: 'Cardápio do Salão',
-              subtitle: 'Cortesias e serviços complementares',
-              destination: const MenuPage(),
-            ),
+
           if (usuario.pode(ModuloPermissao.clientes))
             _buildMenuItem(
               context: context,

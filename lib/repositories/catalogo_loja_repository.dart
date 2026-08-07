@@ -196,13 +196,17 @@ class CatalogoLojaRepository {
   }) async {
     final user = _require(AcaoPermissao.visualizarEstoque);
     final db = await _databaseProvider();
-    return db.query(
-      'estoque',
-      where:
-          'comercio_id = ? AND catalogo_id = ? AND estoque_destino = ?${incluirInativos ? '' : ' AND ativo = 1'}',
-      whereArgs: [user.comercioId, catalogId, 'loja'],
-      orderBy: 'ativo DESC, nome COLLATE NOCASE',
-    );
+    final query =
+        '''
+      SELECT e.*, COALESCE(s.quantidade_atual, e.quantidade_atual) as quantidade_atual, COALESCE(s.estoque_minimo, e.estoque_minimo) as estoque_minimo
+      FROM estoque e
+      LEFT JOIN estoque_saldos s ON e.id = s.estoque_id AND s.finalidade = 'venda'
+      WHERE e.comercio_id = ? AND e.catalogo_id = ? 
+      AND (e.tipo_produto = 'venda' OR e.tipo_produto = 'ambos' OR e.estoque_destino = 'loja')
+      ${incluirInativos ? '' : ' AND e.ativo = 1'}
+      ORDER BY e.ativo DESC, e.nome COLLATE NOCASE
+    ''';
+    return db.rawQuery(query, [user.comercioId, catalogId]);
   }
 
   Future<String> adicionarProduto({
@@ -354,7 +358,8 @@ class CatalogoLojaRepository {
       final changed = await tx.update(
         'estoque',
         sanitized,
-        where: "id = ? AND comercio_id = ? AND estoque_destino = 'loja'",
+        where:
+            "id = ? AND comercio_id = ? AND (tipo_produto = 'venda' OR tipo_produto = 'ambos' OR estoque_destino = 'loja')",
         whereArgs: [id, user.comercioId],
       );
       if (changed == 0) throw StateError('Produto não encontrado.');
@@ -407,7 +412,8 @@ class CatalogoLojaRepository {
       }
       await tx.delete(
         'estoque',
-        where: "id = ? AND comercio_id = ? AND estoque_destino = 'loja'",
+        where:
+            "id = ? AND comercio_id = ? AND (tipo_produto = 'venda' OR tipo_produto = 'ambos' OR estoque_destino = 'loja')",
         whereArgs: [id, user.comercioId],
       );
       await _audit(
@@ -505,7 +511,8 @@ class CatalogoLojaRepository {
   ) async {
     final rows = await db.query(
       'estoque',
-      where: "id = ? AND comercio_id = ? AND estoque_destino = 'loja'",
+      where:
+          "id = ? AND comercio_id = ? AND (tipo_produto = 'venda' OR tipo_produto = 'ambos' OR estoque_destino = 'loja')",
       whereArgs: [id, commerceId],
       limit: 1,
     );

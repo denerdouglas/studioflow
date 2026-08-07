@@ -5,11 +5,19 @@ enum TipoMovimentoLoja {
   entradaManual,
   entradaRecebimento,
   venda,
+  saidaManual,
   consumoInterno,
   perda,
+  avaria,
+  quebra,
+  derramamento,
   vencimento,
+  contaminacao,
+  extravio,
+  transferencia,
   devolucao,
   ajuste,
+  inventario,
   recebimentoConsignado,
   devolucaoConsignada,
   cancelamentoVenda,
@@ -24,6 +32,7 @@ extension TipoMovimentoLojaDados on TipoMovimentoLoja {
     TipoMovimentoLoja.devolucao,
     TipoMovimentoLoja.recebimentoConsignado,
     TipoMovimentoLoja.cancelamentoVenda,
+    TipoMovimentoLoja.inventario, // inventário pode ser entrada ou saída, mas default entrada se positivo (lógica no backend)
   }.contains(this);
 }
 
@@ -37,6 +46,7 @@ class ProdutoLoja {
   final String? codigoInterno;
   final String? codigoBarras;
   final String tipo;
+  final String tipoProduto;
   final ModalidadeProduto modalidade;
   final String? fornecedorPrincipalId;
   final double custo;
@@ -70,6 +80,7 @@ class ProdutoLoja {
     this.codigoInterno,
     this.codigoBarras,
     required this.tipo,
+    required this.tipoProduto,
     required this.modalidade,
     this.fornecedorPrincipalId,
     required this.custo,
@@ -109,6 +120,7 @@ class ProdutoLoja {
     codigoInterno: map['codigo_interno'] as String?,
     codigoBarras: map['codigo_barras'] as String?,
     tipo: map['tipo'] as String,
+    tipoProduto: map['tipo_produto'] as String? ?? 'venda',
     modalidade: map['modalidade'] == 'consignado'
         ? ModalidadeProduto.consignado
         : ModalidadeProduto.proprio,
@@ -149,6 +161,7 @@ class ProdutoLoja {
     'codigo_interno': codigoInterno?.trim(),
     'codigo_barras': codigoBarras?.trim(),
     'tipo': tipo,
+    'tipo_produto': tipoProduto,
     'modalidade': modalidade.name,
     'fornecedor_principal_id': fornecedorPrincipalId,
     'custo_unitario': custo,

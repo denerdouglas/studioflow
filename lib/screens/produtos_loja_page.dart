@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../core/utils/id_generator.dart';
 import '../models/domain/acesso.dart';
 import '../models/domain/loja.dart';
+import '../models/domain/scanner_product_draft.dart';
 import '../repositories/loja_repository.dart';
 import '../services/product_lookup_service.dart';
 import '../services/session_controller.dart';
@@ -12,10 +13,15 @@ import 'estoque_page.dart';
 class ProdutosLojaPage extends StatefulWidget {
   final bool somenteBaixo;
   final ModalidadeProduto? modalidade;
+  final bool somenteUsoInterno;
+  final bool somenteAtivos;
+  
   const ProdutosLojaPage({
     super.key,
     this.somenteBaixo = false,
     this.modalidade,
+    this.somenteUsoInterno = false,
+    this.somenteAtivos = false,
   });
 
   @override
@@ -38,6 +44,8 @@ class _ProdutosLojaPageState extends State<ProdutosLojaPage> {
     pesquisa: _busca.text,
     somenteBaixo: widget.somenteBaixo,
     modalidade: widget.modalidade,
+    somenteUsoInterno: widget.somenteUsoInterno,
+    somenteAtivos: widget.somenteAtivos,
     incluirInativos: true,
   );
 
@@ -176,49 +184,86 @@ class _ProdutosLojaPageState extends State<ProdutosLojaPage> {
                     child: Text('Nenhum produto encontrado.'),
                   );
                 }
+                final categorias = <String, List<ProdutoLoja>>{};
+                for (final p in itens) {
+                  categorias.putIfAbsent(p.categoria, () => []).add(p);
+                }
+
+                final sortedCategories = categorias.keys.toList()..sort();
+
                 return RefreshIndicator(
                   onRefresh: () async => setState(_carregar),
                   child: ListView.builder(
                     padding: const EdgeInsets.only(bottom: 90),
-                    itemCount: itens.length,
+                    itemCount: sortedCategories.length,
                     itemBuilder: (context, i) {
-                      final p = itens[i];
-                      return Card(
-                        margin: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 5,
-                        ),
-                        color: p.estoqueBaixo ? Colors.orange.shade50 : null,
-                        child: ListTile(
-                          leading: CircleAvatar(
-                            child: Icon(
-                              p.modalidade == ModalidadeProduto.consignado
-                                  ? Icons.handshake
-                                  : Icons.shopping_bag,
+                      final cat = sortedCategories[i];
+                      final catItens = categorias[cat]!;
+
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
+                            child: Text(
+                              cat,
+                              style: Theme.of(context).textTheme.titleMedium
+                                  ?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.primary,
+                                  ),
                             ),
                           ),
-                          title: Text(p.nome),
-                          subtitle: Text(
-                            '${p.categoria} • ${p.quantidadeAtual.toStringAsFixed(2)} ${p.unidade}\nR\$ ${p.precoVenda.toStringAsFixed(2)}${p.ativo ? '' : ' • Inativo'}',
-                          ),
-                          isThreeLine: true,
-                          trailing: p.estoqueBaixo
-                              ? const Icon(
-                                  Icons.warning_amber,
-                                  color: Colors.orange,
-                                )
-                              : const Icon(Icons.chevron_right),
-                          onTap: () async {
-                            await Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) =>
-                                    ProdutoDetalhePage(produtoId: p.id),
+                          ...catItens.map(
+                            (p) => Card(
+                              margin: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 4,
                               ),
-                            );
-                            setState(_carregar);
-                          },
-                        ),
+                              color: p.estoqueBaixo
+                                  ? Colors.orange.shade50
+                                  : null,
+                              child: ListTile(
+                                leading: CircleAvatar(
+                                  child: Icon(
+                                    p.modalidade == ModalidadeProduto.consignado
+                                        ? Icons.handshake
+                                        : Icons.shopping_bag,
+                                  ),
+                                ),
+                                title: Text(
+                                  '${p.nome}${p.tipoProduto == 'uso_interno' ? ' (NÃO DESTINADO À VENDA)' : ''}${p.tipoProduto == 'ambos' ? ' (POSSUI SALDO COMERCIAL)' : ''}',
+                                  style: TextStyle(
+                                    color: p.tipoProduto == 'uso_interno' ? Colors.red : null,
+                                    fontWeight: p.tipoProduto == 'uso_interno' ? FontWeight.bold : null,
+                                  ),
+                                ),
+                                subtitle: Text(
+                                  '${p.quantidadeAtual.toStringAsFixed(2)} ${p.unidade}\nR\$ ${p.precoVenda.toStringAsFixed(2)}${p.ativo ? '' : '   Inativo'}',
+                                ),
+                                isThreeLine: true,
+                                trailing: p.estoqueBaixo
+                                    ? const Icon(
+                                        Icons.warning_amber,
+                                        color: Colors.orange,
+                                      )
+                                    : const Icon(Icons.chevron_right),
+                                onTap: () async {
+                                  await Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) =>
+                                          ProdutoDetalhePage(produtoId: p.id),
+                                    ),
+                                  );
+                                  setState(_carregar);
+                                },
+                              ),
+                            ),
+                          ),
+                        ],
                       );
                     },
                   ),
@@ -232,15 +277,20 @@ class _ProdutosLojaPageState extends State<ProdutosLojaPage> {
   }
 }
 
+
 class ProdutoFormPage extends StatefulWidget {
   final ProdutoLoja? produto;
   final String? codigoInicial;
+  final ScannerProductDraft? draftInicial;
+  final String? finalidadeInicial;
   final CatalogProduct? catalogProduct;
   final bool productNotFound;
   const ProdutoFormPage({
     super.key,
     this.produto,
     this.codigoInicial,
+    this.draftInicial,
+    this.finalidadeInicial,
     this.catalogProduct,
     this.productNotFound = false,
   });
@@ -272,19 +322,19 @@ class _ProdutoFormPageState extends State<ProdutoFormPage> {
     modalidade = p?.modalidade ?? ModalidadeProduto.proprio;
     ativo = p?.ativo ?? true;
     revisaoModelagemEstoque = p?.revisaoModelagemEstoque ?? false;
-    _c('nome', p?.nome ?? catalog?.name ?? '');
-    _c('descricao', p?.descricao ?? catalog?.description ?? '');
-    _c('categoria', p?.categoria ?? catalog?.category ?? 'Cosméticos');
-    _c('marca', p?.marca ?? catalog?.brand ?? '');
+    _c('nome', widget.produto?.nome ?? widget.catalogProduct?.name ?? widget.draftInicial?.nome?.value ?? '');
+    _c('descricao', widget.produto?.descricao ?? widget.catalogProduct?.description ?? widget.draftInicial?.descricao?.value ?? '');
+    _c('categoria', widget.produto?.categoria ?? widget.catalogProduct?.category ?? widget.draftInicial?.categoriaSugerida?.value ?? 'Cosméticos');
+    _c('marca', widget.produto?.marca ?? widget.catalogProduct?.brand ?? widget.draftInicial?.marca?.value ?? '');
     _c('interno', p?.codigoInterno ?? '');
-    _c('barras', p?.codigoBarras ?? widget.codigoInicial ?? '');
+    _c('barras', p?.codigoBarras ?? widget.codigoInicial ?? widget.catalogProduct?.gtin ?? widget.draftInicial?.gtin?.value ?? '');
     _c('tipo', p?.tipo ?? 'produto');
     _c('custo', p?.custo.toStringAsFixed(2) ?? '0');
     _c('preco', p?.precoVenda.toStringAsFixed(2) ?? '0');
     _c('quantidade', p?.quantidadeAtual.toString() ?? '0');
     _c('minimo', p?.estoqueMinimo.toString() ?? '0');
     _c('sugerida', p?.quantidadeSugerida.toString() ?? '0');
-    _c('unidade', p?.unidade ?? catalog?.physicalUnit ?? 'un');
+    _c('unidade', p?.unidade ?? catalog?.physicalUnit ?? widget.draftInicial?.unidade?.value ?? 'un');
     _c(
       'conteudo',
       p?.conteudoPorUnidade.toString() ??
@@ -398,6 +448,7 @@ class _ProdutoFormPageState extends State<ProdutoFormPage> {
         id: widget.produto?.id ?? IdGenerator.temporal(),
         comercioId: SessionController.instance.usuario!.comercioId,
         nome: _c('nome').text,
+        tipoProduto: widget.produto?.tipoProduto ?? 'venda',
         descricao: _c('descricao').text,
         categoria: _c('categoria').text,
         marca: _c('marca').text,

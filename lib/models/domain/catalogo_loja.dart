@@ -1,39 +1,54 @@
 enum TipoControleCatalogo {
-  produtoComum,
-  produtoConsignado,
-  itemIndividual,
-  alimentoBebida,
-  produtoValidade,
-  consumivel,
-  outro,
+  cosmeticos,
+  bebidas,
+  comidas,
+  doces,
+  cafes,
+  joias,
+  acessorios,
+  kits,
+  cortesias,
+  outros,
 }
 
 extension TipoControleCatalogoDados on TipoControleCatalogo {
   String get chave => switch (this) {
-    TipoControleCatalogo.produtoComum => 'produto_comum',
-    TipoControleCatalogo.produtoConsignado => 'produto_consignado',
-    TipoControleCatalogo.itemIndividual => 'item_individual',
-    TipoControleCatalogo.alimentoBebida => 'alimento_bebida',
-    TipoControleCatalogo.produtoValidade => 'produto_validade',
-    TipoControleCatalogo.consumivel => 'consumivel',
-    TipoControleCatalogo.outro => 'outro',
+    TipoControleCatalogo.cosmeticos => 'cosmeticos',
+    TipoControleCatalogo.bebidas => 'bebidas',
+    TipoControleCatalogo.comidas => 'comidas',
+    TipoControleCatalogo.doces => 'doces',
+    TipoControleCatalogo.cafes => 'cafes',
+    TipoControleCatalogo.joias => 'joias',
+    TipoControleCatalogo.acessorios => 'acessorios',
+    TipoControleCatalogo.kits => 'kits',
+    TipoControleCatalogo.cortesias => 'cortesias',
+    TipoControleCatalogo.outros => 'outros',
   };
 
   String get nome => switch (this) {
-    TipoControleCatalogo.produtoComum => 'Produto comum',
-    TipoControleCatalogo.produtoConsignado => 'Produto consignado',
-    TipoControleCatalogo.itemIndividual => 'Item individual com código único',
-    TipoControleCatalogo.alimentoBebida => 'Alimento/bebida',
-    TipoControleCatalogo.produtoValidade => 'Produto com validade',
-    TipoControleCatalogo.consumivel => 'Consumível',
-    TipoControleCatalogo.outro => 'Outro',
+    TipoControleCatalogo.cosmeticos => 'Cosméticos',
+    TipoControleCatalogo.bebidas => 'Bebidas',
+    TipoControleCatalogo.comidas => 'Comidas',
+    TipoControleCatalogo.doces => 'Doces',
+    TipoControleCatalogo.cafes => 'Cafés',
+    TipoControleCatalogo.joias => 'Joias',
+    TipoControleCatalogo.acessorios => 'Acessórios',
+    TipoControleCatalogo.kits => 'Kits',
+    TipoControleCatalogo.cortesias => 'Cortesias',
+    TipoControleCatalogo.outros => 'Outros',
   };
 
+  static TipoControleCatalogo? fromChave(String? chave) {
+    if (chave == null) return null;
+    if (chave == 'produto_comum') return TipoControleCatalogo.outros;
+    if (chave == 'alimento_bebida') return TipoControleCatalogo.comidas;
+    if (chave == 'outro') return TipoControleCatalogo.outros;
+    
+    return TipoControleCatalogo.values.where((e) => e.chave == chave).firstOrNull;
+  }
+
   static TipoControleCatalogo pelaChave(String? value) =>
-      TipoControleCatalogo.values.firstWhere(
-        (item) => item.chave == value,
-        orElse: () => TipoControleCatalogo.produtoComum,
-      );
+      fromChave(value) ?? TipoControleCatalogo.outros;
 }
 
 class CatalogoLoja {

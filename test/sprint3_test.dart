@@ -326,6 +326,7 @@ ProdutoLoja _produto(
     id: id,
     comercioId: dono.comercioId,
     nome: 'Produto $id',
+    tipoProduto: 'venda',
     categoria: 'Cosméticos',
     tipo: 'produto',
     modalidade: ModalidadeProduto.proprio,
@@ -350,3 +351,4 @@ FornecedorLoja _fornecedor(UsuarioAcesso dono, String id) => FornecedorLoja(
   prazoDias: 3,
   entrega: true,
 );
+

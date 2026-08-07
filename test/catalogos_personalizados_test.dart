@@ -67,7 +67,7 @@ void main() {
   test('cria, edita, ordena, inativa e exclui catálogo vazio', () async {
     final id = await catalogos.criar(
       nome: 'Cafeteria',
-      tipoControle: TipoControleCatalogo.alimentoBebida,
+      tipoControle: TipoControleCatalogo.comidas,
     );
     var catalogo = (await catalogos.listar()).single;
     expect(catalogo.nome, 'Cafeteria');
@@ -82,7 +82,7 @@ void main() {
   test('produtos dinâmicos, duplicação e proteção do histórico', () async {
     final catalogoId = await catalogos.criar(
       nome: 'Bebidas',
-      tipoControle: TipoControleCatalogo.alimentoBebida,
+      tipoControle: TipoControleCatalogo.comidas,
     );
     final produtoId = await catalogos.adicionarProduto(
       catalogoId: catalogoId,
@@ -108,7 +108,7 @@ void main() {
   test('item individual exige código único e cria peça rastreável', () async {
     final id = await catalogos.criar(
       nome: 'Joias',
-      tipoControle: TipoControleCatalogo.itemIndividual,
+      tipoControle: TipoControleCatalogo.outros,
     );
     await expectLater(
       catalogos.adicionarProduto(
@@ -140,11 +140,11 @@ void main() {
   test('uma comanda combina produtos de catálogos diferentes', () async {
     final bebidas = await catalogos.criar(
       nome: 'Bebidas',
-      tipoControle: TipoControleCatalogo.alimentoBebida,
+      tipoControle: TipoControleCatalogo.comidas,
     );
     final joias = await catalogos.criar(
       nome: 'Joias',
-      tipoControle: TipoControleCatalogo.produtoConsignado,
+      tipoControle: TipoControleCatalogo.outros,
     );
     final coca = await catalogos.adicionarProduto(
       catalogoId: bebidas,
@@ -228,3 +228,4 @@ UsuarioAcesso _owner() => UsuarioAcesso(
   permissoes: ModuloPermissao.values.toSet(),
   acoes: AcaoPermissao.values.toSet(),
 );
+

@@ -2,6 +2,7 @@ import 'package:sqflite/sqflite.dart';
 
 import '../database/database_service.dart';
 import '../models/domain/acesso.dart';
+import '../core/enums/tipo_movimento.dart';
 import '../services/product_catalog_contribution_service.dart';
 import '../services/session_controller.dart';
 
@@ -24,6 +25,7 @@ class ItemEstoqueRegistro {
   final bool descontarAutomaticamente;
   final String observacoes;
   final DateTime dataCadastro;
+  final String tipoProduto; // venda, uso_interno, ambos, ativo_imobilizado
 
   const ItemEstoqueRegistro({
     required this.id,
@@ -44,6 +46,7 @@ class ItemEstoqueRegistro {
     required this.descontarAutomaticamente,
     required this.observacoes,
     required this.dataCadastro,
+    this.tipoProduto = 'uso_interno',
   });
 
   bool get estoqueBaixo {
@@ -90,6 +93,7 @@ class ItemEstoqueRegistro {
       'descontar_automaticamente': descontarAutomaticamente ? 1 : 0,
       'observacoes': observacoes,
       'data_cadastro': dataCadastro.toIso8601String(),
+      'tipo_produto': tipoProduto,
     };
   }
 
@@ -118,6 +122,7 @@ class ItemEstoqueRegistro {
       dataCadastro:
           DateTime.tryParse(mapa['data_cadastro'] as String? ?? '') ??
           DateTime.now(),
+      tipoProduto: mapa['tipo_produto'] as String? ?? 'uso_interno',
     );
   }
 
@@ -163,6 +168,7 @@ class ItemEstoqueRegistro {
           descontarAutomaticamente ?? this.descontarAutomaticamente,
       observacoes: observacoes ?? this.observacoes,
       dataCadastro: dataCadastro,
+      tipoProduto: tipoProduto,
     );
   }
 }
@@ -291,14 +297,17 @@ class EstoqueRepository {
   }) async {
     final Database db = await _databaseService.database;
 
-    final registros = await db.query(
-      'estoque',
-      where: incluirInativos
-          ? "comercio_id = ? AND estoque_destino = 'salao'"
-          : "ativo = ? AND comercio_id = ? AND estoque_destino = 'salao'",
-      whereArgs: incluirInativos ? [_comercioId] : [1, _comercioId],
-      orderBy: 'ativo DESC, nome COLLATE NOCASE ASC',
-    );
+    final query = '''
+      SELECT e.*, COALESCE(s.quantidade_atual, e.quantidade_atual) as quantidade_atual, COALESCE(s.estoque_minimo, e.estoque_minimo) as estoque_minimo
+      FROM estoque e
+      LEFT JOIN estoque_saldos s ON e.id = s.estoque_id AND s.finalidade = 'uso_interno'
+      WHERE e.comercio_id = ?
+      AND (e.tipo_produto = 'uso_interno' OR e.tipo_produto = 'ambos' OR e.estoque_destino = 'salao')
+      \${incluirInativos ? "" : "AND e.ativo = 1"}
+      ORDER BY e.ativo DESC, e.nome COLLATE NOCASE ASC
+    ''';
+
+    final registros = await db.rawQuery(query, [_comercioId]);
 
     return registros
         .map(ItemEstoqueRegistro.doMapa)
@@ -309,17 +318,18 @@ class EstoqueRepository {
   Future<List<ItemEstoqueRegistro>> listarEstoqueBaixo() async {
     final Database db = await _databaseService.database;
 
-    final registros = await db.query(
-      'estoque',
-      where: '''
-        ativo = ?
-        AND quantidade_atual <= estoque_minimo
-        AND comercio_id = ?
-        AND estoque_destino = 'salao'
-      ''',
-      whereArgs: [1, _comercioId],
-      orderBy: 'quantidade_atual ASC',
-    );
+    final query = '''
+      SELECT e.*, COALESCE(s.quantidade_atual, e.quantidade_atual) as quantidade_atual, COALESCE(s.estoque_minimo, e.estoque_minimo) as estoque_minimo
+      FROM estoque e
+      LEFT JOIN estoque_saldos s ON e.id = s.estoque_id AND s.finalidade = 'uso_interno'
+      WHERE e.ativo = 1
+      AND e.comercio_id = ?
+      AND (e.tipo_produto = 'uso_interno' OR e.tipo_produto = 'ambos' OR e.estoque_destino = 'salao')
+      AND COALESCE(s.quantidade_atual, e.quantidade_atual) <= COALESCE(s.estoque_minimo, e.estoque_minimo)
+      ORDER BY quantidade_atual ASC
+    ''';
+
+    final registros = await db.rawQuery(query, [_comercioId]);
 
     return registros
         .map(ItemEstoqueRegistro.doMapa)
@@ -330,12 +340,16 @@ class EstoqueRepository {
   Future<ItemEstoqueRegistro?> buscarPorId(String id) async {
     final Database db = await _databaseService.database;
 
-    final registros = await db.query(
-      'estoque',
-      where: "id = ? AND comercio_id = ? AND estoque_destino = 'salao'",
-      whereArgs: [id, _comercioId],
-      limit: 1,
-    );
+    final query = '''
+      SELECT e.*, COALESCE(s.quantidade_atual, e.quantidade_atual) as quantidade_atual, COALESCE(s.estoque_minimo, e.estoque_minimo) as estoque_minimo
+      FROM estoque e
+      LEFT JOIN estoque_saldos s ON e.id = s.estoque_id AND s.finalidade = 'uso_interno'
+      WHERE e.id = ? AND e.comercio_id = ?
+      AND (e.tipo_produto = 'uso_interno' OR e.tipo_produto = 'ambos' OR e.estoque_destino = 'salao')
+      LIMIT 1
+    ''';
+
+    final registros = await db.rawQuery(query, [id, _comercioId]);
 
     if (registros.isEmpty) {
       return null;
@@ -351,11 +365,42 @@ class EstoqueRepository {
     final user = SessionController.instance.usuario!;
     await db.transaction((txn) async {
       await txn.insert('estoque', {
-        ...item.paraMapa(),
+        ...item.paraMapa()
+          ..remove('quantidade_atual')
+          ..remove('estoque_minimo'),
         'comercio_id': _comercioId,
         'estoque_destino': 'salao',
         'origem_catalogo': 'manual',
+        'tipo_produto': item.tipoProduto,
       }, conflictAlgorithm: ConflictAlgorithm.abort);
+
+      final agora = DateTime.now().toUtc().toIso8601String();
+      await txn.insert('estoque_saldos', {
+        'id': DateTime.now().microsecondsSinceEpoch
+            .toString(), // Simplified ID generation
+        'business_id': _comercioId,
+        'estoque_id': item.id,
+        'finalidade': 'uso_interno',
+        'quantidade_atual': item.quantidadeAtual,
+        'estoque_minimo': item.estoqueMinimo,
+        'created_at': agora,
+        'updated_at': agora,
+      });
+
+      if (item.tipoProduto == 'ambos') {
+        await txn.insert('estoque_saldos', {
+          'id': (DateTime.now().microsecondsSinceEpoch + 1).toString(),
+          'business_id': _comercioId,
+          'estoque_id': item.id,
+          'finalidade': 'venda',
+          'quantidade_atual':
+              item.quantidadeAtual, // Or 0 based on rules, keeping same for now
+          'estoque_minimo': item.estoqueMinimo,
+          'created_at': agora,
+          'updated_at': agora,
+        });
+      }
+
       await ProductCatalogContributionService.enqueue(
         txn,
         user: user,
@@ -371,10 +416,26 @@ class EstoqueRepository {
     _exigirAcao(AcaoPermissao.editarProduto);
     final Database db = await _databaseService.database;
 
+    final updateMap = item.paraMapa()
+      ..remove('quantidade_atual')
+      ..remove('estoque_minimo');
+
     final quantidadeAlterada = await db.update(
       'estoque',
-      item.paraMapa(),
-      where: "id = ? AND comercio_id = ? AND estoque_destino = 'salao'",
+      updateMap,
+      where: "id = ? AND comercio_id = ?",
+      whereArgs: [item.id, _comercioId],
+    );
+
+    await db.update(
+      'estoque_saldos',
+      {
+        'quantidade_atual': item.quantidadeAtual,
+        'estoque_minimo': item.estoqueMinimo,
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      },
+      where:
+          "estoque_id = ? AND business_id = ? AND finalidade = 'uso_interno'",
       whereArgs: [item.id, _comercioId],
     );
 
@@ -416,7 +477,7 @@ class EstoqueRepository {
 
   Future<void> registrarMovimentacao({
     required String itemId,
-    required String tipo,
+    required TipoMovimento tipo,
     required double quantidade,
     required String motivo,
     String? agendamentoId,
@@ -448,33 +509,43 @@ class EstoqueRepository {
 
       double quantidadePosterior;
 
-      if (tipo == 'entrada') {
+      if (tipo == TipoMovimento.entrada) {
         quantidadePosterior = quantidadeAnterior + quantidade;
-      } else if (tipo == 'saida') {
+      } else if (tipo == TipoMovimento.ajuste) {
+        quantidadePosterior = quantidade;
+      } else {
         quantidadePosterior = quantidadeAnterior - quantidade;
 
         if (quantidadePosterior < 0) {
           throw StateError('A saída é maior que a quantidade disponível.');
         }
-      } else if (tipo == 'ajuste') {
-        quantidadePosterior = quantidade;
-      } else {
-        throw StateError('Tipo de movimentação inválido.');
       }
 
       final agora = DateTime.now();
 
       await transaction.update(
+        'estoque_saldos',
+        {
+          'quantidade_atual': quantidadePosterior,
+          'updated_at': agora.toUtc().toIso8601String(),
+        },
+        where:
+            "estoque_id = ? AND business_id = ? AND finalidade = 'uso_interno'",
+        whereArgs: [itemId, _comercioId],
+      );
+
+      // Fallback update para manter compatibilidade com sistemas legados se a row de saldo ainda não existir
+      await transaction.update(
         'estoque',
         {'quantidade_atual': quantidadePosterior},
-        where: "id = ? AND comercio_id = ? AND estoque_destino = 'salao'",
+        where: "id = ? AND comercio_id = ?",
         whereArgs: [itemId, _comercioId],
       );
 
       final movimentacao = MovimentacaoEstoqueRegistro(
         id: agora.microsecondsSinceEpoch.toString(),
         itemEstoqueId: itemId,
-        tipo: tipo,
+        tipo: tipo.chave,
         quantidade: quantidade,
         quantidadeAnterior: quantidadeAnterior,
         quantidadePosterior: quantidadePosterior,
@@ -499,7 +570,7 @@ class EstoqueRepository {
   }) async {
     await registrarMovimentacao(
       itemId: itemId,
-      tipo: 'entrada',
+      tipo: TipoMovimento.entrada,
       quantidade: quantidade,
       motivo: motivo,
     );
@@ -514,7 +585,7 @@ class EstoqueRepository {
   }) async {
     await registrarMovimentacao(
       itemId: itemId,
-      tipo: 'saida',
+      tipo: TipoMovimento.saidaManual,
       quantidade: quantidade,
       motivo: motivo,
       agendamentoId: agendamentoId,
@@ -529,7 +600,7 @@ class EstoqueRepository {
   }) async {
     await registrarMovimentacao(
       itemId: itemId,
-      tipo: 'ajuste',
+      tipo: TipoMovimento.ajuste,
       quantidade: novaQuantidade,
       motivo: motivo,
     );

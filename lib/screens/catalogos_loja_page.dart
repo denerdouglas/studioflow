@@ -45,7 +45,7 @@ class _CatalogosLojaPageState extends State<CatalogosLojaPage> {
     final description = TextEditingController(text: current?.descricao);
     final cover = TextEditingController(text: current?.imagemCapa);
     var icon = current?.icone ?? 'storefront';
-    var type = current?.tipoControle ?? TipoControleCatalogo.produtoComum;
+    var type = current?.tipoControle ?? TipoControleCatalogo.outros;
     var active = current?.ativo ?? true;
     String? unitId =
         current?.unidadeId ??
@@ -485,8 +485,7 @@ class _CatalogoProdutosPageState extends State<CatalogoProdutosPage> {
                 keyboardType: TextInputType.number,
                 decoration: const InputDecoration(labelText: 'Estoque mínimo'),
               ),
-              if (widget.catalog.tipoControle ==
-                  TipoControleCatalogo.produtoConsignado) ...[
+              if (widget.catalog.tipoControle == TipoControleCatalogo.outros) ...[
                 TextField(
                   controller: supplier,
                   decoration: const InputDecoration(labelText: 'Fornecedor'),
@@ -497,8 +496,8 @@ class _CatalogoProdutosPageState extends State<CatalogoProdutosPage> {
                 ),
               ],
               if ({
-                TipoControleCatalogo.alimentoBebida,
-                TipoControleCatalogo.produtoValidade,
+                TipoControleCatalogo.comidas,
+                TipoControleCatalogo.bebidas,
               }.contains(widget.catalog.tipoControle)) ...[
                 TextField(
                   controller: lot,

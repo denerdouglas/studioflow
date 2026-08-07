@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/domain/acesso.dart';
 import '../models/domain/loja.dart';
+import '../models/domain/scanner_product_draft.dart';
 import '../repositories/loja_repository.dart';
 import '../services/session_controller.dart';
 import 'vision_scanner_page.dart';
@@ -21,37 +22,34 @@ class LojaSalaoPage extends StatefulWidget {
 }
 
 class _LojaSalaoPageState extends State<LojaSalaoPage> {
-  Future<void> abrir(Widget page) =>
-      Navigator.push(context, MaterialPageRoute(builder: (_) => page));
+  Future<void> abrir(Widget page) async {
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => page));
+    if (mounted) setState(() {}); // Força rebuild caso algum item precise
+  }
 
   Future<void> scanner() async {
-    final codigo = await Navigator.push<String>(
+    final result = await Navigator.push<Map<String, dynamic>>(
       context,
       MaterialPageRoute(builder: (_) => const VisionScannerPage()),
     );
-    if (!mounted || codigo == null) return;
+    if (!mounted || result == null) return;
+    
     try {
+      final ScannerProductDraft draft = result['draft'];
+      final String finalidade = result['finalidade'];
+      
+      final String? codigo = draft.gtin?.value;
+      if (codigo == null || codigo.isEmpty) {
+        // Criar produto totalmente manual baseado no draft
+        await abrir(ProdutoFormPage(draftInicial: draft, finalidadeInicial: finalidade));
+        return;
+      }
+
       final produto = await LojaRepository().buscarCodigo(codigo);
       if (!mounted) return;
       if (produto == null) {
-        final novo = await showDialog<bool>(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('Produto não encontrado'),
-            content: Text('O código $codigo ainda não está cadastrado.'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('Cancelar'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: const Text('Cadastrar'),
-              ),
-            ],
-          ),
-        );
-        if (novo == true) await abrir(ProdutoFormPage(codigoInicial: codigo));
+        // Criar produto novo
+        await abrir(ProdutoFormPage(codigoInicial: codigo, draftInicial: draft, finalidadeInicial: finalidade));
       } else {
         await abrir(ProdutoDetalhePage(produtoId: produto.id));
       }
@@ -64,206 +62,93 @@ class _LojaSalaoPageState extends State<LojaSalaoPage> {
     }
   }
 
+  Widget _buildGroupTitle(String title) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
+      child: Text(
+        title,
+        style: TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.bold,
+          color: Theme.of(context).colorScheme.primary,
+          letterSpacing: 1.2,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildItem(String titulo, String subtitulo, IconData icone, AcaoPermissao permissao, VoidCallback acao) {
+    if (!SessionController.instance.usuario!.podeAcao(permissao)) {
+      return const SizedBox.shrink();
+    }
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      child: ListTile(
+        leading: Icon(icone, color: Theme.of(context).colorScheme.primary),
+        title: Text(titulo),
+        subtitle: Text(subtitulo),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: acao,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final itens =
-        <
-          ({
-            String titulo,
-            String subtitulo,
-            IconData icone,
-            AcaoPermissao permissao,
-            VoidCallback acao,
-          })
-        >[
-          (
-            titulo: 'Criar catálogo',
-            subtitulo: 'Monte seus próprios catálogos, tipos e produtos',
-            icone: Icons.add_business_outlined,
-            permissao: AcaoPermissao.movimentarEstoque,
-            acao: () => abrir(const CatalogosLojaPage(abrirCriacao: true)),
-          ),
-          (
-            titulo: 'Catálogos',
-            subtitulo:
-                'Joias, bebidas, cosméticos ou qualquer catálogo personalizado',
-            icone: Icons.storefront_outlined,
-            permissao: AcaoPermissao.visualizarEstoque,
-            acao: () => abrir(const CatalogosLojaPage()),
-          ),
-          (
-            titulo: 'Gerar comanda',
-            subtitulo:
-                'Combine produtos de vários catálogos em uma única comanda',
-            icone: Icons.post_add_outlined,
-            permissao: AcaoPermissao.realizarVenda,
-            acao: () => abrir(const ComandasLojaPage()),
-          ),
-          (
-            titulo: 'Joias consignadas',
-            subtitulo: 'Maletas, lotes, peças, vendas e devoluções',
-            icone: Icons.diamond_outlined,
-            permissao: AcaoPermissao.acessarConsignacao,
-            acao: () => abrir(const JoiasConsignadasPage()),
-          ),
-          (
-            titulo: 'Produtos',
-            subtitulo: 'Cadastro, pesquisa, detalhes e histórico',
-            icone: Icons.inventory_2_outlined,
-            permissao: AcaoPermissao.visualizarEstoque,
-            acao: () => abrir(const ProdutosLojaPage()),
-          ),
-          (
-            titulo: 'Produtos e fornecedores',
-            subtitulo: 'Preços, embalagens, prazos e fornecedores alternativos',
-            icone: Icons.add_link,
-            permissao: AcaoPermissao.cadastrarFornecedor,
-            acao: () => abrir(const ProdutoFornecedoresPage()),
-          ),
-          (
-            titulo: 'Ler código de barras',
-            subtitulo: 'Localizar ou cadastrar rapidamente',
-            icone: Icons.barcode_reader,
-            permissao: AcaoPermissao.visualizarEstoque,
-            acao: scanner,
-          ),
-          (
-            titulo: 'Nova venda',
-            subtitulo: 'Carrinho, desconto, pagamento e baixa',
-            icone: Icons.point_of_sale,
-            permissao: AcaoPermissao.realizarVenda,
-            acao: () => abrir(const VendasLojaPage()),
-          ),
-          (
-            titulo: 'Comandas',
-            subtitulo: 'Cliente, itens, pagamentos e finalização',
-            icone: Icons.receipt_long,
-            permissao: AcaoPermissao.realizarVenda,
-            acao: () => abrir(const ComandasLojaPage()),
-          ),
-          (
-            titulo: 'Contas a receber',
-            subtitulo: 'Pendentes, vencidas e recebimentos parciais',
-            icone: Icons.account_balance_wallet_outlined,
-            permissao: AcaoPermissao.acessarFinanceiro,
-            acao: () => abrir(const ContasReceberPage()),
-          ),
-          (
-            titulo: 'Histórico de vendas',
-            subtitulo: 'Resumo, cancelamento e estorno',
-            icone: Icons.receipt_long_outlined,
-            permissao: AcaoPermissao.realizarVenda,
-            acao: () => abrir(const HistoricoVendasPage()),
-          ),
-          (
-            titulo: 'Estoque baixo',
-            subtitulo: 'Alertas e quantidade sugerida',
-            icone: Icons.warning_amber,
-            permissao: AcaoPermissao.visualizarEstoque,
-            acao: () => abrir(const ProdutosLojaPage(somenteBaixo: true)),
-          ),
-          (
-            titulo: 'Movimentações',
-            subtitulo: 'Entradas, saídas, ajustes e perdas',
-            icone: Icons.swap_vert,
-            permissao: AcaoPermissao.movimentarEstoque,
-            acao: () => abrir(const ProdutosLojaPage()),
-          ),
-          (
-            titulo: 'Produtos consignados',
-            subtitulo: 'Itens próprios de terceiros',
-            icone: Icons.handshake_outlined,
-            permissao: AcaoPermissao.acessarConsignacao,
-            acao: () => abrir(
-              const ProdutosLojaPage(modalidade: ModalidadeProduto.consignado),
-            ),
-          ),
-          (
-            titulo: 'Consignações',
-            subtitulo: 'Lotes, peças únicas, vendas e fechamento',
-            icone: Icons.assignment_turned_in_outlined,
-            permissao: AcaoPermissao.acessarConsignacao,
-            acao: () => abrir(const JoiasConsignadasPage()),
-          ),
-          (
-            titulo: 'Fornecedores',
-            subtitulo: 'Cadastro e condições comerciais',
-            icone: Icons.local_shipping_outlined,
-            permissao: AcaoPermissao.cadastrarFornecedor,
-            acao: () => abrir(const FornecedoresPage()),
-          ),
-          (
-            titulo: 'Central de Reposição',
-            subtitulo: 'Baixo estoque, aprovação e pedidos',
-            icone: Icons.playlist_add_check_circle_outlined,
-            permissao: AcaoPermissao.criarPedido,
-            acao: () => abrir(const CentralReposicaoCompletaPage()),
-          ),
-          (
-            titulo: 'Comparador de Reposição',
-            subtitulo: 'Ofertas salvas e pesquisas externas',
-            icone: Icons.compare_arrows,
-            permissao: AcaoPermissao.visualizarEstoque,
-            acao: () => abrir(const ComparadorReposicaoPage()),
-          ),
-          (
-            titulo: 'Ordens de compra',
-            subtitulo: 'Aprovação, conferência e recebimento',
-            icone: Icons.shopping_cart_checkout,
-            permissao: AcaoPermissao.criarPedido,
-            acao: () => abrir(const OrdensCompraPage()),
-          ),
-        ];
     return Scaffold(
       appBar: AppBar(title: const Text('Loja do Salão')),
       body: ListView(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.only(bottom: 24),
         children: [
-          Card(
-            color: Theme.of(context).colorScheme.primaryContainer,
-            child: const Padding(
-              padding: EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Venda e reposição em um só fluxo',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                  SizedBox(height: 4),
-                  Text(
-                    'Produto → estoque → alerta → comparação → ordem → recebimento.',
-                  ),
-                ],
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Card(
+              color: Theme.of(context).colorScheme.primaryContainer,
+              child: const Padding(
+                padding: EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Venda e reposição em um só fluxo',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                    SizedBox(height: 4),
+                    Text('Produto → estoque → alerta → comparação → ordem → recebimento.'),
+                  ],
+                ),
               ),
             ),
           ),
-          ...itens
-              .where(
-                (item) => SessionController.instance.usuario!.podeAcao(
-                  item.permissao,
-                ),
-              )
-              .map(
-                (item) => Card(
-                  child: ListTile(
-                    leading: Icon(
-                      item.icone,
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
-                    title: Text(item.titulo),
-                    subtitle: Text(item.subtitulo),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: item.acao,
-                  ),
-                ),
-              ),
-          const Card(
-            child: ListTile(
-              leading: Icon(Icons.info_outline),
-              title: Text('Marketplaces externos'),
-              subtitle: Text(
-                'A compra é concluída no Mercado Livre, Shopee ou fornecedor. O StudioFlow não armazena senhas nem executa compra automática.',
+          
+          _buildGroupTitle('PRODUTOS E CATÁLOGOS'),
+          _buildItem('Catálogos', 'Agrupe produtos para facilitar a venda', Icons.storefront_outlined, AcaoPermissao.visualizarEstoque, () => abrir(const CatalogosLojaPage())),
+          _buildItem('Produtos à venda', 'Cadastro, pesquisa e detalhes', Icons.inventory_2_outlined, AcaoPermissao.visualizarEstoque, () => abrir(const ProdutosLojaPage())),
+          _buildItem('Ler produto', 'Localizar ou cadastrar rapidamente', Icons.barcode_reader, AcaoPermissao.visualizarEstoque, scanner),
+
+          _buildGroupTitle('VENDAS'),
+          _buildItem('Nova venda', 'Carrinho, desconto e pagamento', Icons.point_of_sale, AcaoPermissao.realizarVenda, () => abrir(const VendasLojaPage())),
+          _buildItem('Comandas', 'Venda em andamento', Icons.receipt_long, AcaoPermissao.realizarVenda, () => abrir(const ComandasLojaPage())),
+          _buildItem('Contas a receber', 'Pendentes e vencidas', Icons.account_balance_wallet_outlined, AcaoPermissao.acessarFinanceiro, () => abrir(const ContasReceberPage())),
+          _buildItem('Histórico de vendas', 'Resumo e estorno', Icons.receipt_long_outlined, AcaoPermissao.realizarVenda, () => abrir(const HistoricoVendasPage())),
+
+          _buildGroupTitle('CONSIGNAÇÃO'),
+          _buildItem('Produtos consignados', 'Itens próprios de terceiros', Icons.handshake_outlined, AcaoPermissao.acessarConsignacao, () => abrir(const ProdutosLojaPage(modalidade: ModalidadeProduto.consignado))),
+          _buildItem('Lotes e acertos', 'Maletas e devoluções', Icons.assignment_turned_in_outlined, AcaoPermissao.acessarConsignacao, () => abrir(const JoiasConsignadasPage())),
+
+          _buildGroupTitle('REPOSIÇÃO'),
+          _buildItem('Fornecedores', 'Cadastro e condições', Icons.local_shipping_outlined, AcaoPermissao.cadastrarFornecedor, () => abrir(const FornecedoresPage())),
+          _buildItem('Estoque baixo', 'Alertas de quantidade', Icons.warning_amber, AcaoPermissao.visualizarEstoque, () => abrir(const ProdutosLojaPage(somenteBaixo: true))),
+          _buildItem('Ordens de compra', 'Aprovação e recebimento', Icons.shopping_cart_checkout, AcaoPermissao.criarPedido, () => abrir(const OrdensCompraPage())),
+          _buildItem('Comparador de reposição', 'Ofertas salvas', Icons.compare_arrows, AcaoPermissao.visualizarEstoque, () => abrir(const ComparadorReposicaoPage())),
+
+          const Padding(
+            padding: EdgeInsets.all(12),
+            child: Card(
+              child: ListTile(
+                leading: Icon(Icons.info_outline),
+                title: Text('Marketplaces externos'),
+                subtitle: Text('A compra é concluída externamente. O StudioFlow não armazena senhas nem executa compra automática.'),
               ),
             ),
           ),
