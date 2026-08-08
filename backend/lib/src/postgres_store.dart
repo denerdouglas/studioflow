@@ -793,6 +793,34 @@ final class PostgresBackendStore
         checks['link_ok'] != true) {
       throw StateError('Serviço, profissional ou unidade indisponível.');
     }
+    final serviceRows = await tx.execute(
+      Sql.named('''
+        SELECT payload
+        FROM sync_records
+        WHERE business_id=@businessId
+          AND entity='servicos'
+          AND entity_id=@serviceId
+          AND deleted=FALSE
+        LIMIT 1
+      '''),
+      parameters: {'businessId': businessId, 'serviceId': serviceId},
+    );
+
+    final rawServicePayload = serviceRows.single.toColumnMap()['payload'];
+    final servicePayload = Map<String, Object?>.from(
+      rawServicePayload is Map
+          ? rawServicePayload
+          : jsonDecode(rawServicePayload.toString()) as Map,
+    );
+
+    final rawPreco = servicePayload['preco'];
+    final valorServico = rawPreco is num
+        ? rawPreco.toDouble()
+        : double.tryParse(rawPreco?.toString().replaceAll(',', '.') ?? '') ??
+              0.0;
+
+    final agora = DateTime.now().toUtc().toIso8601String();
+
     final conflict = await tx.execute(
       Sql.named('''
       SELECT 1 FROM (
@@ -848,6 +876,7 @@ final class PostgresBackendStore
       appointmentId,
       {
         'id': appointmentId,
+        'business_id': businessId,
         'comercio_id': businessId,
         'unidade_id': unitId,
         'cliente_id': clientId,
@@ -857,7 +886,18 @@ final class PostgresBackendStore
         'fim': endsAt.toUtc().toIso8601String(),
         'origem': 'agendamento_publico',
         'status': 'agendado',
-        'observacoes': notes,
+        'forma_pagamento': null,
+        'valor_servico': valorServico,
+        'desconto': 0.0,
+        'valor_recebido': 0.0,
+        'confirmado': 0,
+        'compareceu': 0,
+        'observacoes': notes ?? '',
+        'data_criacao': agora,
+        'created_at': agora,
+        'updated_at': agora,
+        'encaixe': 0,
+        'estoque_consumido': 0,
         'excluido': 0,
       },
     );
