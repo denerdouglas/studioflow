@@ -326,6 +326,7 @@ class AgendaRepository {
         ...agendamento.paraMapa(),
         'consumo_previsto_json': consumoPrevisto,
         'comercio_id': _comercioId,
+        'business_id': _comercioId,
         'created_at': DateTime.now().toIso8601String(),
         'updated_at': DateTime.now().toIso8601String(),
       }, conflictAlgorithm: ConflictAlgorithm.abort);
@@ -411,6 +412,7 @@ class AgendaRepository {
           ...item.paraMapa(),
           'consumo_previsto_json': consumoPrevisto,
           'comercio_id': _comercioId,
+          'business_id': _comercioId,
           'created_at': DateTime.now().toIso8601String(),
           'updated_at': DateTime.now().toIso8601String(),
         }, conflictAlgorithm: ConflictAlgorithm.abort);

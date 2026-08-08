@@ -127,7 +127,7 @@ class _PacotesPageState extends State<PacotesPage>
       itemCount: _modelos.length,
       itemBuilder: (_, index) {
         final item = _modelos[index];
-        final ativo = item['ativo'] == 1;
+        final ativo = (item['status'] as num?)?.toInt() == 1;
         return Card(
           child: ListTile(
             leading: CircleAvatar(

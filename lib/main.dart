@@ -6,7 +6,11 @@ import 'database/database_service.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await DatabaseService.instance.database;
+  try {
+    await DatabaseService.instance.database;
+  } catch (e) {
+    debugPrint('Erro não fatal no pré-carregamento do SQLite: $e');
+  }
 
   runApp(const StudioFlowApp());
 }

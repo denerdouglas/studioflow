@@ -158,8 +158,9 @@ class WhatsappFilaMensagem {
     return {
       'id': id,
       'business_id': businessId,
+      'comercio_id': businessId, // Compatibilidade com schema v6 (NOT NULL)
       'cliente_id': clienteId,
-      'destinatario': destinatario,
+      'destinatario': destinatario ?? '', // Evitar NOT NULL legacy se nullable
       'agendamento_id': agendamentoId,
       'status': status.dbValue,
       'idempotency_key': idempotencyKey,
@@ -168,6 +169,7 @@ class WhatsappFilaMensagem {
       'conversation_id': conversationId,
       'template_id': templateId,
       'payload': payload,
+      'payload_json': payload ?? '{}', // Compatibilidade
       'attempt': attempt,
       'erro': erro,
       'latencia': latencia,
@@ -178,7 +180,9 @@ class WhatsappFilaMensagem {
       'failed_at': failedAt?.toIso8601String(),
       'last_attempt_at': lastAttemptAt?.toIso8601String(),
       'created_at': createdAt.toIso8601String(),
+      'criado_em': createdAt.toIso8601String(), // Compatibilidade
       'updated_at': updatedAt.toIso8601String(),
+      'atualizado_em': updatedAt.toIso8601String(), // Compatibilidade
     };
   }
 }

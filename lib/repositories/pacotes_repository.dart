@@ -486,7 +486,7 @@ class PacotesRepository {
          JOIN servicos s ON s.id=i.servico_id
          WHERE i.pacote_id=p.id) AS itens_resumo
        FROM pacotes p
-       WHERE p.business_id=? ${incluirInativos ? '' : "AND p.status='ativo'"}
+       WHERE p.business_id=? ${incluirInativos ? '' : "AND p.status=1"}
        ORDER BY p.status DESC, p.nome COLLATE NOCASE''',
       [_comercioId],
     );
@@ -844,7 +844,7 @@ class PacotesRepository {
        LEFT JOIN sessoes_pacotes s ON s.pacote_vendido_id=v.id
        WHERE v.business_id=? ${clienteId == null ? '' : 'AND v.cliente_id=?'}
        GROUP BY v.id ORDER BY v.data_venda DESC''',
-      [_comercioId, ?clienteId],
+      [_comercioId, if (clienteId != null) clienteId],
     );
     return rows.map((e) {
       int n(String campo) => (e[campo] as num? ?? 0).toInt();

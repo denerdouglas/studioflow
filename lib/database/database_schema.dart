@@ -139,6 +139,32 @@ abstract final class DatabaseSchema {
     ''');
 
     await db.execute('''
+      CREATE TABLE agendamento_grupos (
+        id TEXT PRIMARY KEY,
+        business_id TEXT NOT NULL,
+        cliente_id TEXT NOT NULL,
+        comanda_id TEXT,
+        status TEXT,
+        observacoes TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        deleted_at TEXT,
+        created_by TEXT,
+        updated_by TEXT
+      )
+    ''');
+
+    await db.execute('''
+      CREATE INDEX idx_agendamento_grupos_business
+      ON agendamento_grupos(business_id)
+    ''');
+
+    await db.execute('''
+      CREATE INDEX idx_agendamento_grupos_cliente
+      ON agendamento_grupos(cliente_id)
+    ''');
+
+    await db.execute('''
       CREATE TABLE agendamentos (
         id TEXT PRIMARY KEY,
         cliente_id TEXT NOT NULL,
@@ -654,6 +680,7 @@ abstract final class DatabaseSchema {
       CREATE TABLE IF NOT EXISTS whatsapp_fila (
         id TEXT PRIMARY KEY,
         business_id TEXT NOT NULL,
+        comercio_id TEXT,
         cliente_id TEXT,
         destinatario TEXT,
         agendamento_id TEXT,
@@ -663,7 +690,9 @@ abstract final class DatabaseSchema {
         provider_message_id TEXT,
         conversation_id TEXT,
         template_id TEXT,
+        template TEXT,
         payload TEXT,
+        payload_json TEXT,
         attempt INTEGER DEFAULT 0,
         erro TEXT,
         latencia INTEGER,
@@ -674,7 +703,9 @@ abstract final class DatabaseSchema {
         failed_at TEXT,
         last_attempt_at TEXT,
         created_at TEXT NOT NULL,
+        criado_em TEXT,
         updated_at TEXT NOT NULL,
+        atualizado_em TEXT,
         deleted_at TEXT,
         created_by TEXT,
         updated_by TEXT

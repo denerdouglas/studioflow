@@ -119,7 +119,8 @@ class _HomePremiumPageState extends State<HomePremiumPage> {
         _modalidades = modalidades.where((item) => item.exibirHome).toList();
         _isLoading = false;
       });
-    } catch (e) {
+    } catch (e, st) {
+      debugPrint('Erro ao carregar painel inteligente: $e\n$st');
       if (!mounted) return;
       setState(() {
         _error = 'Ocorreu um erro ao carregar o painel inteligente.';

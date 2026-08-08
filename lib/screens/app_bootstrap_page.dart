@@ -41,6 +41,33 @@ class _AppBootstrapPageState extends State<AppBootstrapPage> {
       animation: SessionController.instance,
       builder: (context, _) {
         final sessao = SessionController.instance;
+        if (sessao.erroInicializacao != null) {
+          return Scaffold(
+            body: Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.error_outline, size: 64, color: Colors.red),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Erro ao inicializar o banco de dados.',
+                      style: Theme.of(context).textTheme.titleLarge,
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      sessao.erroInicializacao.toString(),
+                      style: Theme.of(context).textTheme.bodyMedium,
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }
         if (sessao.carregando) {
           return const Scaffold(
             body: Center(child: CircularProgressIndicator()),
