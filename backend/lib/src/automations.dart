@@ -321,7 +321,14 @@ final class PostgresMessageAutomationStore implements MessageAutomationStore {
           'scheduledAt': message.scheduledAt,
           'appointmentId': message.appointmentId,
           'clientId': message.clientId,
-          'metadata': jsonEncode(message.metadata),
+          'metadata': jsonEncode(
+            message.metadata,
+            toEncodable: (object) {
+              if (object is Uri) return object.toString();
+              if (object is DateTime) return object.toIso8601String();
+              return object.toString();
+            },
+          ),
         },
       );
       return result.affectedRows > 0;
@@ -1067,11 +1074,15 @@ final class MessageAutomationEngine {
           '${start.hour.toString().padLeft(2, '0')}:'
           '${start.minute.toString().padLeft(2, '0')}',
       'localizacao': business['endereco'] ?? '',
-      'confirmacao': actionBase.replace(queryParameters: {'acao': 'confirmar'}),
-      'reagendamento': actionBase.replace(
-        queryParameters: {'acao': 'reagendar'},
-      ),
-      'cancelamento': actionBase.replace(queryParameters: {'acao': 'cancelar'}),
+      'confirmacao': actionBase
+          .replace(queryParameters: {'acao': 'confirmar'})
+          .toString(),
+      'reagendamento': actionBase
+          .replace(queryParameters: {'acao': 'reagendar'})
+          .toString(),
+      'cancelamento': actionBase
+          .replace(queryParameters: {'acao': 'cancelar'})
+          .toString(),
     };
   }
 
