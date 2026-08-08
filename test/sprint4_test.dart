@@ -428,4 +428,6 @@ Future<void> _agendamento(
   'confirmado': status == 'confirmado' ? 1 : 0,
   'compareceu': status == 'concluido' ? 1 : 0,
   'data_criacao': DateTime(2026, 7, 22).toIso8601String(),
+  'created_at': DateTime(2026, 7, 22).toIso8601String(),
+  'updated_at': DateTime(2026, 7, 22).toIso8601String(),
 });

@@ -261,6 +261,8 @@ void main() {
         'fim': DateTime(2026, 7, 13, 15).toIso8601String(),
         'valor_servico': 100,
         'data_criacao': agora.toIso8601String(),
+        'created_at': agora.toIso8601String(),
+        'updated_at': agora.toIso8601String(),
         'comercio_id': dono.comercioId,
       });
       await db.insert('movimentacoes_financeiras', {

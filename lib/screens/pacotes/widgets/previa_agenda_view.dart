@@ -4,8 +4,9 @@ import '../../../models/domain/pacote_servico.dart';
 
 class PreviaAgendaView extends StatelessWidget {
   final PreviaAgendaPacote previa;
+  final void Function(int, SessaoPlanejadaPacote)? onEditSessao;
 
-  const PreviaAgendaView({super.key, required this.previa});
+  const PreviaAgendaView({super.key, required this.previa, this.onEditSessao});
 
   @override
   Widget build(BuildContext context) {
@@ -91,12 +92,25 @@ class PreviaAgendaView extends StatelessWidget {
                           ),
                       ],
                     ),
-                    trailing: s.horarioAlternativo
-                        ? const Icon(Icons.info_outline, color: Colors.orange)
-                        : const Icon(
-                            Icons.check_circle_outline,
-                            color: Colors.green,
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (onEditSessao != null)
+                          IconButton(
+                            icon: const Icon(Icons.edit, size: 20),
+                            onPressed: () => onEditSessao!(index, s),
                           ),
+                        s.horarioAlternativo
+                            ? const Icon(
+                                Icons.info_outline,
+                                color: Colors.orange,
+                              )
+                            : const Icon(
+                                Icons.check_circle_outline,
+                                color: Colors.green,
+                              ),
+                      ],
+                    ),
                   );
                 },
               ),

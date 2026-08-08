@@ -474,6 +474,8 @@ Future<void> _appointment(
   'comercio_id': 'commerce-1',
   'unidade_id': 'unit-1',
   'data_criacao': DateTime.utc(2026, 8, 4).toIso8601String(),
+  'created_at': DateTime.utc(2026, 8, 4).toIso8601String(),
+  'updated_at': DateTime.utc(2026, 8, 4).toIso8601String(),
 });
 UsuarioAcesso _restricted() => UsuarioAcesso(
   id: 'user-restricted',

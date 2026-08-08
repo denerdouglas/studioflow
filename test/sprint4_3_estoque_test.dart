@@ -187,6 +187,8 @@ void main() {
         'excluido': 0,
         'comercio_id': bizId,
         'data_criacao': inicio.toIso8601String(),
+        'created_at': inicio.toIso8601String(),
+        'updated_at': inicio.toIso8601String(),
         'estoque_consumido': 0,
       });
 

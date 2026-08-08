@@ -327,9 +327,10 @@ class PacotesRepository {
             'confirmado': 0,
             'compareceu': 0,
             'observacoes': 'Sessão de pacote; receita registrada na venda.',
-            'criado_por': _usuarioId,
-            'criado_em': agora,
-            'atualizado_em': agora,
+            'data_criacao': agora,
+            'created_by': _usuarioId,
+            'created_at': agora,
+            'updated_at': agora,
           });
           await txn.update(
             'sessoes_pacotes',
@@ -1076,8 +1077,9 @@ class PacotesRepository {
           'compareceu': 0,
           'observacoes': 'Sessão de pacote; receita registrada na venda.',
           'data_criacao': _agora(),
-          'atualizado_em': _agora(),
-          'pacote_venda_sessao_id': item.sessaoId,
+          'created_by': _usuarioId,
+          'created_at': _agora(),
+          'updated_at': _agora(),
         });
         await txn.update(
           'sessoes_pacotes',
@@ -1110,7 +1112,7 @@ class PacotesRepository {
            ps.estoque_consumido as credito_consumido, pv.valor_original as valor_contratado, pv.quantidade_sessoes as total_sessoes,
            s.comissao_percentual
            FROM agendamentos a
-           JOIN sessoes_pacotes ps ON ps.id=a.pacote_venda_sessao_id
+           JOIN sessoes_pacotes ps ON ps.agendamento_id=a.id
            JOIN pacotes_vendidos pv ON pv.id=ps.pacote_vendido_id
            JOIN pacotes p ON p.id=pv.pacote_id
            JOIN servicos s ON s.id=a.servico_id
@@ -1146,7 +1148,7 @@ class PacotesRepository {
           'confirmado': 1,
           'compareceu': 1,
           'valor_recebido': 0,
-          'atualizado_em': agora,
+          'updated_at': agora,
         },
         where: 'id=? AND comercio_id=?',
         whereArgs: [agendamentoId, _comercioId],
@@ -1205,9 +1207,9 @@ class PacotesRepository {
     final db = await _databaseProvider();
     await db.transaction((txn) async {
       final rows = await txn.rawQuery(
-        '''SELECT a.pacote_venda_sessao_id sessao_id, ps.pacote_vendido_id as pacote_venda_id
+        '''SELECT ps.id as sessao_id, ps.pacote_vendido_id as pacote_venda_id
            FROM agendamentos a JOIN sessoes_pacotes ps
-           ON ps.id=a.pacote_venda_sessao_id
+           ON ps.agendamento_id=a.id
            WHERE a.id=? AND a.comercio_id=?''',
         [agendamentoId, _comercioId],
       );
@@ -1215,7 +1217,7 @@ class PacotesRepository {
       final row = rows.first;
       await txn.update(
         'agendamentos',
-        {'status': 'faltou', 'compareceu': 0, 'atualizado_em': _agora()},
+        {'status': 'faltou', 'compareceu': 0, 'updated_at': _agora()},
         where: 'id=? AND comercio_id=?',
         whereArgs: [agendamentoId, _comercioId],
       );
@@ -1347,7 +1349,7 @@ class PacotesRepository {
             'fim': fim.toIso8601String(),
             'status': 'agendado',
             'confirmado': 0,
-            'atualizado_em': _agora(),
+            'updated_at': _agora(),
           },
           where: 'id=? AND comercio_id=?',
           whereArgs: [sessao['agendamento_id'], _comercioId],
@@ -1406,13 +1408,13 @@ class PacotesRepository {
     final db = await _databaseProvider();
     await db.transaction((txn) async {
       final rows = await txn.query(
-        'agendamentos',
-        columns: ['pacote_venda_sessao_id'],
-        where: 'id=? AND comercio_id=?',
+        'sessoes_pacotes',
+        columns: ['id'],
+        where: 'agendamento_id=? AND business_id=?',
         whereArgs: [agendamentoId, _comercioId],
         limit: 1,
       );
-      if (rows.isEmpty || rows.first['pacote_venda_sessao_id'] == null) return;
+      if (rows.isEmpty) return;
       await txn.update(
         'sessoes_pacotes',
         {
@@ -1423,7 +1425,7 @@ class PacotesRepository {
           'updated_at': _agora(),
         },
         where: 'id=? AND business_id=? AND estoque_consumido=0',
-        whereArgs: [rows.first['pacote_venda_sessao_id'], _comercioId],
+        whereArgs: [rows.first['id'], _comercioId],
       );
     });
   }
@@ -1716,6 +1718,116 @@ class PacotesRepository {
       'tentativas': 0,
       'criada_em': agora,
       'atualizada_em': agora,
+    });
+  }
+
+  Future<void> editarSessaoVendida({
+    required String sessaoId,
+    required DateTime novoInicio,
+    required String novoServicoId,
+    required String novoProfissionalId,
+  }) async {
+    _exigir(AcaoPermissao.venderPacotes);
+    final db = await _databaseProvider();
+
+    await db.transaction((txn) async {
+      final sessaoRow = await txn.query(
+        'sessoes_pacotes',
+        where: 'id=? AND business_id=? AND status=?',
+        whereArgs: [sessaoId, _comercioId, 'agendada'],
+      );
+
+      if (sessaoRow.isEmpty) {
+        throw StateError('Sessão agendada não encontrada ou já realizada.');
+      }
+
+      final sessao = sessaoRow.first;
+      final agendamentoId = sessao['agendamento_id'] as String?;
+
+      if (agendamentoId == null) {
+        throw StateError('Agendamento vinculado não encontrado.');
+      }
+
+      final agendamentoRow = await txn.query(
+        'agendamentos',
+        where: 'id=? AND comercio_id=?',
+        whereArgs: [agendamentoId, _comercioId],
+      );
+
+      if (agendamentoRow.isEmpty) {
+        throw StateError('Agendamento vinculado não encontrado.');
+      }
+
+      final agendamentoAntigo = agendamentoRow.first;
+      final duracao = DateTime.parse(
+        agendamentoAntigo['fim'] as String,
+      ).difference(DateTime.parse(agendamentoAntigo['inicio'] as String));
+
+      final novoFim = novoInicio.add(duracao);
+
+      // We should check the agenda for conflicts using AgendaConflictChecker!
+      // For this, we can fetch all appointments for that professional on the day,
+      // and use the checker. Since this is an individual reschedule, AgendaConflictChecker
+      // can be called manually here, or we can use the same logic as AgendaRepository.atualizar().
+
+      // Validação de jornada
+      final jornada = await txn.query(
+        'horarios_profissionais',
+        where:
+            'comercio_id=? AND profissional_id=? AND dia_semana=? AND ativo=1',
+        whereArgs: [_comercioId, novoProfissionalId, novoInicio.weekday],
+      );
+      if (jornada.isEmpty ||
+          !_dentroDaJornada(novoInicio, novoFim, jornada.first)) {
+        throw StateError('Novo horário fora da jornada do profissional.');
+      }
+
+      // Validação de conflito
+      final conflito = await txn.query(
+        'agendamentos',
+        where:
+            "comercio_id=? AND profissional_id=? AND status!='cancelado' AND inicio<? AND fim>? AND id!=?",
+        whereArgs: [
+          _comercioId,
+          novoProfissionalId,
+          novoFim.toIso8601String(),
+          novoInicio.toIso8601String(),
+          agendamentoId,
+        ],
+      );
+      if (conflito.isNotEmpty) {
+        throw StateError('Já existe um agendamento nesse horário.');
+      }
+
+      await txn.update(
+        'sessoes_pacotes',
+        {
+          'servico_id_previsto': novoServicoId,
+          'servico_id_realizado': novoServicoId,
+          'profissional_id': novoProfissionalId,
+          'data_agendada': novoInicio.toIso8601String(),
+          'horario_inicio':
+              '${novoInicio.hour.toString().padLeft(2, '0')}:${novoInicio.minute.toString().padLeft(2, '0')}',
+          'horario_fim':
+              '${novoFim.hour.toString().padLeft(2, '0')}:${novoFim.minute.toString().padLeft(2, '0')}',
+          'updated_at': _agora(),
+        },
+        where: 'id=?',
+        whereArgs: [sessaoId],
+      );
+
+      await txn.update(
+        'agendamentos',
+        {
+          'servico_id': novoServicoId,
+          'profissional_id': novoProfissionalId,
+          'inicio': novoInicio.toIso8601String(),
+          'fim': novoFim.toIso8601String(),
+          'updated_at': _agora(),
+        },
+        where: 'id=? AND comercio_id=?',
+        whereArgs: [agendamentoId, _comercioId],
+      );
     });
   }
 

@@ -326,6 +326,8 @@ class AgendaRepository {
         ...agendamento.paraMapa(),
         'consumo_previsto_json': consumoPrevisto,
         'comercio_id': _comercioId,
+        'created_at': DateTime.now().toIso8601String(),
+        'updated_at': DateTime.now().toIso8601String(),
       }, conflictAlgorithm: ConflictAlgorithm.abort);
 
       await _enfileirarWhatsapp(txn, agendamento);
@@ -409,6 +411,8 @@ class AgendaRepository {
           ...item.paraMapa(),
           'consumo_previsto_json': consumoPrevisto,
           'comercio_id': _comercioId,
+          'created_at': DateTime.now().toIso8601String(),
+          'updated_at': DateTime.now().toIso8601String(),
         }, conflictAlgorithm: ConflictAlgorithm.abort);
 
         await _enfileirarWhatsapp(txn, item);
@@ -773,8 +777,7 @@ class AgendaRepository {
 
           if (mov.isEmpty) {
             await txn.insert('movimentacoes_estoque', {
-              'id':
-                  '${DateTime.now().microsecondsSinceEpoch}_$produtoId',
+              'id': '${DateTime.now().microsecondsSinceEpoch}_$produtoId',
               'item_estoque_id': produtoId,
               'tipo': 'saida',
               'finalidade': 'uso_interno',
@@ -790,8 +793,7 @@ class AgendaRepository {
 
             if (saldoAtual.isEmpty) {
               await txn.insert('estoque_saldos', {
-                'id':
-                    '${DateTime.now().microsecondsSinceEpoch}_$produtoId',
+                'id': '${DateTime.now().microsecondsSinceEpoch}_$produtoId',
                 'business_id': _comercioId,
                 'estoque_id': produtoId,
                 'finalidade': 'uso_interno',

@@ -152,6 +152,30 @@ class SessaoPlanejadaPacote {
   });
 
   DateTime get fim => inicio.add(Duration(minutes: duracaoMinutos));
+
+  SessaoPlanejadaPacote copyWith({
+    String? sessaoId,
+    String? servicoId,
+    String? servicoNome,
+    String? profissionalId,
+    String? profissionalNome,
+    DateTime? inicio,
+    int? duracaoMinutos,
+    bool? horarioAlternativo,
+    String? aviso,
+  }) {
+    return SessaoPlanejadaPacote(
+      sessaoId: sessaoId ?? this.sessaoId,
+      servicoId: servicoId ?? this.servicoId,
+      servicoNome: servicoNome ?? this.servicoNome,
+      profissionalId: profissionalId ?? this.profissionalId,
+      profissionalNome: profissionalNome ?? this.profissionalNome,
+      inicio: inicio ?? this.inicio,
+      duracaoMinutos: duracaoMinutos ?? this.duracaoMinutos,
+      horarioAlternativo: horarioAlternativo ?? this.horarioAlternativo,
+      aviso: aviso ?? this.aviso,
+    );
+  }
 }
 
 class PreviaAgendaPacote {
@@ -164,6 +188,16 @@ class PreviaAgendaPacote {
   });
 
   bool get completa => naoEncaixadas.isEmpty;
+
+  PreviaAgendaPacote copyWith({
+    List<SessaoPlanejadaPacote>? sessoes,
+    List<String>? naoEncaixadas,
+  }) {
+    return PreviaAgendaPacote(
+      sessoes: sessoes ?? this.sessoes,
+      naoEncaixadas: naoEncaixadas ?? this.naoEncaixadas,
+    );
+  }
 }
 
 class ResumoVendaPacote {

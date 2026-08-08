@@ -236,5 +236,7 @@ Future<void> _appointment(Database db, String businessId, String id) async {
     'confirmado': 0,
     'compareceu': 0,
     'data_criacao': DateTime.now().toIso8601String(),
+    'created_at': DateTime.now().toIso8601String(),
+    'updated_at': DateTime.now().toIso8601String(),
   });
 }

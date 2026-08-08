@@ -66,7 +66,9 @@ class _ScannerDraftPageState extends State<ScannerDraftPage> {
         decoration: InputDecoration(
           labelText: label,
           filled: isLowConfidence,
-          fillColor: isLowConfidence ? Colors.orange.withValues(alpha: 0.1) : null,
+          fillColor: isLowConfidence
+              ? Colors.orange.withValues(alpha: 0.1)
+              : null,
           helperText: fieldData != null
               ? 'Origem: ${fieldData.source}'
               : 'Preenchimento manual',

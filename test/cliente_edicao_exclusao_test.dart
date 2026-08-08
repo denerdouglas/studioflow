@@ -85,6 +85,8 @@ void main() {
         'observacoes': '',
         'confirmado': 1,
         'data_criacao': agora.toIso8601String(),
+        'created_at': agora.toIso8601String(),
+        'updated_at': agora.toIso8601String(),
         'comercio_id': 'comercio-teste',
       });
 
