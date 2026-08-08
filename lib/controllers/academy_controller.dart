@@ -62,7 +62,7 @@ class AcademyController extends ChangeNotifier {
     } catch (e) {
       state = AcademyState.error;
       errorMessage =
-          'Falha ao buscar cursos. Verifique sua conexão e tente novamente.';
+          'Falha ao buscar cursos: $e\nVerifique sua conexão e tente novamente.';
     }
 
     notifyListeners();

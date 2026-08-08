@@ -20,7 +20,7 @@ class AcademySearchResult {
 
   factory AcademySearchResult.fromJson(Map<String, dynamic> json) {
     return AcademySearchResult(
-      courses: (json['data'] as List? ?? [])
+      courses: (json['courses'] as List? ?? [])
           .map((e) => AcademyCourse.fromJson(e as Map<String, dynamic>))
           .toList(),
       total: json['total'] as int? ?? 0,
@@ -126,7 +126,7 @@ class AcademyRepository {
         accessToken: session.accessToken,
       );
 
-      final categoriesList = (response['data'] as List? ?? [])
+      final categoriesList = (response['categories'] as List? ?? [])
           .map((e) => AcademyCategory.fromJson(e as Map<String, dynamic>))
           .toList();
 

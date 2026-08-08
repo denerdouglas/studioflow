@@ -71,13 +71,32 @@ class CommercialRepository {
 
   Future<SubscriptionInfo> subscription() async {
     final db = await _database();
-    final rows = await db.query(
+    var rows = await db.query(
       'assinaturas',
       where: 'comercio_id = ?',
       whereArgs: [_commerceId],
       limit: 1,
     );
-    if (rows.isEmpty) throw StateError('Assinatura não inicializada.');
+    
+    if (rows.isEmpty) {
+      final now = DateTime.now().toUtc();
+      await db.insert('assinaturas', {
+        'comercio_id': _commerceId,
+        'status': SubscriptionStatus.trial.name,
+        'inicio_trial': now.toIso8601String(),
+        'fim_trial': now.add(const Duration(days: 30)).toIso8601String(),
+        'valor_mensal': 24.99,
+        'criado_em': now.toIso8601String(),
+        'atualizado_em': now.toIso8601String(),
+      });
+      rows = await db.query(
+        'assinaturas',
+        where: 'comercio_id = ?',
+        whereArgs: [_commerceId],
+        limit: 1,
+      );
+    }
+    
     final row = rows.first;
     return SubscriptionInfo(
       commerceId: _commerceId,

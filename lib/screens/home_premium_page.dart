@@ -110,9 +110,15 @@ class _HomePremiumPageState extends State<HomePremiumPage> {
 
     try {
       final summary = await _summaryService.loadSummary(DateTime.now());
-      final modalidades = await _modalidadesRepository.listar(
-        incluirInativas: false,
-      );
+      List<ModalidadeRegistro> modalidades = [];
+      try {
+        modalidades = await _modalidadesRepository.listar(
+          incluirInativas: false,
+        );
+      } catch (e, st) {
+        debugPrint('Erro ao carregar modalidades na Home: $e\n$st');
+      }
+      
       if (!mounted) return;
       setState(() {
         _summary = summary;

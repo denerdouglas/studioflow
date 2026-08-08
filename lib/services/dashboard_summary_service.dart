@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import '../models/domain/loja.dart';
 import '../repositories/agenda_repository.dart';
 import '../repositories/caixa_repository.dart';
@@ -35,16 +36,38 @@ class DashboardSummaryService {
   final LojaRepository _lojaRepository = LojaRepository();
 
   Future<DashboardSummary> loadSummary(DateTime date) async {
-    final resultados = await Future.wait([
-      _agendaRepository.listarPorDia(date),
-      _caixaRepository.resumoDoDia(date),
-      _lojaRepository.listarProdutos(somenteBaixo: true),
-    ]);
+    List<AgendamentoRegistro> agenda = [];
+    ResumoCaixa caixa = const ResumoCaixa(
+      saldo: 0,
+      totalEntradas: 0,
+      totalSaidas: 0,
+      quantidadeEntradas: 0,
+      quantidadeSaidas: 0,
+    );
+    List<ProdutoLoja> baixoEstoque = [];
+
+    try {
+      agenda = await _agendaRepository.listarPorDia(date);
+    } catch (e, st) {
+      debugPrint('DashboardSummary: Erro ao carregar agenda: $e\n$st');
+    }
+
+    try {
+      caixa = await _caixaRepository.resumoDoDia(date);
+    } catch (e, st) {
+      debugPrint('DashboardSummary: Erro ao carregar caixa: $e\n$st');
+    }
+
+    try {
+      baixoEstoque = await _lojaRepository.listarProdutos(somenteBaixo: true);
+    } catch (e, st) {
+      debugPrint('DashboardSummary: Erro ao carregar estoque baixo: $e\n$st');
+    }
 
     return DashboardSummary(
-      agendamentosHoje: resultados[0] as List<AgendamentoRegistro>,
-      resumoCaixa: resultados[1] as ResumoCaixa,
-      produtosBaixoEstoque: resultados[2] as List<ProdutoLoja>,
+      agendamentosHoje: agenda,
+      resumoCaixa: caixa,
+      produtosBaixoEstoque: baixoEstoque,
     );
   }
 }

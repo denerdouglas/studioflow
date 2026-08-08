@@ -1,16 +1,20 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 
 import 'app.dart';
-import 'database/database_service.dart';
 
-Future<void> main() async {
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
 
-  try {
-    await DatabaseService.instance.database;
-  } catch (e) {
-    debugPrint('Erro não fatal no pré-carregamento do SQLite: $e');
-  }
+  FlutterError.onError = (details) {
+    FlutterError.presentError(details);
+    debugPrint('FlutterError global: ${details.exceptionAsString()}');
+  };
+
+  PlatformDispatcher.instance.onError = (error, stack) {
+    debugPrint('PlatformDispatcher global erro: $error');
+    return true;
+  };
 
   runApp(const StudioFlowApp());
 }
