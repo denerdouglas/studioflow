@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/domain/agendamento_grupo_registro.dart';
+import '../models/domain/pacote_servico.dart';
 import '../repositories/agenda_repository.dart';
 import '../repositories/cadastros_basicos_repository.dart';
 import '../repositories/cliente_repository.dart';
+import '../repositories/pacotes_repository.dart';
 import '../repositories/servicos_repository.dart';
 import '../widgets/selectors/cliente_smart_selector.dart';
 import '../widgets/selectors/servico_smart_selector.dart';
@@ -27,6 +29,7 @@ class NovoAgendamentoSheet extends StatefulWidget {
 
 class _ItemServico {
   ServicoRegistro? servico;
+  SessaoDisponivelRegistro? sessao;
   ProfissionalBasicoRegistro? profissional;
   DateTime? inicioPrevisto;
   DateTime? fimPrevisto;
@@ -42,10 +45,15 @@ class _NovoAgendamentoSheetState extends State<NovoAgendamentoSheet> {
 
   final TextEditingController _observacoesController = TextEditingController();
   final AgendaRepository _agendaRepository = AgendaRepository();
+  final PacotesRepository _pacotesRepository = PacotesRepository();
 
   ClienteRegistro? _clienteSelecionado;
   late DateTime _dataSelecionada;
   TimeOfDay _horarioSelecionado = const TimeOfDay(hour: 9, minute: 0);
+
+  bool _modoPacote = false;
+  List<SessaoDisponivelRegistro> _sessoesDisponiveis = [];
+  bool _carregandoSessoes = false;
 
   final List<_ItemServico> _itens = [];
 
@@ -61,6 +69,24 @@ class _NovoAgendamentoSheetState extends State<NovoAgendamentoSheet> {
     );
     _clienteSelecionado = widget.clienteInicial;
     _adicionarItem();
+    if (_clienteSelecionado != null) {
+      _carregarSessoesPacote();
+    }
+  }
+
+  Future<void> _carregarSessoesPacote() async {
+    if (_clienteSelecionado == null) return;
+    setState(() => _carregandoSessoes = true);
+    try {
+      final sessoes = await _pacotesRepository.listarSessoesDisponiveisCliente(
+        _clienteSelecionado!.id,
+      );
+      if (mounted) setState(() => _sessoesDisponiveis = sessoes);
+    } catch (e) {
+      _mostrarErro('Erro ao carregar pacotes: $e');
+    } finally {
+      if (mounted) setState(() => _carregandoSessoes = false);
+    }
   }
 
   void _adicionarItem() {
@@ -95,11 +121,13 @@ class _NovoAgendamentoSheetState extends State<NovoAgendamentoSheet> {
 
     for (var item in _itens) {
       item.inicioPrevisto = current;
-      if (item.servico != null) {
-        current = current.add(Duration(minutes: item.servico!.duracaoMinutos));
-      } else {
-        current = current.add(const Duration(minutes: 30));
+      int duracao = 30;
+      if (_modoPacote && item.sessao != null) {
+        duracao = item.sessao!.duracaoMinutos;
+      } else if (item.servico != null) {
+        duracao = item.servico!.duracaoMinutos;
       }
+      current = current.add(Duration(minutes: duracao));
       item.fimPrevisto = current;
     }
   }
@@ -109,8 +137,12 @@ class _NovoAgendamentoSheetState extends State<NovoAgendamentoSheet> {
       _mostrarErro('Selecione um cliente.');
       return;
     }
-    if (_itens.any((i) => i.servico == null || i.profissional == null)) {
-      _mostrarErro('Preencha todos os serviços e profissionais.');
+    if (_itens.any(
+      (i) =>
+          (_modoPacote ? i.sessao == null : i.servico == null) ||
+          i.profissional == null,
+    )) {
+      _mostrarErro('Preencha todos os serviços/sessões e profissionais.');
       return;
     }
 
@@ -135,6 +167,12 @@ class _NovoAgendamentoSheetState extends State<NovoAgendamentoSheet> {
       final listaAgendamentos = <AgendamentoRegistro>[];
       for (var i = 0; i < _itens.length; i++) {
         final item = _itens[i];
+        final servId = _modoPacote ? item.sessao!.servicoId : item.servico!.id;
+        final servNome = _modoPacote
+            ? item.sessao!.servicoNome
+            : item.servico!.nome;
+        final servValor = _modoPacote ? 0.0 : item.servico!.preco;
+
         listaAgendamentos.add(
           AgendamentoRegistro(
             id: '${grupoId}_$i',
@@ -142,12 +180,12 @@ class _NovoAgendamentoSheetState extends State<NovoAgendamentoSheet> {
             clienteNome: _clienteSelecionado!.nome,
             profissionalId: item.profissional!.id,
             profissionalNome: item.profissional!.nome,
-            servicoId: item.servico!.id,
-            servicoNome: item.servico!.nome,
+            servicoId: servId,
+            servicoNome: servNome,
             inicio: item.inicioPrevisto!,
             fim: item.fimPrevisto!,
             status: 'agendado',
-            valorServico: item.servico!.preco,
+            valorServico: servValor,
             desconto: 0,
             valorRecebido: 0,
             confirmado: false,
@@ -162,14 +200,24 @@ class _NovoAgendamentoSheetState extends State<NovoAgendamentoSheet> {
 
       await _agendaRepository.inserirGrupo(grupo, listaAgendamentos);
 
-      // Registrar log (só o grupo ou só o principal, aqui faremos p/ o primeiro)
+      // Registrar log e vincular sessões de pacote
       final agendaCompleta = AgendaCompletaRepository();
-      for (var item in listaAgendamentos) {
+      for (var i = 0; i < listaAgendamentos.length; i++) {
+        final ag = listaAgendamentos[i];
+        final item = _itens[i];
         await agendaCompleta.registrarStatus(
-          agendamentoId: item.id,
+          agendamentoId: ag.id,
           status: 'agendado',
           detalhes: 'Agendamento criado via grupo.',
         );
+
+        if (_modoPacote && item.sessao != null) {
+          await _pacotesRepository.vincularAgendamentoSessao(
+            ag.id,
+            item.sessao!.sessaoId,
+            ag.inicio,
+          );
+        }
       }
 
       if (mounted) {
@@ -195,7 +243,10 @@ class _NovoAgendamentoSheetState extends State<NovoAgendamentoSheet> {
     double valorTotal = 0;
     Duration duracaoTotal = Duration.zero;
     for (var i in _itens) {
-      if (i.servico != null) {
+      if (_modoPacote && i.sessao != null) {
+        duracaoTotal += Duration(minutes: i.sessao!.duracaoMinutos);
+        // Pacote não soma valor
+      } else if (!_modoPacote && i.servico != null) {
         valorTotal += i.servico!.preco;
         duracaoTotal += Duration(minutes: i.servico!.duracaoMinutos);
       }
@@ -234,10 +285,46 @@ class _NovoAgendamentoSheetState extends State<NovoAgendamentoSheet> {
                     color: Color(0xFF2D2140),
                   ),
                 ),
-                TextButton.icon(
-                  onPressed: _adicionarItem,
-                  icon: const Icon(Icons.add),
-                  label: const Text('Serviço'),
+                Row(
+                  children: [
+                    TextButton.icon(
+                      onPressed: () {
+                        setState(() {
+                          _modoPacote = false;
+                          _itens.clear();
+                          _adicionarItem();
+                        });
+                      },
+                      style: TextButton.styleFrom(
+                        foregroundColor: !_modoPacote
+                            ? const Color(0xFF5D408B)
+                            : Colors.grey,
+                      ),
+                      icon: const Icon(Icons.add),
+                      label: const Text('Serviço'),
+                    ),
+                    const SizedBox(width: 8),
+                    TextButton.icon(
+                      onPressed: () {
+                        setState(() {
+                          _modoPacote = true;
+                          _itens.clear();
+                          _adicionarItem();
+                        });
+                        if (_clienteSelecionado != null &&
+                            _sessoesDisponiveis.isEmpty) {
+                          _carregarSessoesPacote();
+                        }
+                      },
+                      style: TextButton.styleFrom(
+                        foregroundColor: _modoPacote
+                            ? const Color(0xFF5D408B)
+                            : Colors.grey,
+                      ),
+                      icon: const Icon(Icons.add_box),
+                      label: const Text('Pacote'),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -247,6 +334,7 @@ class _NovoAgendamentoSheetState extends State<NovoAgendamentoSheet> {
                 final cliente = await ClienteSmartSelector.show(context);
                 if (cliente != null) {
                   setState(() => _clienteSelecionado = cliente);
+                  _carregarSessoesPacote();
                 }
               },
               child: InputDecorator(
@@ -350,29 +438,67 @@ class _NovoAgendamentoSheetState extends State<NovoAgendamentoSheet> {
                             const Icon(Icons.drag_handle, color: Colors.grey),
                             const SizedBox(width: 8),
                             Expanded(
-                              child: InkWell(
-                                onTap: () async {
-                                  final servico =
-                                      await ServicoSmartSelector.show(context);
-                                  if (servico != null) {
-                                    setState(() {
-                                      item.servico = servico;
-                                      _recalcularHorarios();
-                                    });
-                                  }
-                                },
-                                child: InputDecorator(
-                                  decoration: const InputDecoration(
-                                    labelText: 'Serviço',
-                                    isDense: true,
-                                    contentPadding: EdgeInsets.all(8),
-                                  ),
-                                  child: Text(
-                                    item.servico?.nome ?? 'Selecionar...',
-                                  ),
-                                ),
-                              ),
+                              child: _modoPacote
+                                  ? DropdownButtonFormField<
+                                      SessaoDisponivelRegistro
+                                    >(
+                                      decoration: InputDecoration(
+                                        labelText: _carregandoSessoes
+                                            ? 'Carregando pacotes...'
+                                            : 'Sessão do Pacote',
+                                        isDense: true,
+                                        contentPadding: const EdgeInsets.all(8),
+                                      ),
+                                      isExpanded: true,
+                                      initialValue: item.sessao,
+                                      items: _sessoesDisponiveis.map((s) {
+                                        return DropdownMenuItem(
+                                          value: s,
+                                          child: Text(
+                                            '${s.pacoteNome} - ${s.servicoNome}',
+                                          ),
+                                        );
+                                      }).toList(),
+                                      onChanged: (val) {
+                                        setState(() {
+                                          item.sessao = val;
+                                          _recalcularHorarios();
+                                        });
+                                      },
+                                    )
+                                  : InkWell(
+                                      onTap: () async {
+                                        final servico =
+                                            await ServicoSmartSelector.show(
+                                              context,
+                                            );
+                                        if (servico != null) {
+                                          setState(() {
+                                            item.servico = servico;
+                                            _recalcularHorarios();
+                                          });
+                                        }
+                                      },
+                                      child: InputDecorator(
+                                        decoration: const InputDecoration(
+                                          labelText: 'Serviço',
+                                          isDense: true,
+                                          contentPadding: EdgeInsets.all(8),
+                                        ),
+                                        child: Text(
+                                          item.servico?.nome ?? 'Selecionar...',
+                                        ),
+                                      ),
+                                    ),
                             ),
+                            if (_itens.length > 1 || _modoPacote)
+                              IconButton(
+                                icon: const Icon(
+                                  Icons.add_circle,
+                                  color: Color(0xFF5D408B),
+                                ),
+                                onPressed: _adicionarItem,
+                              ),
                             if (_itens.length > 1)
                               IconButton(
                                 icon: const Icon(

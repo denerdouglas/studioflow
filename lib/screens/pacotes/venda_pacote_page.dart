@@ -17,12 +17,12 @@ class VendaPacotePage extends StatefulWidget {
 class _VendaPacotePageState extends State<VendaPacotePage> {
   final _repo = PacotesRepository();
   bool _carregando = true;
-  List<Map<String, Object?>> _pacotes = [];
+  List<PacoteModeloRegistro> _pacotes = [];
   List<Map<String, Object?>> _profissionais = [];
   List<Map<String, Object?>> _servicos = [];
 
   ClienteRegistro? _cliente;
-  Map<String, Object?>? _pacoteSelecionado;
+  PacoteModeloRegistro? _pacoteSelecionado;
   String? _profissionalSelecionadoId;
 
   // Agendamento
@@ -59,7 +59,7 @@ class _VendaPacotePageState extends State<VendaPacotePage> {
 
       if (mounted) {
         setState(() {
-          _pacotes = pacotes.where((p) => p['status'] == 'ativo').toList();
+          _pacotes = pacotes.where((p) => p.ativo).toList();
           _profissionais = profissionais;
           _servicos = servicos;
           _carregando = false;
@@ -95,7 +95,7 @@ class _VendaPacotePageState extends State<VendaPacotePage> {
         intervalo: _intervalo,
       );
       final previa = await _repo.gerarPreviaSimulada(
-        pacoteId: _pacoteSelecionado!['id'] as String,
+        pacoteId: _pacoteSelecionado!.id,
         solicitacao: solicitacao,
       );
       if (mounted) setState(() => _previa = previa);
@@ -269,8 +269,8 @@ class _VendaPacotePageState extends State<VendaPacotePage> {
     if (_cliente == null || _pacoteSelecionado == null) return;
     setState(() => _confirmando = true);
     try {
-      final pacoteId = _pacoteSelecionado!['id'] as String;
-      final preco = (_pacoteSelecionado!['preco'] as num).toDouble();
+      final pacoteId = _pacoteSelecionado!.id;
+      final preco = _pacoteSelecionado!.preco;
 
       final entrada = VendaPacoteEntrada(
         pacoteId: pacoteId,
@@ -289,7 +289,7 @@ class _VendaPacotePageState extends State<VendaPacotePage> {
 
       await _repo.venderEAgendar(
         entrada: entrada,
-        pacoteNome: _pacoteSelecionado!['nome'] as String,
+        pacoteNome: _pacoteSelecionado!.nome,
         agendamentos: sessoes,
       );
 
@@ -345,15 +345,15 @@ class _VendaPacotePageState extends State<VendaPacotePage> {
                     style: TextStyle(fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 8),
-                  DropdownButtonFormField<Map<String, Object?>>(
+                  DropdownButtonFormField<PacoteModeloRegistro>(
                     decoration: const InputDecoration(
                       border: OutlineInputBorder(),
                     ),
                     hint: const Text('Selecione um pacote'),
                     initialValue: _pacoteSelecionado,
                     items: _pacotes.map((p) {
-                      final nome = p['nome'] as String;
-                      final preco = (p['preco'] as num).toDouble();
+                      final nome = p.nome;
+                      final preco = p.preco;
                       return DropdownMenuItem(
                         value: p,
                         child: Text('$nome - R\$ ${preco.toStringAsFixed(2)}'),

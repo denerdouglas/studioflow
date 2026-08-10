@@ -43,7 +43,7 @@ void main() {
     final itens = await c.repository.listarItens(id);
     expect(itens, hasLength(2));
     expect(
-      itens.fold<int>(0, (t, i) => t + (i['quantidade_sessoes'] as int)),
+      itens.fold<int>(0, (t, i) => t + i.quantidadeSessoes),
       3,
     );
   });

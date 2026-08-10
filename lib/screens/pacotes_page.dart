@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/domain/pacote_servico.dart';
 import '../repositories/pacotes_repository.dart';
+import 'pacotes/novo_pacote_page.dart';
 import 'pacotes/venda_pacote_page.dart';
 
 class PacotesPage extends StatefulWidget {
@@ -16,7 +17,7 @@ class _PacotesPageState extends State<PacotesPage>
   final _repository = PacotesRepository();
   late final TabController _tabs;
   bool _carregando = true;
-  List<Map<String, Object?>> _modelos = [];
+  List<PacoteModeloRegistro> _modelos = [];
   List<ResumoVendaPacote> _vendas = [];
 
   @override
@@ -52,7 +53,7 @@ class _PacotesPageState extends State<PacotesPage>
       ]);
       if (!mounted) return;
       setState(() {
-        _modelos = resultado[0] as List<Map<String, Object?>>;
+        _modelos = resultado[0] as List<PacoteModeloRegistro>;
         _vendas = resultado[1] as List<ResumoVendaPacote>;
         _carregando = false;
       });
@@ -127,18 +128,18 @@ class _PacotesPageState extends State<PacotesPage>
       itemCount: _modelos.length,
       itemBuilder: (_, index) {
         final item = _modelos[index];
-        final ativo = (item['status'] as num?)?.toInt() == 1;
+        final ativo = item.ativo;
         return Card(
           child: ListTile(
             leading: CircleAvatar(
               child: Icon(ativo ? Icons.auto_awesome : Icons.pause),
             ),
-            title: Text(item['nome'] as String),
+            title: Text(item.nome),
             subtitle: Text(
-              '${item['itens_resumo'] ?? ''}\n'
-              '${item['total_sessoes']} sessões • '
-              'R\$ ${(item['preco_pacote'] as num).toStringAsFixed(2)} • '
-              '${item['validade_dias']} dias',
+              '${item.itensResumo}\n'
+              '${item.totalSessoes} sessões • '
+              'R\$ ${item.preco.toStringAsFixed(2)} • '
+              '${item.validadeDias ?? '-'} dias',
             ),
             isThreeLine: true,
             trailing: PopupMenuButton<String>(
@@ -146,10 +147,7 @@ class _PacotesPageState extends State<PacotesPage>
                 try {
                   if (acao == 'vender') await _vender(item);
                   if (acao == 'status') {
-                    await _repository.alterarModeloAtivo(
-                      item['id'] as String,
-                      !ativo,
-                    );
+                    await _repository.alterarModeloAtivo(item.id, !ativo);
                     await _carregar();
                   }
                 } catch (erro) {
@@ -227,344 +225,16 @@ class _PacotesPageState extends State<PacotesPage>
   }
 
   Future<void> _novoModelo() async {
-    try {
-      final cadastros = await Future.wait([
-        _repository.listarServicosAtivos(),
-        _repository.listarProfissionaisAtivos(),
-      ]);
-      final servicos = cadastros[0];
-      final profissionais = cadastros[1];
-      if (!mounted) return;
-      if (servicos.isEmpty) {
-        throw StateError(
-          'Cadastre ao menos um serviço antes de criar um pacote.',
-        );
-      }
-      final nome = TextEditingController();
-      final descricao = TextEditingController();
-      final categoria = TextEditingController(text: 'Tratamentos');
-      final preco = TextEditingController();
-      final validade = TextEditingController(text: '90');
-      final intervalo = TextEditingController(text: '7');
-      final maxParcelas = TextEditingController(text: '1');
-      final sinal = TextEditingController(text: '0');
-      final regrasCancelamento = TextEditingController();
-      final percentualFalta = TextEditingController(text: '0');
-      final percentualVendedor = TextEditingController(text: '0');
-      final observacoes = TextEditingController();
-      final selecionados = <String, int>{};
-      final profissionaisSelecionados = <String>{};
-      var sequencia = false;
-      var permiteParcelamento = false;
-      var exigeSinal = false;
-      var permiteTransferencia = false;
-      var formaPagamento = 'Pix';
-      var regraFalta = RegraFaltaPacote.manter;
-      var modoComissao = ModoComissaoPacote.porSessao;
-      final confirmou = await showDialog<bool>(
-        context: context,
-        builder: (context) => StatefulBuilder(
-          builder: (context, setLocal) => AlertDialog(
-            title: const Text('Novo pacote de serviços'),
-            content: SizedBox(
-              width: 520,
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextField(
-                      controller: nome,
-                      decoration: const InputDecoration(labelText: 'Nome *'),
-                    ),
-                    TextField(
-                      controller: descricao,
-                      maxLines: 2,
-                      decoration: const InputDecoration(labelText: 'Descrição'),
-                    ),
-                    TextField(
-                      controller: categoria,
-                      decoration: const InputDecoration(
-                        labelText: 'Categoria *',
-                      ),
-                    ),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: preco,
-                            keyboardType: TextInputType.number,
-                            decoration: const InputDecoration(
-                              labelText: 'Preço do pacote *',
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: TextField(
-                            controller: validade,
-                            keyboardType: TextInputType.number,
-                            decoration: const InputDecoration(
-                              labelText: 'Validade (dias) *',
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    TextField(
-                      controller: intervalo,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                        labelText: 'Intervalo recomendado (dias)',
-                      ),
-                    ),
-                    DropdownButtonFormField<String>(
-                      initialValue: formaPagamento,
-                      decoration: const InputDecoration(
-                        labelText: 'Forma de pagamento padrão',
-                      ),
-                      items:
-                          const ['Pix', 'Dinheiro', 'Cartão', 'Transferência']
-                              .map(
-                                (v) =>
-                                    DropdownMenuItem(value: v, child: Text(v)),
-                              )
-                              .toList(),
-                      onChanged: (v) => formaPagamento = v!,
-                    ),
-                    SwitchListTile(
-                      contentPadding: EdgeInsets.zero,
-                      value: permiteParcelamento,
-                      title: const Text('Permitir parcelamento'),
-                      onChanged: (v) => setLocal(() => permiteParcelamento = v),
-                    ),
-                    if (permiteParcelamento)
-                      TextField(
-                        controller: maxParcelas,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(
-                          labelText: 'Máximo de parcelas',
-                        ),
-                      ),
-                    SwitchListTile(
-                      contentPadding: EdgeInsets.zero,
-                      value: exigeSinal,
-                      title: const Text('Exigir sinal'),
-                      onChanged: (v) => setLocal(() => exigeSinal = v),
-                    ),
-                    if (exigeSinal)
-                      TextField(
-                        controller: sinal,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(
-                          labelText: 'Sinal mínimo',
-                        ),
-                      ),
-                    DropdownButtonFormField<RegraFaltaPacote>(
-                      initialValue: regraFalta,
-                      decoration: const InputDecoration(
-                        labelText: 'Regra para faltas',
-                      ),
-                      items: const [
-                        DropdownMenuItem(
-                          value: RegraFaltaPacote.manter,
-                          child: Text('Manter sessão'),
-                        ),
-                        DropdownMenuItem(
-                          value: RegraFaltaPacote.consumir,
-                          child: Text('Consumir sessão'),
-                        ),
-                        DropdownMenuItem(
-                          value: RegraFaltaPacote.parcial,
-                          child: Text('Consumir parcialmente'),
-                        ),
-                        DropdownMenuItem(
-                          value: RegraFaltaPacote.aprovar,
-                          child: Text('Exigir aprovação'),
-                        ),
-                      ],
-                      onChanged: (v) => setLocal(() => regraFalta = v!),
-                    ),
-                    if (regraFalta == RegraFaltaPacote.parcial)
-                      TextField(
-                        controller: percentualFalta,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(
-                          labelText: 'Percentual consumido na falta',
-                        ),
-                      ),
-                    TextField(
-                      controller: regrasCancelamento,
-                      maxLines: 2,
-                      decoration: const InputDecoration(
-                        labelText: 'Regras de cancelamento',
-                      ),
-                    ),
-                    SwitchListTile(
-                      contentPadding: EdgeInsets.zero,
-                      value: permiteTransferencia,
-                      title: const Text('Permitir transferência'),
-                      onChanged: (v) =>
-                          setLocal(() => permiteTransferencia = v),
-                    ),
-                    DropdownButtonFormField<ModoComissaoPacote>(
-                      initialValue: modoComissao,
-                      decoration: const InputDecoration(
-                        labelText: 'Geração da comissão',
-                      ),
-                      items: const [
-                        DropdownMenuItem(
-                          value: ModoComissaoPacote.venda,
-                          child: Text('Integral na venda'),
-                        ),
-                        DropdownMenuItem(
-                          value: ModoComissaoPacote.porSessao,
-                          child: Text('Proporcional por sessão'),
-                        ),
-                        DropdownMenuItem(
-                          value: ModoComissaoPacote.dividida,
-                          child: Text('Vendedor e executor'),
-                        ),
-                      ],
-                      onChanged: (v) => setLocal(() => modoComissao = v!),
-                    ),
-                    if (modoComissao != ModoComissaoPacote.porSessao)
-                      TextField(
-                        controller: percentualVendedor,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(
-                          labelText: 'Comissão do vendedor (%)',
-                        ),
-                      ),
-                    if (profissionais.isNotEmpty) ...[
-                      const Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text('Profissionais autorizados'),
-                      ),
-                      Wrap(
-                        spacing: 6,
-                        children: profissionais.map((p) {
-                          final id = p['id'] as String;
-                          return FilterChip(
-                            label: Text(p['nome'] as String),
-                            selected: profissionaisSelecionados.contains(id),
-                            onSelected: (v) => setLocal(
-                              () => v
-                                  ? profissionaisSelecionados.add(id)
-                                  : profissionaisSelecionados.remove(id),
-                            ),
-                          );
-                        }).toList(),
-                      ),
-                    ],
-                    SwitchListTile(
-                      contentPadding: EdgeInsets.zero,
-                      value: sequencia,
-                      title: const Text('Sequência obrigatória'),
-                      onChanged: (v) => setLocal(() => sequencia = v),
-                    ),
-                    const Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text('Serviços e quantidades'),
-                    ),
-                    ...servicos.map((servico) {
-                      final id = servico['id'] as String;
-                      final quantidade = selecionados[id] ?? 0;
-                      return CheckboxListTile(
-                        contentPadding: EdgeInsets.zero,
-                        value: quantidade > 0,
-                        title: Text(servico['nome'] as String),
-                        subtitle: quantidade == 0
-                            ? null
-                            : Text('Quantidade: $quantidade'),
-                        secondary: quantidade == 0
-                            ? null
-                            : IconButton(
-                                tooltip: 'Aumentar quantidade',
-                                onPressed: () => setLocal(
-                                  () => selecionados[id] = quantidade + 1,
-                                ),
-                                icon: const Icon(Icons.add_circle_outline),
-                              ),
-                        onChanged: (v) => setLocal(() {
-                          if (v == true) {
-                            selecionados[id] = 1;
-                          } else {
-                            selecionados.remove(id);
-                          }
-                        }),
-                      );
-                    }),
-                    TextField(
-                      controller: observacoes,
-                      maxLines: 2,
-                      decoration: const InputDecoration(
-                        labelText: 'Observações',
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('Cancelar'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: const Text('Salvar'),
-              ),
-            ],
-          ),
-        ),
-      );
-      if (confirmou != true) return;
-      var ordem = 0;
-      await _repository.salvarModelo(
-        PacoteEntrada(
-          nome: nome.text,
-          descricao: descricao.text,
-          categoria: categoria.text,
-          precoPacote: double.tryParse(preco.text.replaceAll(',', '.')) ?? -1,
-          validadeDias: int.tryParse(validade.text) ?? 0,
-          intervaloRecomendadoDias: int.tryParse(intervalo.text) ?? 7,
-          tipoSequencia: sequencia
-              ? TipoSequenciaPacote.obrigatoria
-              : TipoSequenciaPacote.livre,
-          formaPagamentoPadrao: formaPagamento,
-          permiteParcelamento: permiteParcelamento,
-          maxParcelas: int.tryParse(maxParcelas.text) ?? 1,
-          exigeSinal: exigeSinal,
-          sinalPadrao: double.tryParse(sinal.text.replaceAll(',', '.')) ?? 0,
-          regrasCancelamento: regrasCancelamento.text,
-          regraFalta: regraFalta,
-          percentualFalta:
-              double.tryParse(percentualFalta.text.replaceAll(',', '.')) ?? 0,
-          permiteTransferencia: permiteTransferencia,
-          modoComissao: modoComissao,
-          percentualVendedor:
-              double.tryParse(percentualVendedor.text.replaceAll(',', '.')) ??
-              0,
-          observacoes: observacoes.text,
-          itens: selecionados.entries.map((item) {
-            ordem++;
-            return PacoteItemEntrada(
-              servicoId: item.key,
-              quantidade: item.value,
-              ordemInicial: sequencia ? ordem : null,
-              intervaloMinimoDias: int.tryParse(intervalo.text) ?? 0,
-              profissionaisAutorizados: profissionaisSelecionados.toList(),
-            );
-          }).toList(),
-        ),
-      );
-      await _carregar();
-    } catch (erro) {
-      if (mounted) _erro(erro);
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const NovoPacotePage()),
+    );
+    if (result == true && mounted) {
+      _carregar();
     }
   }
 
-  Future<void> _vender(Map<String, Object?> modelo) async {
+  Future<void> _vender(PacoteModeloRegistro modelo) async {
     final clientes = await _repository.listarClientesAtivos();
     final profissionais = await _repository.listarProfissionaisAtivos();
     if (!mounted) return;
@@ -576,12 +246,12 @@ class _PacotesPageState extends State<PacotesPage>
     final desconto = TextEditingController(text: '0');
     final pago = TextEditingController(text: '0');
     final parcelas = TextEditingController(text: '1');
-    String forma = modelo['forma_pagamento_padrao'] as String? ?? 'Pix';
+    String forma = 'Pix';
     final confirmou = await showDialog<bool>(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setLocal) => AlertDialog(
-          title: Text('Vender ${modelo['nome']}'),
+          title: Text('Vender ${modelo.nome}'),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -657,7 +327,7 @@ class _PacotesPageState extends State<PacotesPage>
     final valorPago = double.tryParse(pago.text.replaceAll(',', '.')) ?? 0;
     final vendaId = await _repository.vender(
       VendaPacoteEntrada(
-        pacoteId: modelo['id'] as String,
+        pacoteId: modelo.id,
         clienteId: clienteId,
         vendedorProfissionalId: profissionalId,
         desconto: double.tryParse(desconto.text.replaceAll(',', '.')) ?? 0,

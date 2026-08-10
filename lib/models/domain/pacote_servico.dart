@@ -235,3 +235,59 @@ class ResumoVendaPacote {
 
   double get progresso => contratadas == 0 ? 0 : realizadas / contratadas;
 }
+
+class PacoteItemRegistro {
+  final String id;
+  final String servicoId;
+  final String servicoNome;
+  final int quantidadeSessoes;
+  final int? ordem;
+
+  const PacoteItemRegistro({
+    required this.id,
+    required this.servicoId,
+    required this.servicoNome,
+    required this.quantidadeSessoes,
+    this.ordem,
+  });
+}
+
+class PacoteModeloRegistro {
+  final String id;
+  final String nome;
+  final double preco;
+  final int? validadeDias;
+  final String regrasUso;
+  final bool ativo;
+  final String itensResumo;
+  final int totalSessoes;
+
+  const PacoteModeloRegistro({
+    required this.id,
+    required this.nome,
+    required this.preco,
+    this.validadeDias,
+    required this.regrasUso,
+    required this.ativo,
+    required this.itensResumo,
+    required this.totalSessoes,
+  });
+}
+
+class SessaoDisponivelRegistro {
+  final String sessaoId;
+  final String pacoteNome;
+  final String servicoId;
+  final String servicoNome;
+  final String pacoteVendidoId;
+  final int duracaoMinutos;
+
+  const SessaoDisponivelRegistro({
+    required this.sessaoId,
+    required this.pacoteNome,
+    required this.servicoId,
+    required this.servicoNome,
+    required this.pacoteVendidoId,
+    required this.duracaoMinutos,
+  });
+}

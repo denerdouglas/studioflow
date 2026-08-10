@@ -478,34 +478,126 @@ class PacotesRepository {
     );
   }
 
-  Future<List<Map<String, Object?>>> listarModelos({
+  Future<List<SessaoDisponivelRegistro>> listarSessoesDisponiveisCliente(
+    String clienteId,
+  ) async {
+    final db = await _databaseProvider();
+    final result = await db.rawQuery(
+      '''SELECT s.id AS sessao_id, pv.id AS pacote_vendido_id,
+                p.nome AS pacote_nome, sv.id AS servico_id,
+                sv.nome AS servico_nome, sv.duracao_minutos
+         FROM sessoes_pacotes s
+         JOIN pacotes_vendidos pv ON pv.id=s.pacote_vendido_id
+         JOIN pacotes p ON p.id=pv.pacote_id
+         JOIN servicos sv ON sv.id=s.servico_id_previsto
+         WHERE pv.cliente_id=? AND pv.business_id=? 
+           AND s.status='disponivel' AND pv.status='ativo'
+         ORDER BY pv.data_venda ASC, s.ordem ASC''',
+      [clienteId, _comercioId],
+    );
+    return result
+        .map(
+          (row) => SessaoDisponivelRegistro(
+            sessaoId: row['sessao_id'] as String,
+            pacoteNome: row['pacote_nome'] as String,
+            servicoId: row['servico_id'] as String,
+            servicoNome: row['servico_nome'] as String,
+            pacoteVendidoId: row['pacote_vendido_id'] as String,
+            duracaoMinutos: (row['duracao_minutos'] as num).toInt(),
+          ),
+        )
+        .toList();
+  }
+
+  Future<void> vincularAgendamentoSessao(
+    String agendamentoId,
+    String sessaoId,
+    DateTime dataAgendada,
+  ) async {
+    final db = await _databaseProvider();
+    await db.transaction((txn) async {
+      final sessaoRow = await txn.query(
+        'sessoes_pacotes',
+        where: 'id=? AND business_id=? AND status=?',
+        whereArgs: [sessaoId, _comercioId, 'disponivel'],
+      );
+      if (sessaoRow.isEmpty) {
+        throw StateError('Sessão indisponível ou já agendada.');
+      }
+
+      await txn.update(
+        'sessoes_pacotes',
+        {
+          'agendamento_id': agendamentoId,
+          'status': 'agendada',
+          'data_agendada': dataAgendada.toIso8601String(),
+          'updated_at': DateTime.now().toIso8601String(),
+        },
+        where: 'id=?',
+        whereArgs: [sessaoId],
+      );
+
+      // We might want to enqueue an event for the backend sync
+      await _enfileirar(txn, 'pacote_agenda', sessaoId, 'editar');
+    });
+  }
+
+  Future<List<PacoteModeloRegistro>> listarModelos({
     bool incluirInativos = true,
   }) async {
     _exigir(AcaoPermissao.visualizarPacotes);
     final db = await _databaseProvider();
-    return db.rawQuery(
+    final result = await db.rawQuery(
       '''SELECT p.*,
         (SELECT GROUP_CONCAT(s.nome || ' ×' || i.quantidade_sessoes, ', ')
          FROM pacote_itens i
          JOIN servicos s ON s.id=i.servico_id
-         WHERE i.pacote_id=p.id) AS itens_resumo
+         WHERE i.pacote_id=p.id AND i.ativo=1) AS itens_resumo,
+        (SELECT SUM(quantidade_sessoes)
+         FROM pacote_itens i
+         WHERE i.pacote_id=p.id AND i.ativo=1) AS total_sessoes
        FROM pacotes p
        WHERE p.business_id=? ${incluirInativos ? '' : "AND p.status=1"}
        ORDER BY p.status DESC, p.nome COLLATE NOCASE''',
       [_comercioId],
     );
+    return result
+        .map(
+          (row) => PacoteModeloRegistro(
+            id: row['id'] as String,
+            nome: row['nome'] as String,
+            preco: (row['preco'] as num).toDouble(),
+            validadeDias: row['validade_dias'] as int?,
+            regrasUso: row['regras_uso'] as String? ?? '',
+            ativo: (row['status'] as int) == 1,
+            itensResumo: row['itens_resumo'] as String? ?? '',
+            totalSessoes: (row['total_sessoes'] as num?)?.toInt() ?? 0,
+          ),
+        )
+        .toList();
   }
 
-  Future<List<Map<String, Object?>>> listarItens(String pacoteId) async {
+  Future<List<PacoteItemRegistro>> listarItens(String pacoteId) async {
     final db = await _databaseProvider();
-    return db.rawQuery(
+    final result = await db.rawQuery(
       '''SELECT i.*, s.nome AS servico_nome
          FROM pacote_itens i
          JOIN servicos s ON s.id=i.servico_id
-         WHERE i.pacote_id=?
+         WHERE i.pacote_id=? AND i.ativo=1
          ORDER BY COALESCE(i.ordem, 9999), s.nome''',
       [pacoteId],
     );
+    return result
+        .map(
+          (row) => PacoteItemRegistro(
+            id: row['id'] as String,
+            servicoId: row['servico_id'] as String,
+            servicoNome: row['servico_nome'] as String,
+            quantidadeSessoes: (row['quantidade_sessoes'] as num).toInt(),
+            ordem: row['ordem'] as int?,
+          ),
+        )
+        .toList();
   }
 
   Future<String> salvarModelo(PacoteEntrada entrada) async {
