@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:developer' as developer;
 
 import 'package:sqflite/sqflite.dart';
 
@@ -406,8 +407,11 @@ class PacotesRepository {
         'updated_at': now,
       });
     } catch (e) {
-      // Ignore Whatsapp enqueue failure as per user requirements
-      print('Falha ao enfileirar WhatsApp: $e');
+      developer.log(
+        'Falha ao enfileirar WhatsApp.',
+        name: 'PacotesRepository',
+        error: e,
+      );
     }
 
     return vendaId;
@@ -552,11 +556,6 @@ class PacotesRepository {
         0,
         (total, item) => total + item.quantidade,
       );
-      final soma = entrada.itens.fold<double>(0, (total, item) {
-        return total +
-            (servicos[item.servicoId]!['preco'] as num).toDouble() *
-                item.quantidade;
-      });
       final agora = _agora();
       final mapa = <String, Object?>{
         'id': id,
@@ -565,7 +564,7 @@ class PacotesRepository {
         'preco': entrada.precoPacote,
         'validade_dias': entrada.validadeDias,
         'regras_uso': entrada.regrasCancelamento.trim(),
-        'status': entrada.ativo ? 'ativo' : 'inativo',
+        'status': entrada.ativo ? 1 : 0,
         'created_by': _usuarioId,
         'created_at': agora,
         'updated_at': agora,
@@ -630,7 +629,7 @@ class PacotesRepository {
     final db = await _databaseProvider();
     await db.update(
       'pacotes',
-      {'status': ativo ? 'ativo' : 'inativo', 'updated_at': _agora()},
+      {'status': ativo ? 1 : 0, 'updated_at': _agora()},
       where: 'id=? AND business_id=?',
       whereArgs: [id, _comercioId],
     );
@@ -645,7 +644,7 @@ class PacotesRepository {
       final pacotes = await txn.query(
         'pacotes',
         where: 'id=? AND business_id=? AND status=?',
-        whereArgs: [entrada.pacoteId, _comercioId, 'ativo'],
+        whereArgs: [entrada.pacoteId, _comercioId, 1],
         limit: 1,
       );
       if (pacotes.isEmpty) throw StateError('Pacote inativo ou inexistente.');
@@ -735,11 +734,7 @@ class PacotesRepository {
           });
         }
       }
-      final saldo = contratado - pago;
-      final valorParcela = entrada.parcelas == 0
-          ? saldo
-          : saldo / entrada.parcelas;
-      // Parcelas handled by external financial module now
+      // Parcelas tratadas pelo m?dulo financeiro externo.
       if (pago > 0) {
         await _registrarPagamentoTxn(
           txn,
@@ -844,7 +839,7 @@ class PacotesRepository {
        LEFT JOIN sessoes_pacotes s ON s.pacote_vendido_id=v.id
        WHERE v.business_id=? ${clienteId == null ? '' : 'AND v.cliente_id=?'}
        GROUP BY v.id ORDER BY v.data_venda DESC''',
-      [_comercioId, if (clienteId != null) clienteId],
+      [_comercioId, ?clienteId],
     );
     return rows.map((e) {
       int n(String campo) => (e[campo] as num? ?? 0).toInt();
@@ -1642,6 +1637,7 @@ class PacotesRepository {
     return criados;
   }
 
+  // ignore: unused_element
   Future<void> _comissao(
     DatabaseExecutor txn, {
     required String vendaId,
@@ -1831,6 +1827,7 @@ class PacotesRepository {
     });
   }
 
+  // ignore: unused_element
   String _modoComissao(ModoComissaoPacote modo) {
     return switch (modo) {
       ModoComissaoPacote.venda => 'venda',

@@ -31,12 +31,7 @@ class BookingSettingsRepository {
     if (rows.isEmpty) throw StateError('Estabelecimento não encontrado.');
     var slug = rows.single['booking_slug'] as String?;
     if (slug == null || slug.isEmpty) {
-      slug = await BookingSlug.available(
-        db,
-        rows.single['nome'] as String,
-        exceptBusinessId: _businessId,
-      );
-      await _save(db, slug, true);
+      slug = '';
     }
     return BookingSettings(
       slug: slug,

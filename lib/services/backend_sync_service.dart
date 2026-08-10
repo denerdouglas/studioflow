@@ -64,21 +64,8 @@ class BackendSyncService {
         password: credenciais.senha,
         businessId: usuario.comercioId,
       );
-    } on BackendHttpException catch (error) {
-      if (!criarAmbienteSeAusente || error.code != 'invalid_credentials') {
-        rethrow;
-      }
-      response = await _api.registerBusiness(
-        endpoint: endpoint,
-        businessId: usuario.comercioId,
-        businessName: usuario.nomeComercio,
-        segment: usuario.tipoEstabelecimento.name,
-        userId: usuario.id,
-        ownerName: usuario.nome,
-        phone: usuario.telefone,
-        login: credenciais.login,
-        password: credenciais.senha,
-      );
+    } on BackendHttpException {
+      rethrow;
     }
     final session = _sessionFromResponse(response, usuario.comercioId);
     if (session.comercioId != usuario.comercioId) {
@@ -396,7 +383,11 @@ class BackendSyncService {
             'operationId': row['id'],
             'entity': row['entidade'],
             'entityId': row['entidade_id'],
-            'operation': row['operacao'],
+            'operation': row['operacao'] == 'upsert'
+                ? ((row['versao_servidor'] as int? ?? 0) == 0
+                      ? 'criar'
+                      : 'atualizar')
+                : row['operacao'],
             'localVersion': row['versao_servidor'],
             'payload': jsonDecode(row['payload_json'] as String) as Object?,
           },

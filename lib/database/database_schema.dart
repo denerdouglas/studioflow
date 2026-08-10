@@ -282,7 +282,7 @@ abstract final class DatabaseSchema {
         catalogo_id TEXT,
         codigo_interno TEXT,
         preco_venda REAL DEFAULT 0,
-        modalidade TEXT,
+        modalidade TEXT DEFAULT 'proprio',
         lote TEXT,
         unidade_id TEXT,
         quantidade REAL DEFAULT 0,

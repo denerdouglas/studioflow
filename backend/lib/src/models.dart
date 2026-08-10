@@ -8,6 +8,8 @@ final class AccountIdentity {
   final String role;
   final String passwordHash;
   final bool active;
+  final String? bookingSlug;
+  final bool? bookingEnabled;
 
   const AccountIdentity({
     required this.userId,
@@ -19,6 +21,8 @@ final class AccountIdentity {
     required this.role,
     required this.passwordHash,
     required this.active,
+    this.bookingSlug,
+    this.bookingEnabled,
   });
 
   Map<String, Object?> toPublicJson() => {
@@ -29,6 +33,8 @@ final class AccountIdentity {
     'phone': phone,
     'login': login,
     'role': role,
+    'bookingSlug': bookingSlug,
+    'bookingEnabled': bookingEnabled,
   };
 }
 

@@ -163,9 +163,34 @@ class AcessoRepository {
         'telefone': telefone,
         'email': login,
         'ativo': 1,
+        if (account['bookingSlug'] != null)
+          'booking_slug': account['bookingSlug'],
+        if (account['bookingEnabled'] != null)
+          'booking_enabled': (account['bookingEnabled'] == true) ? 1 : 0,
+        if (account['bookingSlug'] != null)
+          'booking_public_url': BookingSlug.publicUrl(
+            account['bookingSlug'] as String,
+          ),
+        if (account['bookingSlug'] != null) 'booking_updated_at': agora,
         'criado_em': agora,
         'atualizado_em': agora,
       }, conflictAlgorithm: ConflictAlgorithm.ignore);
+
+      if (account['bookingSlug'] != null) {
+        await txn.update(
+          'comercios',
+          {
+            'booking_slug': account['bookingSlug'],
+            'booking_enabled': (account['bookingEnabled'] == true) ? 1 : 0,
+            'booking_public_url': BookingSlug.publicUrl(
+              account['bookingSlug'] as String,
+            ),
+            'booking_updated_at': agora,
+          },
+          where: 'id = ?',
+          whereArgs: [comercioId],
+        );
+      }
       await _garantirModalidadeInicial(txn, comercioId, agora);
       await txn.insert('usuarios', {
         'id': usuarioId,

@@ -77,7 +77,7 @@ class CommercialRepository {
       whereArgs: [_commerceId],
       limit: 1,
     );
-    
+
     if (rows.isEmpty) {
       final now = DateTime.now().toUtc();
       await db.insert('assinaturas', {
@@ -96,7 +96,7 @@ class CommercialRepository {
         limit: 1,
       );
     }
-    
+
     final row = rows.first;
     return SubscriptionInfo(
       commerceId: _commerceId,

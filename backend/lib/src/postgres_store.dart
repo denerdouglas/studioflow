@@ -77,7 +77,8 @@ final class PostgresBackendStore
       final result = await tx.execute(
         Sql.named('''
           SELECT u.id, u.business_id, b.display_name AS business_name,
-                 u.name, u.phone, u.login, u.password_hash, u.role, u.active
+                 u.name, u.phone, u.login, u.password_hash, u.role, u.active,
+                 b.booking_slug, b.booking_enabled
           FROM users u
           INNER JOIN businesses b ON b.id = u.business_id
           WHERE lower(u.login) = @login
@@ -97,7 +98,8 @@ final class PostgresBackendStore
       final result = await tx.execute(
         Sql.named('''
           SELECT u.id, u.business_id, b.display_name AS business_name,
-                 u.name, u.phone, u.login, u.password_hash, u.role, u.active
+                 u.name, u.phone, u.login, u.password_hash, u.role, u.active,
+                 b.booking_slug, b.booking_enabled
           FROM users u
           INNER JOIN businesses b ON b.id = u.business_id
           WHERE u.id = @userId AND u.business_id = @businessId
@@ -495,7 +497,8 @@ final class PostgresBackendStore
       final user = await tx.execute(
         Sql.named('''
           SELECT u.id, u.business_id, b.display_name AS business_name,
-                 u.name, u.phone, u.login, u.password_hash, u.role, u.active
+                 u.name, u.phone, u.login, u.password_hash, u.role, u.active,
+                 b.booking_slug, b.booking_enabled
           FROM users u INNER JOIN businesses b ON b.id = u.business_id
           WHERE u.id = @userId AND u.business_id = @businessId
         '''),
@@ -530,6 +533,8 @@ final class PostgresBackendStore
       role: row['role'] as String,
       passwordHash: row['password_hash'] as String,
       active: row['active'] as bool,
+      bookingSlug: row['booking_slug'] as String?,
+      bookingEnabled: row['booking_enabled'] as bool?,
     );
   }
 

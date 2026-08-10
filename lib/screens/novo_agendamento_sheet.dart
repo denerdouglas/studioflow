@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../models/domain/acesso.dart';
 import '../models/domain/agendamento_grupo_registro.dart';
 import '../repositories/agenda_repository.dart';
 import '../repositories/cadastros_basicos_repository.dart';
@@ -329,7 +328,7 @@ class _NovoAgendamentoSheetState extends State<NovoAgendamentoSheet> {
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               itemCount: _itens.length,
-              onReorder: (oldIndex, newIndex) {
+              onReorderItem: (oldIndex, newIndex) {
                 setState(() {
                   if (newIndex > oldIndex) newIndex -= 1;
                   final item = _itens.removeAt(oldIndex);

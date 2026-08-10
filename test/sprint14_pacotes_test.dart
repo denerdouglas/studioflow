@@ -1,3 +1,4 @@
+// ignore_for_file: dead_code
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:studioflow/database/database_schema_latest.dart';

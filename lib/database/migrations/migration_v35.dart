@@ -3,7 +3,9 @@ import 'package:sqflite/sqflite.dart';
 abstract final class MigrationV35 {
   static Future<void> executar(Database db) async {
     final colunas = await db.rawQuery('PRAGMA table_info(estoque)');
-    final nomesColunas = colunas.map((c) => c['name'].toString().toLowerCase()).toSet();
+    final nomesColunas = colunas
+        .map((c) => c['name'].toString().toLowerCase())
+        .toSet();
 
     Future<void> add(String nome, String definicao) async {
       if (!nomesColunas.contains(nome.toLowerCase())) {
@@ -21,7 +23,10 @@ abstract final class MigrationV35 {
     await add('modalidade', 'TEXT');
     await add('lote', 'TEXT');
     await add('unidade_id', 'TEXT');
-    await add('quantidade', 'REAL DEFAULT 0'); // Usado em algumas queries legadas
+    await add(
+      'quantidade',
+      'REAL DEFAULT 0',
+    ); // Usado em algumas queries legadas
     await add('codigo_barras', 'TEXT');
     await add('ativo', 'INTEGER DEFAULT 1');
     await add('quantidade_atual', 'REAL DEFAULT 0');

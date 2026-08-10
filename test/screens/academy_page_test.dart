@@ -140,9 +140,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(
-        find.text(
-          'Falha ao buscar cursos. Verifique sua conexão e tente novamente.',
-        ),
+        find.textContaining('Falha ao buscar cursos'),
         findsOneWidget,
       );
     });

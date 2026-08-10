@@ -88,11 +88,6 @@ class _ProducaoPageState extends State<ProducaoPage> {
 
     if (!mounted || input == null) return;
 
-    if (input.criarAmbiente && usuario.funcao != FuncaoUsuario.dono) {
-      _mensagem('Somente o dono pode criar o ambiente remoto.');
-      return;
-    }
-
     await _executar(() async {
       await _syncService.conectar(
         usuario: usuario,
@@ -101,7 +96,7 @@ class _ProducaoPageState extends State<ProducaoPage> {
           login: input.login,
           senha: input.senha,
         ),
-        criarAmbienteSeAusente: input.criarAmbiente,
+        criarAmbienteSeAusente: false,
       );
 
       final resultado = await _syncService.sincronizar(usuario.comercioId);
@@ -338,7 +333,6 @@ class _BackendConnectionDialogState extends State<_BackendConnectionDialog> {
   late final TextEditingController _endpointController;
   late final TextEditingController _loginController;
   late final TextEditingController _senhaController;
-  bool _criarAmbiente = false;
 
   @override
   void initState() {
@@ -364,7 +358,6 @@ class _BackendConnectionDialogState extends State<_BackendConnectionDialog> {
         endpoint: AcessoOnlineService.endpointCompilado,
         login: _loginController.text.trim(),
         senha: _senhaController.text,
-        criarAmbiente: _criarAmbiente,
       ),
     );
   }
@@ -399,17 +392,6 @@ class _BackendConnectionDialogState extends State<_BackendConnectionDialog> {
               onSubmitted: (_) => _confirmar(),
               decoration: const InputDecoration(labelText: 'Senha online'),
             ),
-            CheckboxListTile(
-              contentPadding: EdgeInsets.zero,
-              value: _criarAmbiente,
-              onChanged: (value) {
-                setState(() => _criarAmbiente = value ?? false);
-              },
-              title: const Text('Criar ambiente remoto se ainda não existir'),
-              subtitle: const Text(
-                'Disponível somente para o dono no primeiro vínculo.',
-              ),
-            ),
           ],
         ),
       ),
@@ -428,12 +410,9 @@ class _BackendInput {
   final String endpoint;
   final String login;
   final String senha;
-  final bool criarAmbiente;
-
   const _BackendInput({
     required this.endpoint,
     required this.login,
     required this.senha,
-    required this.criarAmbiente,
   });
 }

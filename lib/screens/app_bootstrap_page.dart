@@ -40,10 +40,14 @@ class _AppBootstrapPageState extends State<AppBootstrapPage> {
       }
 
       // Forçar inicialização do banco com timeout
-      await DatabaseService.instance.database.timeout(const Duration(seconds: 15));
+      await DatabaseService.instance.database.timeout(
+        const Duration(seconds: 15),
+      );
 
       // Inicializar sessão
-      await SessionController.instance.inicializar().timeout(const Duration(seconds: 15));
+      await SessionController.instance.inicializar().timeout(
+        const Duration(seconds: 15),
+      );
 
       final erroSessao = SessionController.instance.erroInicializacao;
       if (erroSessao != null) {

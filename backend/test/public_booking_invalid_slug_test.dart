@@ -28,7 +28,10 @@ void main() {
     });
 
     test('Deve retornar 404 para slug inexistente', () async {
-      final request = Request('GET', Uri.parse('http://localhost/v1/public/booking/slug-inexistente-123'));
+      final request = Request(
+        'GET',
+        Uri.parse('http://localhost/v1/public/booking/slug-inexistente-123'),
+      );
       final response = await handler(request);
 
       expect(response.statusCode, 404);
@@ -37,7 +40,12 @@ void main() {
     });
 
     test('Deve retornar 404 para serviços de slug inexistente', () async {
-      final request = Request('GET', Uri.parse('http://localhost/v1/public/booking/slug-inexistente-123/services'));
+      final request = Request(
+        'GET',
+        Uri.parse(
+          'http://localhost/v1/public/booking/slug-inexistente-123/services',
+        ),
+      );
       final response = await handler(request);
 
       expect(response.statusCode, 404);

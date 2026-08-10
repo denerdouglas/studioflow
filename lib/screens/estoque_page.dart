@@ -17,10 +17,6 @@ class _EstoquePageState extends State<EstoquePage> {
   static const Color _roxo = Color(0xFF70569A);
   static const Color _fundo = Color(0xFFF9F6FC);
   static const Color _texto = Color(0xFF2D2140);
-  static const Color _textoClaro = Color(0xFF766A85);
-  static const Color _verde = Color(0xFF15996B);
-  static const Color _laranja = Color(0xFFE58A25);
-  static const Color _vermelho = Color(0xFFD64D64);
 
   final EstoqueRepository _repository = EstoqueRepository();
   ResumoEstoque _resumo = ResumoEstoque.vazio();

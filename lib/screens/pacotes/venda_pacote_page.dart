@@ -138,8 +138,9 @@ class _VendaPacotePageState extends State<VendaPacotePage> {
                         );
                       }).toList(),
                       onChanged: (val) {
-                        if (val != null)
+                        if (val != null) {
                           setDialogState(() => novoServicoId = val);
+                        }
                       },
                     ),
                     const SizedBox(height: 16),
@@ -155,8 +156,9 @@ class _VendaPacotePageState extends State<VendaPacotePage> {
                         );
                       }).toList(),
                       onChanged: (val) {
-                        if (val != null)
+                        if (val != null) {
                           setDialogState(() => novoProfissionalId = val);
+                        }
                       },
                     ),
                     const SizedBox(height: 16),

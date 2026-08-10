@@ -305,6 +305,7 @@ class _ModalidadesPageState extends State<ModalidadesPage> {
       return;
     }
 
+    if (!mounted) return;
     final selected = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
@@ -336,6 +337,7 @@ class _ModalidadesPageState extends State<ModalidadesPage> {
 
     final templateName = templates.firstWhere((t) => t.slug == selected).nome;
 
+    if (!mounted) return;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(

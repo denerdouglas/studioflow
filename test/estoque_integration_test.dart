@@ -1,3 +1,4 @@
+// ignore_for_file: unused_local_variable
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:studioflow/repositories/estoque_repository.dart';

@@ -160,8 +160,6 @@ void main() {
 
     final duracao = DateTime.now().difference(inicio).inMilliseconds;
 
-    print('Tempo de busca com FTS dinâmico em 10k: $duracao ms');
-
     // O ideal é que o banco resolva em menos de 100ms
     expect(duracao, lessThan(300));
 

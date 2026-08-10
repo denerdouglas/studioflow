@@ -118,7 +118,7 @@ class _HomePremiumPageState extends State<HomePremiumPage> {
       } catch (e, st) {
         debugPrint('Erro ao carregar modalidades na Home: $e\n$st');
       }
-      
+
       if (!mounted) return;
       setState(() {
         _summary = summary;

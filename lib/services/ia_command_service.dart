@@ -626,8 +626,8 @@ class IaCommandService {
           },
         );
         pending++;
-      } catch (e, stack) {
-        print('Exception in _executeReminders: $e\n$stack');
+      } catch (e) {
+
         failures++;
       }
     }

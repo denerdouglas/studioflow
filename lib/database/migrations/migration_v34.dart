@@ -27,7 +27,7 @@ abstract final class MigrationV34 {
       ON creditos_comerciais (business_id, codigo) 
       WHERE codigo IS NOT NULL AND deleted_at IS NULL
     ''');
-    
+
     // Garantir que whatsapp_fila exista
     await db.execute('''
       CREATE TABLE IF NOT EXISTS whatsapp_fila (
@@ -67,7 +67,7 @@ abstract final class MigrationV34 {
 
     // 2. Agendamentos
     await _garantirColunasAgendamentos(db);
-    
+
     // 3. Whatsapp Fila
     await _garantirColunasWhatsappFila(db);
   }
@@ -133,7 +133,7 @@ abstract final class MigrationV34 {
     await _addColumn(db, 'whatsapp_fila', 'updated_by', 'TEXT');
 
     final columns = await db.rawQuery('PRAGMA table_info(whatsapp_fila)');
-    
+
     // Backfill para manter consistência sem dropar/apagar colunas velhas
     final hasBusinessId = columns.any((c) => c['name'] == 'business_id');
     final hasComercioId = columns.any((c) => c['name'] == 'comercio_id');
