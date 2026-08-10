@@ -55,7 +55,7 @@ class PacotesRepository {
 
     var fakeId = 0;
     for (final item in itens) {
-      final qtd = item['quantidade_sessoes'] as int;
+      final qtd = _parseInt(item['quantidade_sessoes']);
       for (var i = 0; i < qtd; i++) {
         fakeId++;
         final autorizados = await db.query(
@@ -90,7 +90,7 @@ class PacotesRepository {
           Duration(days: solicitacao.limiteBuscaDias),
         );
         var diaBusca = alvo;
-        final duracao = item['duracao_prevista'] as int;
+        final duracao = _parseInt(item['duracao_prevista'], fallback: 30);
         while (escolhido == null && diaBusca.isBefore(limiteBusca)) {
           if (!solicitacao.diasSemana.contains(diaBusca.weekday)) {
             diaBusca = diaBusca.add(const Duration(days: 1));
@@ -142,7 +142,7 @@ class PacotesRepository {
             profissionalId: solicitacao.profissionalId,
             profissionalNome: profissional.first['nome'] as String,
             inicio: escolhido,
-            duracaoMinutos: item['duracao_prevista'] as int,
+            duracaoMinutos: _parseInt(item['duracao_prevista'], fallback: 30),
             horarioAlternativo:
                 escolhido.day != desejado.day ||
                 escolhido.hour != desejado.hour ||
@@ -189,12 +189,12 @@ class PacotesRepository {
       );
       if (pacoteRows.isEmpty) throw ArgumentError('Pacote não encontrado.');
       final pacote = pacoteRows.first;
-      final preco = (pacote['preco'] as num).toDouble();
+      final preco = _parseDouble(pacote['preco']);
       final contratado = preco - entrada.desconto;
       final pago = entrada.valorPagoInicial;
       final compra = entrada.dataCompra;
       final validade = compra.add(
-        Duration(days: pacote['validade_dias'] as int),
+        Duration(days: _parseInt(pacote['validade_dias'])),
       );
       final agora = _agora();
 
@@ -238,7 +238,7 @@ class PacotesRepository {
 
       final sessoesCriadasIds = <String>[];
       for (final item in itens) {
-        for (var i = 0; i < (item['quantidade_sessoes'] as int); i++) {
+        for (var i = 0; i < _parseInt(item['quantidade_sessoes']); i++) {
           final sessaoId = _id('pvs');
           sessoesCriadasIds.add(sessaoId);
           await txn.insert('sessoes_pacotes', {
@@ -246,7 +246,7 @@ class PacotesRepository {
             'business_id': _comercioId,
             'pacote_vendido_id': vendaId,
             'servico_id_previsto': item['servico_id'],
-            'ordem': item['ordem'] == null ? null : (item['ordem'] as int) + i,
+            'ordem': item['ordem'] == null ? null : _parseInt(item['ordem']) + i,
             'status': 'disponivel',
             'created_at': agora,
             'updated_at': agora,
@@ -503,7 +503,7 @@ class PacotesRepository {
             servicoId: row['servico_id'] as String,
             servicoNome: row['servico_nome'] as String,
             pacoteVendidoId: row['pacote_vendido_id'] as String,
-            duracaoMinutos: (row['duracao_minutos'] as num).toInt(),
+            duracaoMinutos: _parseInt(row['duracao_minutos']),
           ),
         )
         .toList();
@@ -566,12 +566,12 @@ class PacotesRepository {
           (row) => PacoteModeloRegistro(
             id: row['id'] as String,
             nome: row['nome'] as String,
-            preco: (row['preco'] as num).toDouble(),
-            validadeDias: row['validade_dias'] as int?,
+            preco: _parseDouble(row['preco']),
+            validadeDias: _parseIntOrNull(row['validade_dias']),
             regrasUso: row['regras_uso'] as String? ?? '',
-            ativo: (row['status'] as int) == 1,
+            ativo: _parseInt(row['status']) == 1,
             itensResumo: row['itens_resumo'] as String? ?? '',
-            totalSessoes: (row['total_sessoes'] as num?)?.toInt() ?? 0,
+            totalSessoes: _parseInt(row['total_sessoes']),
           ),
         )
         .toList();
@@ -593,8 +593,8 @@ class PacotesRepository {
             id: row['id'] as String,
             servicoId: row['servico_id'] as String,
             servicoNome: row['servico_nome'] as String,
-            quantidadeSessoes: (row['quantidade_sessoes'] as num).toInt(),
-            ordem: row['ordem'] as int?,
+            quantidadeSessoes: _parseInt(row['quantidade_sessoes']),
+            ordem: _parseIntOrNull(row['ordem']),
           ),
         )
         .toList();
@@ -754,7 +754,7 @@ class PacotesRepository {
         );
         if (rows.isEmpty) throw StateError('Cliente ou vendedor inválido.');
       }
-      final preco = (pacote['preco'] as num).toDouble();
+      final preco = _parseDouble(pacote['preco']);
       if (entrada.desconto < 0 || entrada.desconto > preco) {
         throw ArgumentError('Desconto inválido.');
       }
@@ -773,7 +773,7 @@ class PacotesRepository {
       }
       final compra = entrada.dataCompra;
       final validade = compra.add(
-        Duration(days: pacote['validade_dias'] as int),
+        Duration(days: _parseInt(pacote['validade_dias'])),
       );
       final agora = _agora();
       final totalSessoes =
@@ -813,13 +813,13 @@ class PacotesRepository {
         orderBy: 'COALESCE(ordem, 9999), id',
       );
       for (final item in itens) {
-        for (var i = 0; i < (item['quantidade_sessoes'] as int); i++) {
+        for (var i = 0; i < _parseInt(item['quantidade_sessoes']); i++) {
           await txn.insert('sessoes_pacotes', {
             'id': _id('pvs'),
             'business_id': _comercioId,
             'pacote_vendido_id': vendaId,
             'servico_id_previsto': item['servico_id'],
-            'ordem': item['ordem'] == null ? null : (item['ordem'] as int) + i,
+            'ordem': item['ordem'] == null ? null : _parseInt(item['ordem']) + i,
             'status': 'disponivel',
             'created_at': agora,
             'updated_at': agora,
@@ -934,15 +934,15 @@ class PacotesRepository {
       [_comercioId, ?clienteId],
     );
     return rows.map((e) {
-      int n(String campo) => (e[campo] as num? ?? 0).toInt();
+      int n(String campo) => _parseInt(e[campo]);
       return ResumoVendaPacote(
         id: e['id'] as String,
         pacoteNome: e['pacote_nome'] as String,
         clienteNome: e['cliente_nome'] as String,
-        valorContratado: (e['valor_final'] as num).toDouble(),
-        valorPago: (e['valor_final'] as num).toDouble(),
+        valorContratado: _parseDouble(e['valor_final']),
+        valorPago: _parseDouble(e['valor_final']),
         valorPendente: 0,
-        contratadas: (e['quantidade_sessoes'] as num).toInt(),
+        contratadas: _parseInt(e['quantidade_sessoes']),
         realizadas: n('realizadas'),
         agendadas: n('agendadas'),
         disponiveis: n('disponiveis'),
@@ -1021,7 +1021,7 @@ class PacotesRepository {
         continue;
       }
       if (anterior != null) {
-        final minimo = sessao['intervalo_minimo_dias'] as int;
+        final minimo = _parseInt(sessao['intervalo_minimo_dias']);
         final minimoData = anterior.add(Duration(days: minimo));
         if (alvo.isBefore(minimoData)) alvo = minimoData;
       }
@@ -1047,14 +1047,14 @@ class PacotesRepository {
         final livres = await agenda.horariosDisponiveis(
           profissionalId: solicitacao.profissionalId,
           data: data,
-          duracaoMinutos: sessao['duracao_minutos'] as int,
+          duracaoMinutos: _parseInt(sessao['duracao_minutos'], fallback: 30),
         );
         livres.removeWhere(
           (inicio) => planejadas.any(
             (p) =>
                 inicio.isBefore(p.fim) &&
                 inicio
-                    .add(Duration(minutes: sessao['duracao_minutos'] as int))
+                    .add(Duration(minutes: _parseInt(sessao['duracao_minutos'], fallback: 30)))
                     .isAfter(p.inicio),
           ),
         );
@@ -1080,7 +1080,7 @@ class PacotesRepository {
           profissionalId: solicitacao.profissionalId,
           profissionalNome: profissional.first['nome'] as String,
           inicio: escolhido,
-          duracaoMinutos: sessao['duracao_minutos'] as int,
+          duracaoMinutos: _parseInt(sessao['duracao_minutos'], fallback: 30),
           horarioAlternativo:
               escolhido.day != desejado.day ||
               escolhido.hour != desejado.hour ||
@@ -1208,7 +1208,7 @@ class PacotesRepository {
       );
       if (rows.isEmpty) throw StateError('Sessão de pacote não encontrada.');
       final row = rows.first;
-      if ((row['credito_consumido'] as num).toDouble() > 0) return;
+      if (_parseDouble(row['credito_consumido']) > 0) return;
       final materiais = await txn.query(
         'servico_materiais',
         where: 'comercio_id=? AND servico_id=? AND ativo=1',
@@ -1222,8 +1222,8 @@ class PacotesRepository {
           limit: 1,
         );
         if (estoques.isEmpty ||
-            (estoques.first['quantidade_atual'] as num).toDouble() <
-                (material['quantidade'] as num).toDouble()) {
+            _parseDouble(estoques.first['quantidade_atual']) <
+                _parseDouble(material['quantidade'])) {
           throw StateError('Estoque insuficiente para concluir a sessão.');
         }
       }
@@ -1253,8 +1253,8 @@ class PacotesRepository {
           whereArgs: [material['estoque_id'], _comercioId],
           limit: 1,
         )).first;
-        final anterior = (estoque['quantidade_atual'] as num).toDouble();
-        final quantidade = (material['quantidade'] as num).toDouble();
+        final anterior = _parseDouble(estoque['quantidade_atual']);
+        final quantidade = _parseDouble(material['quantidade']);
         await txn.update(
           'estoque',
           {'quantidade_atual': anterior - quantidade},
@@ -1947,5 +1947,29 @@ class PacotesRepository {
         atual.minute,
       ),
     };
+  }
+
+  int _parseInt(dynamic value, {int fallback = 0}) {
+    if (value == null) return fallback;
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    if (value is String) return int.tryParse(value) ?? fallback;
+    return fallback;
+  }
+
+  int? _parseIntOrNull(dynamic value) {
+    if (value == null) return null;
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    if (value is String) return int.tryParse(value);
+    return null;
+  }
+
+  double _parseDouble(dynamic value, {double fallback = 0.0}) {
+    if (value == null) return fallback;
+    if (value is double) return value;
+    if (value is num) return value.toDouble();
+    if (value is String) return double.tryParse(value) ?? fallback;
+    return fallback;
   }
 }

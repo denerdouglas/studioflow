@@ -274,8 +274,11 @@ class _NovoAgendamentoSheetState extends State<NovoAgendamentoSheet> {
               ),
             ),
             const SizedBox(height: 20),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 8,
+              runSpacing: 8,
               children: [
                 const Text(
                   'Novo Agendamento',
@@ -286,6 +289,7 @@ class _NovoAgendamentoSheetState extends State<NovoAgendamentoSheet> {
                   ),
                 ),
                 Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     TextButton.icon(
                       onPressed: () {
