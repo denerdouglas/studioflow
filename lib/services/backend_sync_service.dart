@@ -529,7 +529,8 @@ class BackendSyncService {
           where: 'comercio_id = ? AND cursor = ?',
           whereArgs: [comercioId, changeCursor],
         );
-        break;
+        lastCursor = changeCursor;
+        continue;
       }
       try {
         await _applyRemote(
