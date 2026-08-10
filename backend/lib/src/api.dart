@@ -336,8 +336,12 @@ final class StudioFlowApi {
                 r['unidade_id'] == null ||
                 r['unidade_id'] == unitId),
       )) {
-        final open = clock(work['hora_inicio'] ?? work['horario_inicio']);
-        final close = clock(work['hora_fim'] ?? work['horario_fim']);
+        final open = clock(
+          work['inicio'] ?? work['hora_inicio'] ?? work['horario_inicio'],
+        );
+        final close = clock(
+          work['fim'] ?? work['hora_fim'] ?? work['horario_fim'],
+        );
         if (open == null || close == null) continue;
         final pauseA = clock(work['intervalo_inicio']),
             pauseB = clock(work['intervalo_fim']);
@@ -494,7 +498,22 @@ final class StudioFlowApi {
     final availabilityBody =
         jsonDecode(await availabilityResponse.readAsString()) as Map;
     final availableSlots = List<String>.from(availabilityBody['slots'] as List);
-    if (!availableSlots.contains(startsAt.toIso8601String())) {
+    // Os slots da agenda são gerados no horário local de São Paulo,
+    // enquanto o navegador envia startsAt em UTC via toISOString().
+    final startsAtLocal = startsAt.toUtc().subtract(const Duration(hours: 3));
+
+    final slotDisponivel = availableSlots.any((slot) {
+      final parsed = DateTime.tryParse(slot);
+      if (parsed == null) return false;
+
+      return parsed.year == startsAtLocal.year &&
+          parsed.month == startsAtLocal.month &&
+          parsed.day == startsAtLocal.day &&
+          parsed.hour == startsAtLocal.hour &&
+          parsed.minute == startsAtLocal.minute;
+    });
+
+    if (!slotDisponivel) {
       final previous = await _bookingStore.findPublicAppointmentByIdempotency(
         businessId: booking.businessId,
         idempotencyKey: idempotency,

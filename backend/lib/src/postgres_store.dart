@@ -771,9 +771,9 @@ final class PostgresBackendStore
           AND entity='profissionais' AND entity_id=@professionalId
           AND deleted=FALSE
           AND COALESCE(payload->>'ativo','true') NOT IN ('false','0')) professional_ok,
-        (@unitId IS NULL OR EXISTS(SELECT 1 FROM sync_records
+        (CAST(@unitId AS TEXT) IS NULL OR EXISTS(SELECT 1 FROM sync_records
           WHERE business_id=@businessId AND entity='unidades'
-            AND entity_id=@unitId AND deleted=FALSE)) unit_ok,
+            AND entity_id=CAST(@unitId AS TEXT) AND deleted=FALSE)) unit_ok,
         NOT EXISTS(SELECT 1 FROM sync_records links
           WHERE links.business_id=@businessId
             AND links.entity='profissional_servicos' AND links.deleted=FALSE
