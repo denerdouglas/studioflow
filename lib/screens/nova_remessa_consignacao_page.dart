@@ -2,7 +2,8 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import '../repositories/consignacao_repository.dart';
-import '../services/vision_ocr_service.dart';
+import '../models/domain/consignment_document_import.dart';
+import '../services/consignment_document_import_service.dart';
 
 class NovaRemessaConsignacaoPage extends StatefulWidget {
   const NovaRemessaConsignacaoPage({super.key});
@@ -15,6 +16,7 @@ class NovaRemessaConsignacaoPage extends StatefulWidget {
 class _NovaRemessaConsignacaoPageState
     extends State<NovaRemessaConsignacaoPage> {
   final repo = ConsignacaoRepository();
+  final importer = ConsignmentDocumentImportService();
   final nome = TextEditingController();
   final contrato = TextEditingController();
   final mostruario = TextEditingController();
@@ -28,6 +30,9 @@ class _NovaRemessaConsignacaoPageState
   DateTime? pagamento;
   bool conferindo = false;
   bool salvando = false;
+  bool importando = false;
+  int linhasPendentes = 0;
+  String? validacaoDocumento;
 
   @override
   void initState() {
@@ -60,26 +65,97 @@ class _NovaRemessaConsignacaoPageState
     );
     final path = result?.files.single.path;
     if (path == null) return;
-    arquivo = path;
-    final lower = path.toLowerCase();
-    if (!lower.endsWith('.pdf')) {
-      try {
-        final data = await VisionOcrService.processImage(path);
-        itens.add({
-          'codigo': data.codigo ?? '',
-          'categoria': '',
-          'nome': data.nome ?? '',
-          'descricao': data.descricao ?? '',
-          'quantidade': 1,
-          'preco': data.preco ?? 0,
-          'material': data.material ?? '',
-          'observacoes': '',
-        });
-      } catch (_) {
-        // O arquivo continua anexado e a conferência manual permanece possível.
+    await _importar(path);
+  }
+
+  Future<void> _importar(String path) async {
+    setState(() => importando = true);
+    try {
+      final data = path.toLowerCase().endsWith('.pdf')
+          ? await importer.importPdf(path)
+          : await importer.importImage(path);
+      if (!mounted) return;
+      setState(() {
+        arquivo = path;
+        itens
+          ..clear()
+          ..addAll(data.itens.map((item) => item.toPieceMap()));
+        linhasPendentes = data.linhasPendentes.length;
+        validacaoDocumento = data.divergeDoDeclarado
+            ? 'Documento informa ${data.quantidadeDeclarada ?? "?"} itens / R\$ ${_money(data.totalDeclarado)}. '
+                  'Importação identificou ${data.quantidadeImportada} itens / R\$ ${_money(data.totalImportado)}. '
+                  'Revise antes de confirmar.'
+            : null;
+        _applyHeader(data);
+        conferindo = true;
+      });
+    } on ConsignmentImportException catch (error) {
+      if (mounted) await _showImportError(error.message, path);
+    } catch (_) {
+      if (mounted) {
+        await _showImportError(
+          'Não foi possível extrair os itens deste PDF.',
+          path,
+        );
+      }
+    } finally {
+      if (mounted) setState(() => importando = false);
+    }
+  }
+
+  void _applyHeader(ConsignmentDocumentImport data) {
+    contrato.text = data.contrato ?? contrato.text;
+    mostruario.text = data.mostruario ?? mostruario.text;
+    recebimento = data.dataEnvio ?? recebimento;
+    troca = data.dataTroca ?? troca;
+    pagamento = data.dataPagamento ?? pagamento;
+    if (nome.text.trim().isEmpty && data.mostruario != null) {
+      nome.text = 'Mostruário ${data.mostruario}';
+    }
+    final representative = data.representante?.trim();
+    if (representative != null && representative.isNotEmpty) {
+      final match = fornecedores.where(
+        (supplier) =>
+            '${supplier['nome']}'.trim().toLowerCase() ==
+            representative.toLowerCase(),
+      );
+      if (match.isNotEmpty) {
+        fornecedorId = match.first['id'] as String;
+      } else if (!observacoes.text.contains(representative)) {
+        observacoes.text = [
+          observacoes.text.trim(),
+          'Representante identificado: $representative',
+        ].where((value) => value.isNotEmpty).join('\n');
       }
     }
-    if (mounted) setState(() {});
+    final zone = data.zonaVenda?.trim();
+    if (zone != null && zone.isNotEmpty && !observacoes.text.contains(zone)) {
+      observacoes.text = [
+        observacoes.text.trim(),
+        'Zona de venda: $zone',
+      ].where((value) => value.isNotEmpty).join('\n');
+    }
+  }
+
+  Future<void> _showImportError(String message, String path) async {
+    final action = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Falha na importação'),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, 'manual'),
+            child: const Text('Preencher manualmente'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, 'retry'),
+            child: const Text('Tentar novamente'),
+          ),
+        ],
+      ),
+    );
+    if (action == 'retry') await _importar(path);
   }
 
   Future<void> _editarItem([int? index]) async {
@@ -266,9 +342,11 @@ class _NovaRemessaConsignacaoPageState
         const SizedBox(height: 12),
         if (!conferindo) ...[
           OutlinedButton.icon(
-            onPressed: _selecionarArquivo,
+            onPressed: importando ? null : _selecionarArquivo,
             icon: const Icon(Icons.upload_file),
-            label: const Text('Selecionar foto/imagem/PDF'),
+            label: Text(
+              importando ? 'Extraindo documento...' : 'Importar documento',
+            ),
           ),
           if (arquivo != null)
             Text(
@@ -281,7 +359,7 @@ class _NovaRemessaConsignacaoPageState
           children: [
             Expanded(
               child: Text(
-                'Itens (${itens.length} linhas)',
+                '${itens.length} itens identificados',
                 style: Theme.of(context).textTheme.titleMedium,
               ),
             ),
@@ -292,6 +370,26 @@ class _NovaRemessaConsignacaoPageState
             ),
           ],
         ),
+        if (linhasPendentes > 0)
+          Card(
+            color: Theme.of(context).colorScheme.errorContainer,
+            child: ListTile(
+              leading: const Icon(Icons.warning_amber_outlined),
+              title: Text('$linhasPendentes linhas ficaram pendentes'),
+              subtitle: const Text(
+                'Revise o documento e inclua/corrija manualmente antes de confirmar.',
+              ),
+            ),
+          ),
+        if (validacaoDocumento != null)
+          Card(
+            color: Theme.of(context).colorScheme.errorContainer,
+            child: ListTile(
+              leading: const Icon(Icons.calculate_outlined),
+              title: const Text('Totais divergentes'),
+              subtitle: Text(validacaoDocumento!),
+            ),
+          ),
         ...itens.indexed.map(
           (entry) => Card(
             child: ListTile(
@@ -329,4 +427,7 @@ class _NovaRemessaConsignacaoPageState
 
   static String _formatDate(DateTime value) =>
       '${value.day.toString().padLeft(2, '0')}/${value.month.toString().padLeft(2, '0')}/${value.year}';
+
+  static String _money(double? value) =>
+      value == null ? '?' : value.toStringAsFixed(2).replaceAll('.', ',');
 }

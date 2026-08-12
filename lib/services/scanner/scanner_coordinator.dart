@@ -1,4 +1,5 @@
 import '../../models/domain/scanner_product_draft.dart';
+import '../product_lookup_service.dart';
 
 abstract class ScannerProvider {
   Future<ScannerProductDraft?> searchBarcode(String gtin);
@@ -33,8 +34,12 @@ class ScannerCoordinator {
       gtin: ScannerField(
         gtin,
         source: 'barcode',
-        confidence: ScannerConfidence.alta,
+        confidence: ScannerConfidence.baixa,
+        reviewReason: 'GTIN válido, mas sem correspondência exata no catálogo.',
       ),
+      reviewReasons: const [
+        'Produto não encontrado; revise ou cadastre manualmente.',
+      ],
     );
   }
 
@@ -70,14 +75,7 @@ class ScannerCoordinator {
           if (backDraft != null) {
             // Em uma implementação real profunda, faríamos um merge campo a campo
             // Aqui preservamos o principal da frente e enriquecemos.
-            finalDraft = ScannerProductDraft(
-              gtin: finalDraft.gtin ?? backDraft.gtin,
-              nome: finalDraft.nome ?? backDraft.nome,
-              marca: finalDraft.marca ?? backDraft.marca,
-              descricao: finalDraft.descricao ?? backDraft.descricao,
-              imagemFrente: frontPath,
-              imagemVerso: backPath,
-            );
+            finalDraft = mergeDrafts(finalDraft, backDraft);
             break;
           }
         } catch (_) {}
@@ -89,8 +87,119 @@ class ScannerCoordinator {
       imagemFrente: frontPath,
       imagemVerso: backPath,
       gtin: finalDraft.gtin,
+      referenciaComercial: finalDraft.referenciaComercial,
       nome: finalDraft.nome,
       marca: finalDraft.marca,
+      descricao: finalDraft.descricao,
+      quantidadeEmbalagem: finalDraft.quantidadeEmbalagem,
+      unidade: finalDraft.unidade,
+      validade: finalDraft.validade,
+      lote: finalDraft.lote,
+      categoriaSugerida: finalDraft.categoriaSugerida,
+      reviewReasons: finalDraft.reviewReasons,
     );
   }
+
+  static ScannerProductDraft mergeDrafts(
+    ScannerProductDraft front,
+    ScannerProductDraft back,
+  ) {
+    final conflicts = <String>[...front.reviewReasons, ...back.reviewReasons];
+    ScannerField<T>? choose<T>(
+      String field,
+      ScannerField<T>? first,
+      ScannerField<T>? second,
+    ) {
+      if (first?.value == null) return second;
+      if (second?.value == null) return first;
+      if (first!.value != second!.value) {
+        conflicts.add('$field diverge entre frente e verso.');
+      }
+      return first;
+    }
+
+    return ScannerProductDraft(
+      gtin: choose('GTIN', front.gtin, back.gtin),
+      referenciaComercial: choose(
+        'Referência comercial',
+        front.referenciaComercial,
+        back.referenciaComercial,
+      ),
+      nome: choose('Nome', front.nome, back.nome),
+      marca: choose('Marca', front.marca, back.marca),
+      descricao: choose('Descrição', front.descricao, back.descricao),
+      quantidadeEmbalagem: choose(
+        'Quantidade',
+        front.quantidadeEmbalagem,
+        back.quantidadeEmbalagem,
+      ),
+      unidade: choose('Unidade', front.unidade, back.unidade),
+      validade: choose('Validade', front.validade, back.validade),
+      lote: choose('Lote', front.lote, back.lote),
+      categoriaSugerida: choose(
+        'Categoria',
+        front.categoriaSugerida,
+        back.categoriaSugerida,
+      ),
+      imagemFrente: front.imagemFrente,
+      imagemVerso: back.imagemVerso,
+      reviewReasons: conflicts,
+    );
+  }
+}
+
+class ProductLookupScannerProvider implements ScannerProvider {
+  final ProductLookupService lookupService;
+  final String commerceId;
+
+  ProductLookupScannerProvider({
+    required this.commerceId,
+    ProductLookupService? lookupService,
+  }) : lookupService = lookupService ?? ProductLookupService();
+
+  @override
+  Future<ScannerProductDraft?> searchBarcode(String gtin) async {
+    final result = await lookupService.lookup(gtin, commerceId: commerceId);
+    final product = result.product;
+    if (product == null) return null;
+    return ScannerProductDraft(
+      gtin: ScannerField(
+        result.normalizedGtin,
+        source: product.source,
+        confidence: ScannerConfidence.alta,
+      ),
+      nome: ScannerField(
+        product.name,
+        source: product.source,
+        confidence: ScannerConfidence.alta,
+      ),
+      marca: product.brand == null
+          ? null
+          : ScannerField(
+              product.brand,
+              source: product.source,
+              confidence: ScannerConfidence.alta,
+            ),
+      descricao: product.description == null
+          ? null
+          : ScannerField(
+              product.description,
+              source: product.source,
+              confidence: ScannerConfidence.alta,
+            ),
+      categoriaSugerida: product.category == null
+          ? null
+          : ScannerField(
+              product.category,
+              source: product.source,
+              confidence: ScannerConfidence.alta,
+            ),
+    );
+  }
+
+  @override
+  Future<ScannerProductDraft?> analyzeImage(
+    String imagePath, {
+    bool isFront = true,
+  }) async => null;
 }

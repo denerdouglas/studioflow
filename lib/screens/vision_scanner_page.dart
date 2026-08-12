@@ -5,6 +5,8 @@ import '../services/scanner/mlkit_vision_provider.dart';
 import '../models/domain/scanner_product_draft.dart';
 import 'scanner_draft_page.dart';
 import 'vision_ocr_capture_page.dart';
+import '../services/session_controller.dart';
+import '../core/validation/gtin_validator.dart';
 
 class VisionScannerPage extends StatefulWidget {
   const VisionScannerPage({super.key});
@@ -38,18 +40,35 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
     await _controller.stop();
     if (!mounted) return;
 
-    // Tenta buscar o gtin externamente
+    final normalized = GtinValidator.normalize(codigo);
+    if (!GtinValidator.isValid(normalized)) {
+      setState(() {
+        _processando = false;
+        _erro = 'GTIN inválido. Confira o código ou preencha manualmente.';
+      });
+      await _controller.start();
+      return;
+    }
+    final commerceId = SessionController.instance.usuario?.comercioId;
     final coordinator = ScannerCoordinator(
-      externalProviders: [MlKitVisionProvider()],
+      externalProviders: [
+        if (commerceId != null)
+          ProductLookupScannerProvider(commerceId: commerceId),
+      ],
     );
     final draft =
-        await coordinator.searchExternalBarcode(codigo) ??
+        await coordinator.searchExternalBarcode(normalized) ??
         ScannerProductDraft(
           gtin: ScannerField(
-            codigo,
+            normalized,
             source: 'barcode',
-            confidence: ScannerConfidence.alta,
+            confidence: ScannerConfidence.baixa,
+            reviewReason:
+                'GTIN válido, mas sem correspondência exata no catálogo.',
           ),
+          reviewReasons: const [
+            'Produto não encontrado; revise ou cadastre manualmente.',
+          ],
         );
 
     if (!mounted) return;

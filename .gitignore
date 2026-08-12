@@ -78,3 +78,7 @@ pub_outdated.txt
 fix_*.py
 replace_api.py
 rewrite_memory_store.py
+
+# Fixture real privada e sua representação gerada para o teste nativo local.
+test/fixtures/5128.pdf
+integration_test/fixtures/fixture_5128_bytes.dart

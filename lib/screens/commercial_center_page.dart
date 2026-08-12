@@ -465,7 +465,11 @@ class _CommercialCenterPageState extends State<CommercialCenterPage> {
                   '${product.brand ?? 'Marca não informada'} • fonte: ${product.source}',
                 ),
               ),
-              Text('Confiança: ${(product.confidence * 100).round()}%'),
+              Text(
+                product.confidence == null
+                    ? 'Correspondência exata de GTIN — confira os dados'
+                    : 'Confiança informada pela fonte: ${(product.confidence! * 100).round()}%',
+              ),
               const SizedBox(height: 8),
               Wrap(
                 spacing: 8,

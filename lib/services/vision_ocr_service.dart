@@ -1,5 +1,9 @@
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 
+import '../core/validation/gtin_validator.dart';
+
+enum ExtractedCodeKind { gtin, referenciaComercial, codigoInterno }
+
 class ExtractedTagData {
   final String? codigo;
   final String? nome;
@@ -7,6 +11,8 @@ class ExtractedTagData {
   final String? descricao;
   final String? material;
   final double? preco;
+  final ExtractedCodeKind? codigoTipo;
+  final bool precisaRevisao;
 
   const ExtractedTagData({
     this.codigo,
@@ -15,20 +21,26 @@ class ExtractedTagData {
     this.descricao,
     this.material,
     this.preco,
+    this.codigoTipo,
+    this.precisaRevisao = false,
   });
 }
 
 class VisionOcrService {
-  static Future<ExtractedTagData> processImage(String imagePath) async {
+  static Future<String> recognizeText(String imagePath) async {
     final recognizer = TextRecognizer(script: TextRecognitionScript.latin);
     try {
       final result = await recognizer.processImage(
         InputImage.fromFilePath(imagePath),
       );
-      return parseText(result.text);
+      return result.text;
     } finally {
       await recognizer.close();
     }
+  }
+
+  static Future<ExtractedTagData> processImage(String imagePath) async {
+    return parseText(await recognizeText(imagePath));
   }
 
   static ExtractedTagData parseText(String text) {
@@ -43,13 +55,15 @@ class VisionOcrService {
     String? fornecedor;
     String? descricao;
     String? material;
+    ExtractedCodeKind? codigoTipo;
+    var precisaRevisao = false;
 
     final pricePattern = RegExp(
-      r'(?:R\$|RS|\$)\s*([0-9]{1,6}(?:[.,][0-9]{2})?)',
+      r'(?:R\$|RS|\$)\s*([0-9]{1,3}(?:\.[0-9]{3})*(?:,[0-9]{2})|[0-9]{1,6}(?:[.,][0-9]{2})?)',
       caseSensitive: false,
     );
     final plainMoneyPattern = RegExp(r'^([0-9]{1,6})[,.]([0-9]{2})$');
-    final codePattern = RegExp(r'^\d{4,14}$');
+    final codePattern = RegExp(r'^[A-Z0-9]{4,20}$', caseSensitive: false);
     final materialPattern = RegExp(
       r'\b(prata|ouro|aço|aco|folheado|banhado|algodão|algodao|couro|seda)\b',
       caseSensitive: false,
@@ -67,6 +81,10 @@ class VisionOcrService {
       final compact = line.replaceAll(RegExp(r'[\s-]'), '');
       if (codigo == null && codePattern.hasMatch(compact)) {
         codigo = compact;
+        codigoTipo = GtinValidator.isValid(compact)
+            ? ExtractedCodeKind.gtin
+            : ExtractedCodeKind.referenciaComercial;
+        precisaRevisao = codigoTipo != ExtractedCodeKind.gtin;
         continue;
       }
       final lower = line.toLowerCase();
@@ -75,8 +93,14 @@ class VisionOcrService {
               lower.startsWith('ref:') ||
               lower.startsWith('referência:')) &&
           codigo == null) {
-        final candidate = line.split(':').last.replaceAll(RegExp(r'\D'), '');
-        if (codePattern.hasMatch(candidate)) codigo = candidate;
+        final candidate = line.split(':').last.trim().replaceAll(' ', '');
+        if (codePattern.hasMatch(candidate)) {
+          codigo = candidate;
+          codigoTipo = GtinValidator.isValid(candidate)
+              ? ExtractedCodeKind.gtin
+              : ExtractedCodeKind.referenciaComercial;
+          precisaRevisao = codigoTipo != ExtractedCodeKind.gtin;
+        }
         continue;
       }
       if ((lower.startsWith('marca:') || lower.startsWith('fornecedor:')) &&
@@ -113,6 +137,8 @@ class VisionOcrService {
       descricao: descricao,
       material: material,
       preco: preco,
+      codigoTipo: codigoTipo,
+      precisaRevisao: precisaRevisao,
     );
   }
 }

@@ -3,6 +3,7 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../services/product_lookup_service.dart';
+import '../core/validation/gtin_validator.dart';
 
 class BarcodeScannerPage extends StatefulWidget {
   const BarcodeScannerPage({super.key});
@@ -39,7 +40,7 @@ class _BarcodeScannerPageState extends State<BarcodeScannerPage> {
     final value = normalizeBarcode(input);
     if (value.isEmpty || value.length > 80) return false;
     if (RegExp(r'^\d+$').hasMatch(value)) {
-      return const {8, 12, 13, 14}.contains(value.length);
+      return GtinValidator.isValid(value);
     }
     return value.length >= 4;
   }

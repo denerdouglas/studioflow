@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:sqflite/sqflite.dart';
 
 import '../database/database_service.dart';
+import '../core/validation/gtin_validator.dart';
 import 'backend_sync_service.dart';
 
 class CatalogProduct {
@@ -21,7 +22,8 @@ class CatalogProduct {
   final String? localProductId;
   final String? localDestination;
   final String source;
-  final double confidence;
+  final double? confidence;
+  final bool exactMatch;
 
   const CatalogProduct({
     required this.gtin,
@@ -37,7 +39,8 @@ class CatalogProduct {
     this.localProductId,
     this.localDestination,
     required this.source,
-    required this.confidence,
+    this.confidence,
+    this.exactMatch = true,
   });
 
   Map<String, Object?> toJson() => {
@@ -55,6 +58,7 @@ class CatalogProduct {
     'localDestination': localDestination,
     'source': source,
     'confidence': confidence,
+    'exactMatch': exactMatch,
   };
 
   factory CatalogProduct.fromJson(Map<String, Object?> json) => CatalogProduct(
@@ -75,7 +79,8 @@ class CatalogProduct {
     localProductId: json['localProductId'] as String?,
     localDestination: json['localDestination'] as String?,
     source: json['source'] as String? ?? 'cache',
-    confidence: (json['confidence'] as num? ?? 0).toDouble(),
+    confidence: (json['confidence'] as num?)?.toDouble(),
+    exactMatch: json['exactMatch'] as bool? ?? true,
   );
 }
 
@@ -190,8 +195,15 @@ class OfficialProductCatalogProvider implements ProductCatalogProvider {
         return null;
       }
       final product = Map<String, Object?>.from(response['product'] as Map);
+      final returnedGtin = product['barcode'] ?? product['gtin'];
+      if (returnedGtin is! String ||
+          !GtinValidator.isExactMatch(gtin, returnedGtin) ||
+          response['approximate'] == true ||
+          response['exact'] == false) {
+        return null;
+      }
       return CatalogProduct(
-        gtin: (product['barcode'] ?? product['gtin'] ?? gtin) as String,
+        gtin: GtinValidator.normalize(returnedGtin),
         name: product['name'] as String,
         brand: product['brand'] as String?,
         category: product['category'] as String?,
@@ -203,7 +215,8 @@ class OfficialProductCatalogProvider implements ProductCatalogProvider {
         contentPerUnit: (product['content_per_unit'] as num? ?? 1).toDouble(),
         contentUnit: product['content_unit'] as String?,
         source: response['source'] as String? ?? 'external',
-        confidence: 0.85,
+        // O backend atual não fornece uma medição de confiança verificável.
+        confidence: null,
       );
     } catch (error) {
       throw CatalogProviderUnavailable(
@@ -265,20 +278,9 @@ class ProductLookupService {
              OfficialProductCatalogProvider(),
            ];
 
-  static String normalizeGtin(String input) =>
-      input.replaceAll(RegExp(r'[^0-9]'), '');
+  static String normalizeGtin(String input) => GtinValidator.normalize(input);
 
-  static bool isValidGtin(String input) {
-    final value = normalizeGtin(input);
-    if (!const {8, 12, 13, 14}.contains(value.length)) return false;
-    final digits = value.split('').map(int.parse).toList();
-    final check = digits.removeLast();
-    var sum = 0;
-    for (var i = digits.length - 1, position = 0; i >= 0; i--, position++) {
-      sum += digits[i] * (position.isEven ? 3 : 1);
-    }
-    return (10 - (sum % 10)) % 10 == check;
-  }
+  static bool isValidGtin(String input) => GtinValidator.isValid(input);
 
   Future<ProductLookupResult> lookup(
     String rawGtin, {
@@ -295,7 +297,7 @@ class ProductLookupService {
     if (local != null) {
       consulted.add(local.id);
       final product = await local.findByGtin(gtin, commerceId: commerceId);
-      if (product != null) {
+      if (_isExactProduct(gtin, product)) {
         return ProductLookupResult(
           product: product,
           normalizedGtin: gtin,
@@ -310,8 +312,8 @@ class ProductLookupService {
     if (shared != null) {
       consulted.add(shared.id);
       final product = await shared.findByGtin(gtin, commerceId: commerceId);
-      if (product != null) {
-        await _writeCache(product);
+      if (_isExactProduct(gtin, product)) {
+        await _writeCache(product!);
         return ProductLookupResult(
           product: product,
           normalizedGtin: gtin,
@@ -322,6 +324,7 @@ class ProductLookupService {
     }
     final cached = await _readCache(gtin);
     if (cached != null &&
+        _isExactProduct(gtin, cached) &&
         cached.source != 'business' &&
         cached.source != 'studioflow') {
       return ProductLookupResult(
@@ -337,8 +340,8 @@ class ProductLookupService {
     )) {
       consulted.add(provider.id);
       final product = await provider.findByGtin(gtin, commerceId: commerceId);
-      if (product != null) {
-        await _writeCache(product);
+      if (_isExactProduct(gtin, product)) {
+        await _writeCache(product!);
         return ProductLookupResult(
           product: product,
           normalizedGtin: gtin,
@@ -354,6 +357,11 @@ class ProductLookupService {
       fromCache: false,
     );
   }
+
+  static bool _isExactProduct(String requested, CatalogProduct? product) =>
+      product != null &&
+      product.exactMatch &&
+      GtinValidator.isExactMatch(requested, product.gtin);
 
   Future<CatalogProduct?> _readCache(String gtin) async {
     final db = await _database();

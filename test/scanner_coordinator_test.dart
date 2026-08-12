@@ -71,7 +71,8 @@ void main() {
       final result = await coordinator.searchExternalBarcode('987654');
 
       expect(result?.gtin?.value, '987654');
-      expect(result?.gtin?.confidence, ScannerConfidence.alta);
+      expect(result?.gtin?.confidence, ScannerConfidence.baixa);
+      expect(result?.exigeRevisaoHumana, isTrue);
       expect(result?.nome, isNull);
     });
   });
