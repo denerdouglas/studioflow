@@ -95,7 +95,12 @@ abstract final class MigrationV29 {
                 0;
 
             if (exists == 0) {
-              await db.insert('estoque', {
+              final colunas = await db.rawQuery('PRAGMA table_info(estoque)');
+              final nomesColunas = colunas
+                  .map((c) => c['name'].toString().toLowerCase())
+                  .toSet();
+
+              final map = {
                 'id': id,
                 'business_id': businessId,
                 'comercio_id': businessId,
@@ -119,7 +124,31 @@ abstract final class MigrationV29 {
                 'atualizado_em': agora,
                 'created_at': agora,
                 'updated_at': agora,
-              });
+              };
+
+              // IMPORTANTE: Uma migration histórica não pode tentar inserir colunas que
+              // só seriam criadas no futuro (ex: business_id na V36).
+              // Auditar e manter apenas o que já existe na tabela física naquele exato momento.
+              final obrigatorias = [
+                'id',
+                'nome',
+                'categoria',
+                'tipo',
+                'quantidade_atual',
+              ];
+              final missing = obrigatorias
+                  .where((c) => !nomesColunas.contains(c))
+                  .toList();
+              if (missing.isNotEmpty) {
+                throw StateError(
+                  'Falha crítica na MigrationV29: A tabela estoque não possui as colunas estruturais obrigatórias: \${missing.join(", ")}',
+                );
+              }
+              map.removeWhere(
+                (key, value) => !nomesColunas.contains(key.toLowerCase()),
+              );
+
+              await db.insert('estoque', map);
             }
           }
         }

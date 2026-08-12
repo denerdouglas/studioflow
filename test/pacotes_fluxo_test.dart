@@ -4,7 +4,6 @@ import 'package:studioflow/repositories/pacotes_repository.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:studioflow/database/database_schema_latest.dart';
 
-
 import 'package:studioflow/repositories/acesso_repository.dart';
 import 'package:studioflow/models/domain/acesso.dart';
 

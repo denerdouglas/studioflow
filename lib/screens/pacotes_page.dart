@@ -4,6 +4,10 @@ import '../models/domain/pacote_servico.dart';
 import '../repositories/pacotes_repository.dart';
 import 'pacotes/novo_pacote_page.dart';
 import 'pacotes/venda_pacote_page.dart';
+import 'novo_agendamento_sheet.dart';
+import 'pacote_vendido_detalhe_page.dart';
+import '../repositories/cliente_repository.dart';
+import '../repositories/cadastros_basicos_repository.dart';
 
 class PacotesPage extends StatefulWidget {
   const PacotesPage({super.key});
@@ -346,7 +350,7 @@ class _PacotesPageState extends State<PacotesPage>
         title: const Text('Venda registrada'),
         content: const Text(
           'Os créditos foram criados sem consumir sessões. '
-          'Deseja montar agora uma prévia automática da agenda?',
+          'Deseja agendar as sessões agora?',
         ),
         actions: [
           TextButton(
@@ -364,277 +368,65 @@ class _PacotesPageState extends State<PacotesPage>
   }
 
   Future<void> _agendar(String vendaId) async {
+    final vendas = await _repository.listarVendas();
+    final venda = vendas.firstWhere((v) => v.id == vendaId);
+
+    final clientes = await _repository.listarClientesAtivos();
+    final cRow = clientes.firstWhere(
+      (c) => c['nome'] == venda.clienteNome,
+      orElse: () => <String, Object?>{},
+    );
+    if (cRow.isEmpty || !mounted) return;
+
+    final clienteRegistro = ClienteRegistro(
+      id: cRow['id'] as String,
+      nome: cRow['nome'] as String,
+      telefone: cRow['telefone'] as String? ?? '',
+      whatsapp: cRow['telefone'] as String? ?? '',
+      profissional: '',
+      ultimoServico: '',
+      totalGasto: 0.0,
+      totalAtendimentos: 0,
+      observacoes: '',
+      dataCadastro: DateTime.now(),
+    );
+
     final profissionais = await _repository.listarProfissionaisAtivos();
     if (!mounted || profissionais.isEmpty) return;
-    String profissionalId = profissionais.first['id'] as String;
-    var data = DateTime.now().add(const Duration(days: 1));
-    final hora = TextEditingController(text: '09:00');
-    final intervalo = TextEditingController(text: '1');
-    final dias = <int>{1, 2, 3, 4, 5, 6};
-    final confirmou = await showDialog<bool>(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setLocal) => AlertDialog(
-          title: const Text('Preferências da agenda'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                DropdownButtonFormField<String>(
-                  initialValue: profissionalId,
-                  decoration: const InputDecoration(labelText: 'Profissional'),
-                  items: profissionais
-                      .map(
-                        (p) => DropdownMenuItem(
-                          value: p['id'] as String,
-                          child: Text(p['nome'] as String),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: (v) => profissionalId = v!,
-                ),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('Primeira data'),
-                  subtitle: Text('${data.day}/${data.month}/${data.year}'),
-                  trailing: const Icon(Icons.calendar_month),
-                  onTap: () async {
-                    final escolhida = await showDatePicker(
-                      context: context,
-                      initialDate: data,
-                      firstDate: DateTime.now(),
-                      lastDate: DateTime.now().add(const Duration(days: 730)),
-                    );
-                    if (escolhida != null) setLocal(() => data = escolhida);
-                  },
-                ),
-                TextField(
-                  controller: hora,
-                  decoration: const InputDecoration(
-                    labelText: 'Horário preferido (HH:mm)',
-                  ),
-                ),
-                TextField(
-                  controller: intervalo,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Intervalo em semanas',
-                  ),
-                ),
-                Wrap(
-                  spacing: 4,
-                  children: List.generate(7, (i) {
-                    const nomes = [
-                      'Seg',
-                      'Ter',
-                      'Qua',
-                      'Qui',
-                      'Sex',
-                      'Sáb',
-                      'Dom',
-                    ];
-                    final dia = i + 1;
-                    return FilterChip(
-                      label: Text(nomes[i]),
-                      selected: dias.contains(dia),
-                      onSelected: (v) =>
-                          setLocal(() => v ? dias.add(dia) : dias.remove(dia)),
-                    );
-                  }),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancelar'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Gerar prévia'),
-            ),
-          ],
-        ),
-      ),
-    );
-    if (confirmou != true) return;
-    final partes = hora.text.split(':');
-    final previa = await _repository.gerarPrevia(
-      SolicitacaoAgendaPacote(
-        vendaId: vendaId,
-        primeiraData: data,
-        diasSemana: dias,
-        horaPreferida: int.tryParse(partes.first) ?? 9,
-        minutoPreferido: partes.length > 1 ? int.tryParse(partes[1]) ?? 0 : 0,
-        profissionalId: profissionalId,
-        intervalo: int.tryParse(intervalo.text) ?? 1,
-      ),
-    );
-    if (!mounted) return;
-    final salvar = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Prévia — confirme antes de salvar'),
-        content: SizedBox(
-          width: 520,
-          child: ListView(
-            shrinkWrap: true,
-            children: [
-              ...previa.sessoes.map(
-                (s) => ListTile(
-                  leading: Icon(
-                    s.horarioAlternativo ? Icons.schedule : Icons.check_circle,
-                  ),
-                  title: Text(s.servicoNome),
-                  subtitle: Text(
-                    '${s.inicio.day}/${s.inicio.month}/${s.inicio.year} '
-                    '${s.inicio.hour.toString().padLeft(2, '0')}:'
-                    '${s.inicio.minute.toString().padLeft(2, '0')} • '
-                    '${s.profissionalNome}${s.aviso == null ? '' : '\n${s.aviso}'}',
-                  ),
-                ),
-              ),
-              ...previa.naoEncaixadas.map(
-                (texto) => ListTile(
-                  leading: const Icon(
-                    Icons.warning_amber,
-                    color: Colors.orange,
-                  ),
-                  title: Text(texto),
-                ),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Ajustar'),
-          ),
-          FilledButton(
-            onPressed: previa.sessoes.isEmpty
-                ? null
-                : () => Navigator.pop(context, true),
-            child: const Text('Confirmar horários'),
-          ),
-        ],
-      ),
-    );
-    if (salvar == true) {
-      await _repository.confirmarPrevia(previa);
-      await _carregar();
-    }
-  }
 
-  Future<void> _detalhar(ResumoVendaPacote venda) async {
-    final sessoes = await _repository.listarSessoes(venda.id);
-    if (!mounted) return;
+    final profList = profissionais
+        .map(
+          (p) => ProfissionalBasicoRegistro(
+            id: p['id'] as String,
+            nome: p['nome'] as String,
+            cargo: p['cargo'] as String? ?? 'Profissional',
+            percentualComissao:
+                (p['percentual_comissao'] as num?)?.toDouble() ?? 0.0,
+            ativo: (p['ativo'] as int?) == 1,
+            whatsapp: p['whatsapp'] as String? ?? '',
+          ),
+        )
+        .toList();
+
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      builder: (context) => DraggableScrollableSheet(
-        expand: false,
-        initialChildSize: .75,
-        builder: (_, controller) => ListView(
-          controller: controller,
-          padding: const EdgeInsets.all(20),
-          children: [
-            Text(
-              venda.pacoteNome,
-              style: Theme.of(context).textTheme.headlineSmall,
-            ),
-            Text(
-              '${venda.clienteNome} • validade ${venda.validade.day}/'
-              '${venda.validade.month}/${venda.validade.year}',
-            ),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                if (venda.disponiveis > 0 && venda.status == 'ativo')
-                  FilledButton.icon(
-                    onPressed: () {
-                      Navigator.pop(context);
-                      _agendar(venda.id);
-                    },
-                    icon: const Icon(Icons.auto_awesome),
-                    label: const Text('Agenda automática'),
-                  ),
-                if (venda.valorPendente > 0)
-                  OutlinedButton(
-                    onPressed: () => _receber(venda),
-                    child: const Text('Registrar pagamento'),
-                  ),
-                OutlinedButton(
-                  onPressed: () async {
-                    await _repository.alterarStatusVenda(
-                      venda.id,
-                      venda.status == 'pausado' ? 'ativo' : 'pausado',
-                    );
-                    if (context.mounted) Navigator.pop(context);
-                    await _carregar();
-                  },
-                  child: Text(venda.status == 'pausado' ? 'Retomar' : 'Pausar'),
-                ),
-                OutlinedButton(
-                  onPressed: () async {
-                    await _repository.estenderValidade(venda.id, 30);
-                    if (context.mounted) Navigator.pop(context);
-                    await _carregar();
-                  },
-                  child: const Text('+30 dias'),
-                ),
-                if (venda.status != 'cancelado' && venda.status != 'concluido')
-                  OutlinedButton(
-                    onPressed: () {
-                      Navigator.pop(context);
-                      _transferirVenda(venda);
-                    },
-                    child: const Text('Transferir'),
-                  ),
-                if (venda.status != 'cancelado' && venda.status != 'concluido')
-                  OutlinedButton(
-                    onPressed: () {
-                      Navigator.pop(context);
-                      _cancelarVenda(venda);
-                    },
-                    child: const Text('Cancelar pacote'),
-                  ),
-              ],
-            ),
-            const Divider(height: 32),
-            const Text(
-              'Sessões',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-            ...sessoes.map(
-              (s) => ListTile(
-                leading: const Icon(Icons.event_available),
-                title: Text('${s['numero']}. ${s['servico_nome']}'),
-                subtitle: Text(
-                  '${s['status']}'
-                  '${s['inicio_planejado'] == null ? '' : ' • ${s['inicio_planejado']}'}',
-                ),
-                trailing: s['status'] == 'agendada'
-                    ? IconButton(
-                        tooltip: 'Reagendar',
-                        icon: const Icon(Icons.edit_calendar_outlined),
-                        onPressed: () {
-                          Navigator.pop(context);
-                          _reagendarSessao(venda, s);
-                        },
-                      )
-                    : Text(
-                        '${((s['credito_consumido'] as num) * 100).round()}%',
-                      ),
-              ),
-            ),
-          ],
-        ),
+      builder: (_) => NovoAgendamentoSheet(
+        dataBase: DateTime.now(),
+        profissionais: profList,
+        clienteInicial: clienteRegistro,
       ),
     );
+
+    if (mounted) await _carregar();
+  }
+
+  Future<void> _detalhar(ResumoVendaPacote venda) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => PacoteVendidoDetalhePage(venda: venda)),
+    );
+    if (mounted) await _carregar();
   }
 
   Future<void> _mostrarAlertas() async {
@@ -721,6 +513,7 @@ class _PacotesPageState extends State<PacotesPage>
     }
   }
 
+  // ignore: unused_element
   Future<void> _cancelarVenda(ResumoVendaPacote venda) async {
     final motivo = TextEditingController();
     final confirmou = await showDialog<bool>(
@@ -760,6 +553,7 @@ class _PacotesPageState extends State<PacotesPage>
     }
   }
 
+  // ignore: unused_element
   Future<void> _transferirVenda(ResumoVendaPacote venda) async {
     try {
       final clientes = await _repository.listarClientesAtivos();
@@ -807,34 +601,45 @@ class _PacotesPageState extends State<PacotesPage>
     }
   }
 
-  Future<void> _reagendarSessao(
+  // ignore: unused_element
+  Future<void> _agendarSessaoIndividual(
     ResumoVendaPacote venda,
     Map<String, Object?> sessao,
   ) async {
     try {
       final profissionais = await _repository.listarProfissionaisAtivos();
       if (!mounted || profissionais.isEmpty) return;
-      var inicio = DateTime.parse(sessao['inicio_planejado'] as String);
+
+      var inicio = sessao['data_agendada'] != null
+          ? DateTime.parse(sessao['data_agendada'] as String)
+          : DateTime.now();
+
       var profissionalId =
           sessao['profissional_id'] as String? ??
           profissionais.first['id'] as String;
-      var escopo = EscopoReagendamentoPacote.somenteEsta;
+
       final hora = TextEditingController(
-        text:
-            '${inicio.hour.toString().padLeft(2, '0')}:${inicio.minute.toString().padLeft(2, '0')}',
+        text: sessao['data_agendada'] != null
+            ? '${inicio.hour.toString().padLeft(2, '0')}:${inicio.minute.toString().padLeft(2, '0')}'
+            : '09:00',
       );
+
+      final isNova = sessao['status'] == 'disponivel';
+
       final confirmou = await showDialog<bool>(
         context: context,
         builder: (context) => StatefulBuilder(
           builder: (context, setLocal) => AlertDialog(
-            title: Text('Reagendar ${sessao['servico_nome']}'),
+            title: Text(
+              '${isNova ? 'Agendar' : 'Reagendar'} ${sessao['servico_nome']}',
+            ),
             content: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   ListTile(
                     contentPadding: EdgeInsets.zero,
-                    title: const Text('Nova data'),
+                    title: const Text('Data'),
                     subtitle: Text(
                       '${inicio.day}/${inicio.month}/${inicio.year}',
                     ),
@@ -842,7 +647,9 @@ class _PacotesPageState extends State<PacotesPage>
                       final data = await showDatePicker(
                         context: context,
                         initialDate: inicio,
-                        firstDate: DateTime.now(),
+                        firstDate: DateTime.now().subtract(
+                          const Duration(days: 1),
+                        ),
                         lastDate: DateTime.now().add(const Duration(days: 730)),
                       );
                       if (data != null) {
@@ -879,27 +686,6 @@ class _PacotesPageState extends State<PacotesPage>
                         .toList(),
                     onChanged: (v) => profissionalId = v!,
                   ),
-                  DropdownButtonFormField<EscopoReagendamentoPacote>(
-                    initialValue: escopo,
-                    decoration: const InputDecoration(
-                      labelText: 'Aplicar alteração',
-                    ),
-                    items: const [
-                      DropdownMenuItem(
-                        value: EscopoReagendamentoPacote.somenteEsta,
-                        child: Text('Somente esta sessão'),
-                      ),
-                      DropdownMenuItem(
-                        value: EscopoReagendamentoPacote.estaEProximas,
-                        child: Text('Esta e as próximas'),
-                      ),
-                      DropdownMenuItem(
-                        value: EscopoReagendamentoPacote.refazerRestante,
-                        child: Text('Refazer restante'),
-                      ),
-                    ],
-                    onChanged: (v) => escopo = v!,
-                  ),
                 ],
               ),
             ),
@@ -910,7 +696,7 @@ class _PacotesPageState extends State<PacotesPage>
               ),
               FilledButton(
                 onPressed: () => Navigator.pop(context, true),
-                child: const Text('Reagendar'),
+                child: Text(isNova ? 'Agendar' : 'Salvar'),
               ),
             ],
           ),
@@ -927,12 +713,20 @@ class _PacotesPageState extends State<PacotesPage>
             ? int.tryParse(partes[1]) ?? inicio.minute
             : inicio.minute,
       );
-      await _repository.reagendarSessoes(
-        sessaoId: sessao['id'] as String,
-        novoInicio: novoInicio,
-        profissionalId: profissionalId,
-        escopo: escopo,
-      );
+      if (isNova) {
+        await _repository.agendarSessao(
+          sessaoId: sessao['id'] as String,
+          inicio: novoInicio,
+          profissionalId: profissionalId,
+        );
+      } else {
+        await _repository.reagendarSessoes(
+          sessaoId: sessao['id'] as String,
+          novoInicio: novoInicio,
+          profissionalId: profissionalId,
+          escopo: EscopoReagendamentoPacote.somenteEsta,
+        );
+      }
       await _carregar();
       if (mounted) {
         await _detalhar(
@@ -946,6 +740,7 @@ class _PacotesPageState extends State<PacotesPage>
     }
   }
 
+  // ignore: unused_element
   Future<void> _receber(ResumoVendaPacote venda) async {
     final valor = TextEditingController(
       text: venda.valorPendente.toStringAsFixed(2),

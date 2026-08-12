@@ -144,7 +144,9 @@ void main() {
       });
 
       // 5. O AgendaRepository consegue enxergar o agendamento?
-      final agendaRepo = AgendaRepository(databaseService: MockDatabaseService(db));
+      final agendaRepo = AgendaRepository(
+        databaseService: MockDatabaseService(db),
+      );
       final dia = DateTime(2026, 8, 15);
       final agendamentosDia = await agendaRepo.listarPorDia(dia);
 

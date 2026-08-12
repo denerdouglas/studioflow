@@ -254,7 +254,7 @@ class _Cliente360DetalhePageState extends State<Cliente360DetalhePage> {
                             'Pago: R\$ ${pacote.valorPago.toStringAsFixed(2)} • Pendente: R\$ ${pacote.valorPendente.toStringAsFixed(2)}',
                           ),
                           Text(
-                            'Validade: ${pacote.validade.day}/${pacote.validade.month}/${pacote.validade.year}',
+                            'Validade: ${pacote.validade != null ? '${pacote.validade!.day}/${pacote.validade!.month}/${pacote.validade!.year}' : 'vitalícia'}',
                           ),
                         ],
                       ),

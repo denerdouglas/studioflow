@@ -187,6 +187,89 @@ void main() {
       expect(livres.map((e) => e.hour), [9]);
     });
 
+    test(
+      'bloqueio pode ser editado, excluído e preserva horário livre',
+      () async {
+        final data = DateTime(2026, 7, 25);
+        await agenda.salvarHorario(
+          HorarioProfissional(
+            id: 'horario_bloqueio_crud',
+            profissionalId: 'prof_1',
+            diaSemana: data.weekday,
+            inicio: '09:00',
+            fim: '18:00',
+          ),
+        );
+        await agenda.adicionarBloqueio(
+          BloqueioAgenda(
+            id: 'bloqueio_crud',
+            profissionalId: 'prof_1',
+            inicio: DateTime(2026, 7, 25, 13, 30),
+            fim: DateTime(2026, 7, 25, 14),
+            tipo: 'bloqueio',
+            motivo: 'Compromisso',
+          ),
+        );
+        await agenda.adicionarBloqueio(
+          BloqueioAgenda(
+            id: 'bloqueio_crud',
+            profissionalId: 'prof_1',
+            inicio: DateTime(2026, 7, 25, 14),
+            fim: DateTime(2026, 7, 25, 15),
+            tipo: 'bloqueio',
+            motivo: 'Editado',
+          ),
+        );
+        final bloqueios = await agenda.listarBloqueios(aPartirDe: data);
+        expect(bloqueios, hasLength(1));
+        expect(bloqueios.single.inicio.hour, 14);
+        expect(bloqueios.single.motivo, 'Editado');
+
+        final livres = await agenda.horariosDisponiveis(
+          profissionalId: 'prof_1',
+          data: data,
+          duracaoMinutos: 60,
+          intervaloMinutos: 60,
+        );
+        expect(livres.any((hora) => hora.hour == 14), isFalse);
+        expect(livres.any((hora) => hora.hour == 15), isTrue);
+
+        await agenda.removerBloqueio('bloqueio_crud');
+        expect(await agenda.listarBloqueios(aPartirDe: data), isEmpty);
+      },
+    );
+
+    test('bloqueio de dia inteiro impede todos os horários', () async {
+      final data = DateTime(2026, 7, 26);
+      await agenda.salvarHorario(
+        HorarioProfissional(
+          id: 'horario_dia_inteiro',
+          profissionalId: 'prof_1',
+          diaSemana: data.weekday,
+          inicio: '09:00',
+          fim: '18:00',
+        ),
+      );
+      await agenda.adicionarBloqueio(
+        BloqueioAgenda(
+          id: 'bloqueio_dia_inteiro',
+          profissionalId: 'prof_1',
+          inicio: data,
+          fim: data.add(const Duration(days: 1)),
+          tipo: 'dia_inteiro',
+          motivo: 'Folga',
+        ),
+      );
+      expect(
+        await agenda.horariosDisponiveis(
+          profissionalId: 'prof_1',
+          data: data,
+          duracaoMinutos: 30,
+        ),
+        isEmpty,
+      );
+    });
+
     test('reagendamento registra histórico e impede conflito', () async {
       await _agendamento(
         db,

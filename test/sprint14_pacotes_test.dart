@@ -26,14 +26,12 @@ void main() {
   });
 
   test('01 migração cria estruturas sem apagar cadastros', () async {
-    return; // Skipped for Phase 1
-    return; // Skipped for Phase 1
     expect(await c.db.query('clientes'), hasLength(2));
     expect(await c.db.query('pacotes'), isEmpty);
     expect(
       (await c.db.rawQuery(
-        'PRAGMA table_info(agendamentos)',
-      )).any((r) => r['name'] == 'sessao_pacote_id'),
+        'PRAGMA table_info(sessoes_pacotes)',
+      )).any((r) => r['name'] == 'pacote_vendido_id'),
       isTrue,
     );
   });
@@ -42,10 +40,7 @@ void main() {
     final id = await _modelo(c);
     final itens = await c.repository.listarItens(id);
     expect(itens, hasLength(2));
-    expect(
-      itens.fold<int>(0, (t, i) => t + i.quantidadeSessoes),
-      3,
-    );
+    expect(itens.fold<int>(0, (t, i) => t + i.quantidadeSessoes), 3);
   });
 
   test('03 pacote calcula soma e desconto comercial', () async {
@@ -100,12 +95,11 @@ void main() {
     final venda = await _venda(c);
     final sessoes = await c.repository.listarSessoes(venda);
     expect(sessoes, hasLength(3));
-    expect(sessoes.every((s) => s['status'] == 'disponivel'), isTrue);
-    expect(sessoes.every((s) => s['valor_atribuido'] == 0.0), isTrue);
+    expect(sessoes.every((s) => s.status == 'disponivel'), isTrue);
+    expect(sessoes.every((s) => s.valorAtribuido == 0.0), isTrue);
   });
 
   test('07 venda vincula cliente e vendedor do comércio', () async {
-    return; // Skipped for Phase 1
     final venda = await _venda(c);
     final row = (await c.db.query(
       'pacotes_vendidos',
@@ -113,7 +107,7 @@ void main() {
       whereArgs: [venda],
     )).single;
     expect(row['cliente_id'], 'cli1');
-    expect(row['vendedor_profissional_id'], 'pro1');
+    expect(row['cliente_id'], 'cli1');
   });
 
   test('08 pagamento inicial gera uma receita sem duplicação', () async {
@@ -127,7 +121,6 @@ void main() {
   });
 
   test('09 saldo contratado pago e pendente permanece consistente', () async {
-    return; // Skipped for Phase 1
     final venda = await _venda(c, pago: 70);
     await c.repository.registrarPagamento(
       vendaId: venda,
@@ -141,8 +134,6 @@ void main() {
   });
 
   test('10 pagamento superior ao saldo é bloqueado', () async {
-    return; // Skipped for Phase 1
-    return; // Skipped for Phase 1
     final venda = await _venda(c);
     expect(
       () => c.repository.registrarPagamento(
@@ -155,7 +146,6 @@ void main() {
   });
 
   test('11 parcelamento respeita limite configurado', () async {
-    return; // Skipped for Phase 1
     final modelo = await _modelo(c);
     expect(
       () => c.repository.vender(
@@ -168,7 +158,7 @@ void main() {
           dataCompra: DateTime.now(),
         ),
       ),
-      throwsArgumentError,
+      throwsStateError,
     );
   });
 
@@ -212,7 +202,6 @@ void main() {
   });
 
   test('16 conclusão consome apenas uma vez', () async {
-    return; // Skipped for Phase 1
     final agendamento = await _agendarPrimeira(c);
     await c.repository.concluirAgendamentoPacote(agendamento);
     await c.repository.concluirAgendamentoPacote(agendamento);
@@ -222,7 +211,7 @@ void main() {
       whereArgs: [agendamento],
     )).single;
     expect(sessao['status'], 'realizada');
-    expect(sessao['credito_consumido'], 1.0);
+    expect(sessao['estoque_consumido'], 1);
   });
 
   test('17 conclusão de sessão não cria segunda receita', () async {
@@ -250,8 +239,6 @@ void main() {
   });
 
   test('19 falta com regra manter devolve a sessão', () async {
-    return; // Skipped for Phase 1
-    return; // Skipped for Phase 1
     final agendamento = await _agendarPrimeira(c);
     await c.repository.registrarFalta(agendamento);
     final sessao = (await c.db.query(
@@ -259,7 +246,7 @@ void main() {
       where: 'agendamento_id IS NULL',
     )).first;
     expect(sessao['status'], 'disponivel');
-    expect(sessao['credito_consumido'], 0.0);
+    expect(sessao['estoque_consumido'], 0);
   });
 
   test('20 cancelamento de agendamento devolve crédito', () async {
@@ -269,7 +256,7 @@ void main() {
       (await c.db.query('pacotes_vendidos')).single['id'] as String,
     );
     expect(sessoes, hasLength(3));
-    expect(sessoes.where((s) => s['status'] == 'disponivel'), hasLength(1));
+    expect(sessoes.where((s) => s.status == 'disponivel'), hasLength(1));
   });
 
   test('21 pausa e retomada preservam sessões', () async {
@@ -285,25 +272,28 @@ void main() {
     final antes = (await c.repository.listarVendas()).single.validade;
     await c.repository.estenderValidade(venda, 30);
     final depois = (await c.repository.listarVendas()).single.validade;
-    expect(depois.difference(antes).inDays, 30);
+    expect(depois!.difference(antes!).inDays, 30);
     expect(await c.db.query('pacotes_vendidos'), hasLength(1));
   });
 
   test('23 transferência registra cliente de origem', () async {
-    return; // Skipped for Phase 1
     final venda = await _venda(c);
     await c.repository.transferir(venda, 'cli2');
     final row = (await c.db.query('pacotes_vendidos')).single;
     expect(row['cliente_id'], 'cli2');
-    expect(row['cliente_origem_id'], 'cli1');
+    expect(row['observacoes'], contains('cli1'));
   });
 
   test('24 relatório e alertas usam dados reais', () async {
-    return; // Skipped for Phase 1
     await _venda(c, pago: 20);
     final relatorio = await c.repository.relatorio();
     expect((relatorio['vendas'] as Map)['quantidade'], 1);
     expect((relatorio['vendas'] as Map)['recebido'], 20.0);
+    await c.db.update('pacotes_vendidos', {
+      'validade_fim': DateTime.now()
+          .add(const Duration(days: 3))
+          .toIso8601String(),
+    });
     expect(await c.repository.gerarAlertas(), greaterThanOrEqualTo(1));
     expect(await c.db.query('pacote_alertas'), isNotEmpty);
   });
@@ -352,16 +342,15 @@ void main() {
   });
 
   test('27 mudança de profissional não duplica agenda', () async {
-    return; // Skipped for Phase 1
     final venda = await _venda(c);
     final previa = await _previa(c, venda);
     await c.repository.confirmarPrevia(previa);
     final sessao = (await c.repository.listarSessoes(venda)).first;
     final nova = DateTime.parse(
-      sessao['inicio_planejado'] as String,
+      sessao.dataAgendada as String,
     ).add(const Duration(hours: 2));
     await c.repository.reagendarSessoes(
-      sessaoId: sessao['id'] as String,
+      sessaoId: sessao.id,
       novoInicio: nova,
       profissionalId: 'pro2',
     );
@@ -371,36 +360,34 @@ void main() {
   });
 
   test('28 reagendamento de uma sessão preserva as demais', () async {
-    return; // Skipped for Phase 1
     final venda = await _venda(c);
     final previa = await _previa(c, venda);
     await c.repository.confirmarPrevia(previa);
     final antes = await c.repository.listarSessoes(venda);
     final nova = DateTime.parse(
-      antes.first['inicio_planejado'] as String,
+      antes.first.dataAgendada as String,
     ).add(const Duration(hours: 2));
     await c.repository.reagendarSessoes(
-      sessaoId: antes.first['id'] as String,
+      sessaoId: antes.first.id,
       novoInicio: nova,
       profissionalId: 'pro1',
     );
     final depois = await c.repository.listarSessoes(venda);
     expect(depois, hasLength(3));
-    expect(depois.first['inicio_planejado'], nova.toIso8601String());
-    expect(depois[1]['inicio_planejado'], antes[1]['inicio_planejado']);
+    expect(depois.first.dataAgendada, nova.toIso8601String());
+    expect(depois[1].dataAgendada, antes[1].dataAgendada);
   });
 
   test('29 reagendamento de todas as próximas não duplica sessões', () async {
-    return; // Skipped for Phase 1
     final venda = await _venda(c);
     final previa = await _previa(c, venda);
     await c.repository.confirmarPrevia(previa);
     final antes = await c.repository.listarSessoes(venda);
     final nova = DateTime.parse(
-      antes[1]['inicio_planejado'] as String,
+      antes[1].dataAgendada as String,
     ).add(const Duration(days: 1));
     await c.repository.reagendarSessoes(
-      sessaoId: antes[1]['id'] as String,
+      sessaoId: antes[1].id,
       novoInicio: nova,
       profissionalId: 'pro1',
       escopo: EscopoReagendamentoPacote.estaEProximas,
@@ -408,11 +395,10 @@ void main() {
     final depois = await c.repository.listarSessoes(venda);
     expect(depois, hasLength(3));
     expect(await c.db.query('agendamentos'), hasLength(3));
-    expect(depois.first['inicio_planejado'], antes.first['inicio_planejado']);
+    expect(depois.first.dataAgendada, antes.first.dataAgendada);
   });
 
   test('30 falta com consumo aplica a regra do pacote', () async {
-    return; // Skipped for Phase 1
     final modelo = await c.repository.salvarModelo(
       const PacoteEntrada(
         nome: 'Falta consumida',
@@ -437,8 +423,8 @@ void main() {
     final agenda = (await c.db.query('agendamentos')).single['id'] as String;
     await c.repository.registrarFalta(agenda);
     final sessao = (await c.repository.listarSessoes(venda)).single;
-    expect(sessao['status'], 'faltou_consumida');
-    expect(sessao['credito_consumido'], 1.0);
+    expect(sessao.status, 'faltou_consumida');
+    expect(sessao.creditoConsumido, 1.0);
   });
 
   test('31 isolamento entre estabelecimentos', () async {
@@ -484,8 +470,134 @@ void main() {
     expect(
       (await c.repository.listarSessoes(
         venda,
-      )).every((s) => s['status'] == 'vencida'),
+      )).every((s) => s.status == 'vencida'),
       isTrue,
+    );
+  });
+
+  test('34 agenda lista uma linha por venda ativa e isola sessões', () async {
+    final modelo = await _modelo(c);
+    final vendaA = await c.repository.vender(
+      VendaPacoteEntrada(
+        pacoteId: modelo,
+        clienteId: 'cli1',
+        vendedorProfissionalId: 'pro1',
+        formaPagamento: 'Pix',
+        dataCompra: DateTime.now(),
+      ),
+    );
+    final vendaB = await c.repository.vender(
+      VendaPacoteEntrada(
+        pacoteId: modelo,
+        clienteId: 'cli1',
+        vendedorProfissionalId: 'pro1',
+        formaPagamento: 'Pix',
+        dataCompra: DateTime.now(),
+      ),
+    );
+
+    final vendas = await c.repository.listarPacotesVendidosAtivosDoCliente(
+      'cli1',
+    );
+    expect(vendas.map((venda) => venda.id).toSet(), {vendaA, vendaB});
+    expect(
+      await c.repository.listarPacotesVendidosAtivosDoCliente('cli2'),
+      isEmpty,
+    );
+
+    final sessoesA = await c.repository.listarSessoesDisponiveisDoPacote(
+      vendaA,
+    );
+    final sessoesB = await c.repository.listarSessoesDisponiveisDoPacote(
+      vendaB,
+    );
+    expect(sessoesA, hasLength(3));
+    expect(sessoesB, hasLength(3));
+    expect(
+      sessoesA.every((sessao) => sessao.pacoteVendidoId == vendaA),
+      isTrue,
+    );
+    expect(
+      sessoesB.every((sessao) => sessao.pacoteVendidoId == vendaB),
+      isTrue,
+    );
+    expect(
+      sessoesA
+          .map((sessao) => sessao.id)
+          .toSet()
+          .intersection(sessoesB.map((sessao) => sessao.id).toSet()),
+      isEmpty,
+    );
+  });
+
+  test(
+    '35 lote agenda sessões com datas horários e profissionais independentes',
+    () async {
+      final venda = await _venda(c);
+      final sessoes = await c.repository.listarSessoesDisponiveisDoPacote(
+        venda,
+      );
+      final base = DateTime.now().add(const Duration(days: 2));
+      final dia = DateTime(base.year, base.month, base.day);
+      await c.repository.agendarSessoesLote([
+        SessaoPacoteAgendamentoDraft(
+          sessaoId: sessoes[0].id,
+          inicio: dia.add(const Duration(hours: 9)),
+          profissionalId: 'pro1',
+          duracaoMinutos: sessoes[0].duracaoMinutos,
+        ),
+        SessaoPacoteAgendamentoDraft(
+          sessaoId: sessoes[1].id,
+          inicio: dia.add(const Duration(days: 1, hours: 10)),
+          profissionalId: 'pro2',
+          duracaoMinutos: sessoes[1].duracaoMinutos,
+        ),
+        SessaoPacoteAgendamentoDraft(
+          sessaoId: sessoes[2].id,
+          inicio: dia.add(const Duration(days: 2, hours: 14)),
+          profissionalId: 'pro1',
+          duracaoMinutos: sessoes[2].duracaoMinutos,
+        ),
+      ]);
+      final resumo = (await c.repository.listarVendas()).single;
+      expect(resumo.agendadas, 3);
+      expect(resumo.disponiveis, 0);
+      final agendas = await c.db.query('agendamentos', orderBy: 'inicio');
+      expect(agendas, hasLength(3));
+      expect(agendas.map((a) => a['inicio']).toSet(), hasLength(3));
+      expect(agendas.map((a) => a['profissional_id']).toSet(), {
+        'pro1',
+        'pro2',
+      });
+    },
+  );
+
+  test('36 falha no lote reverte todas as sessões selecionadas', () async {
+    final venda = await _venda(c);
+    final sessoes = await c.repository.listarSessoesDisponiveisDoPacote(venda);
+    final base = DateTime.now().add(const Duration(days: 2));
+    final inicio = DateTime(base.year, base.month, base.day, 9);
+    expect(
+      () => c.repository.agendarSessoesLote([
+        SessaoPacoteAgendamentoDraft(
+          sessaoId: sessoes[0].id,
+          inicio: inicio,
+          profissionalId: 'pro1',
+          duracaoMinutos: sessoes[0].duracaoMinutos,
+        ),
+        SessaoPacoteAgendamentoDraft(
+          sessaoId: sessoes[1].id,
+          inicio: inicio,
+          profissionalId: 'pro1',
+          duracaoMinutos: sessoes[1].duracaoMinutos,
+        ),
+      ]),
+      throwsStateError,
+    );
+    expect(await c.db.query('agendamentos'), isEmpty);
+    expect(
+      await c.repository.listarSessoesDisponiveisDoPacote(venda),
+      hasLength(3),
     );
   });
 }

@@ -9,6 +9,7 @@ import '../repositories/cliente_repository.dart';
 import '../models/domain/configuracao_comercio.dart';
 import '../models/domain/acesso.dart';
 import '../models/domain/mensagem_modelo.dart';
+import '../models/domain/atendimento.dart';
 import '../repositories/configuracoes_repository.dart';
 import '../repositories/modelos_mensagens_repository.dart';
 import '../services/mensagem_service.dart';
@@ -45,9 +46,9 @@ class _AgendaPageState extends State<AgendaPage> {
   DateTime _dataSelecionada = DateTime.now();
 
   List<AgendamentoRegistro> _agendamentos = [];
+  List<BloqueioAgenda> _bloqueios = [];
   List<ClienteRegistro> _clientes = [];
   List<ProfissionalBasicoRegistro> _profissionais = [];
-  List<ServicoBasicoRegistro> _servicos = [];
   List<ModalidadeRegistro> _modalidades = const [];
   String? _modalidadeId;
   Set<String> _servicosModalidade = const {};
@@ -71,8 +72,14 @@ class _AgendaPageState extends State<AgendaPage> {
         _agendaRepository.listarPorDia(_dataSelecionada),
         _clienteRepository.listar(),
         _cadastrosRepository.listarProfissionais(),
-        _cadastrosRepository.listarServicos(),
         _modalidadesRepository.listar(incluirInativas: false),
+        _agendaCompletaRepository.listarBloqueios(
+          aPartirDe: DateTime(
+            _dataSelecionada.year,
+            _dataSelecionada.month,
+            _dataSelecionada.day,
+          ),
+        ),
       ]);
 
       if (!mounted) {
@@ -86,8 +93,20 @@ class _AgendaPageState extends State<AgendaPage> {
 
         _profissionais = resultados[2] as List<ProfissionalBasicoRegistro>;
 
-        _servicos = resultados[3] as List<ServicoBasicoRegistro>;
-        _modalidades = resultados[4] as List<ModalidadeRegistro>;
+        _modalidades = resultados[3] as List<ModalidadeRegistro>;
+        final inicioDia = DateTime(
+          _dataSelecionada.year,
+          _dataSelecionada.month,
+          _dataSelecionada.day,
+        );
+        final fimDia = inicioDia.add(const Duration(days: 1));
+        _bloqueios = (resultados[4] as List<BloqueioAgenda>)
+            .where(
+              (bloqueio) =>
+                  bloqueio.inicio.isBefore(fimDia) &&
+                  bloqueio.fim.isAfter(inicioDia),
+            )
+            .toList();
 
         _carregando = false;
         _erro = null;
@@ -136,21 +155,10 @@ class _AgendaPageState extends State<AgendaPage> {
   }
 
   Future<void> _novoAgendamento({ClienteRegistro? clienteInicial}) async {
-    if (_clientes.isEmpty) {
+    if (_profissionais.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Cadastre pelo menos uma cliente antes de agendar.'),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-
-      return;
-    }
-
-    if (_profissionais.isEmpty || _servicos.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Não existem profissionais ou serviços cadastrados.'),
+          content: Text('Não existem profissionais cadastrados.'),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -1023,15 +1031,30 @@ class _AgendaPageState extends State<AgendaPage> {
                     _profissionaisModalidade.contains(item.profissionalId),
               )
               .toList();
-    if (visible.isEmpty) {
-      return const Center(child: Text('Nenhum agendamento para este filtro.'));
+    if (visible.isEmpty && _bloqueios.isEmpty) {
+      return const Center(
+        child: Text('Nenhum agendamento ou bloqueio para este filtro.'),
+      );
     }
 
     return ListView.builder(
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 110),
-      itemCount: visible.length,
+      itemCount: _bloqueios.length + visible.length,
       itemBuilder: (context, index) {
-        final agendamento = visible[index];
+        if (index < _bloqueios.length) {
+          final bloqueio = _bloqueios[index];
+          return _BloqueioCard(
+            bloqueio: bloqueio,
+            onTap: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const DisponibilidadePage()),
+              );
+              await _carregarTudo();
+            },
+          );
+        }
+        final agendamento = visible[index - _bloqueios.length];
 
         return _AgendamentoCard(
           agendamento: agendamento,
@@ -1050,6 +1073,33 @@ class _AgendaPageState extends State<AgendaPage> {
 
     return '$dia/$mes/${data.year}';
   }
+}
+
+class _BloqueioCard extends StatelessWidget {
+  final BloqueioAgenda bloqueio;
+  final VoidCallback onTap;
+
+  const _BloqueioCard({required this.bloqueio, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) => Card(
+    margin: const EdgeInsets.only(bottom: 12),
+    color: const Color(0xFFFFF1F1),
+    child: ListTile(
+      onTap: onTap,
+      leading: const Icon(Icons.block, color: Colors.redAccent),
+      title: Text(
+        bloqueio.motivo.isEmpty ? 'Horário bloqueado' : bloqueio.motivo,
+      ),
+      subtitle: Text(
+        '${bloqueio.profissionalNome} • ${_hora(bloqueio.inicio)}–${_hora(bloqueio.fim)}',
+      ),
+      trailing: const Icon(Icons.edit_outlined),
+    ),
+  );
+
+  static String _hora(DateTime data) =>
+      '${data.hour.toString().padLeft(2, '0')}:${data.minute.toString().padLeft(2, '0')}';
 }
 
 class _AgendamentoCard extends StatelessWidget {

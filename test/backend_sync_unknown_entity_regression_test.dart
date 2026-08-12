@@ -54,8 +54,7 @@ void main() {
           usuarioId: 'user_sync_unknown',
           accessToken: 'access',
           refreshToken: 'refresh',
-          refreshExpiraEm:
-              DateTime.now().toUtc().add(const Duration(days: 1)),
+          refreshExpiraEm: DateTime.now().toUtc().add(const Duration(days: 1)),
         ),
       );
 
@@ -104,10 +103,7 @@ void main() {
 
       expect(agendamentos, hasLength(1));
       expect(agendamentos.single['cliente_id'], 'cliente_remoto_ok');
-      expect(
-        agendamentos.single['profissional_id'],
-        'profissional_remoto_ok',
-      );
+      expect(agendamentos.single['profissional_id'], 'profissional_remoto_ok');
       expect(agendamentos.single['servico_id'], 'servico_remoto_ok');
       expect(agendamentos.single['origem'], 'online');
 

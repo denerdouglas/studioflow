@@ -201,8 +201,27 @@ class AgendaCompletaRepository {
       throw ArgumentError('O fim do bloqueio deve ser posterior ao início.');
     }
     final db = await _databaseProvider();
-    await db.insert('bloqueios_agenda', {
-      'id': bloqueio.id.isEmpty ? _id('bloq') : bloqueio.id,
+    final conflitos = await db.query(
+      'agendamentos',
+      columns: ['id'],
+      where:
+          "comercio_id=? AND status!='cancelado' AND inicio<? AND fim>? "
+          'AND (? IS NULL OR profissional_id=?)',
+      whereArgs: [
+        _comercioId,
+        bloqueio.fim.toIso8601String(),
+        bloqueio.inicio.toIso8601String(),
+        bloqueio.profissionalId,
+        bloqueio.profissionalId,
+      ],
+      limit: 1,
+    );
+    if (conflitos.isNotEmpty) {
+      throw StateError(
+        'Já existe um agendamento nesse período. O bloqueio não foi salvo.',
+      );
+    }
+    final dados = <String, Object?>{
       'comercio_id': _comercioId,
       'profissional_id': bloqueio.profissionalId,
       'inicio': bloqueio.inicio.toIso8601String(),
@@ -211,7 +230,20 @@ class AgendaCompletaRepository {
       'motivo': bloqueio.motivo,
       'criado_por_id': _usuarioId,
       'criado_em': DateTime.now().toUtc().toIso8601String(),
-    });
+    };
+    if (bloqueio.id.isEmpty) {
+      await db.insert('bloqueios_agenda', {'id': _id('bloq'), ...dados});
+    } else {
+      final alterados = await db.update(
+        'bloqueios_agenda',
+        dados,
+        where: 'id=? AND comercio_id=?',
+        whereArgs: [bloqueio.id, _comercioId],
+      );
+      if (alterados == 0) {
+        await db.insert('bloqueios_agenda', {'id': bloqueio.id, ...dados});
+      }
+    }
   }
 
   Future<void> removerBloqueio(String id) async {

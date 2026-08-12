@@ -246,7 +246,9 @@ class PacotesRepository {
             'business_id': _comercioId,
             'pacote_vendido_id': vendaId,
             'servico_id_previsto': item['servico_id'],
-            'ordem': item['ordem'] == null ? null : _parseInt(item['ordem']) + i,
+            'ordem': item['ordem'] == null
+                ? null
+                : _parseInt(item['ordem']) + i,
             'status': 'disponivel',
             'created_at': agora,
             'updated_at': agora,
@@ -655,7 +657,13 @@ class PacotesRepository {
         'nome': entrada.nome.trim(),
         'preco': entrada.precoPacote,
         'validade_dias': entrada.validadeDias,
-        'regras_uso': entrada.regrasCancelamento.trim(),
+        'regras_uso': jsonEncode({
+          'cancelamento': entrada.regrasCancelamento.trim(),
+          'regra_falta': entrada.regraFalta.name,
+          'percentual_falta': entrada.percentualFalta,
+          'permite_transferencia': entrada.permiteTransferencia,
+          'vendedor_percentual': entrada.percentualVendedor,
+        }),
         'status': entrada.ativo ? 1 : 0,
         'created_by': _usuarioId,
         'created_at': agora,
@@ -819,7 +827,9 @@ class PacotesRepository {
             'business_id': _comercioId,
             'pacote_vendido_id': vendaId,
             'servico_id_previsto': item['servico_id'],
-            'ordem': item['ordem'] == null ? null : _parseInt(item['ordem']) + i,
+            'ordem': item['ordem'] == null
+                ? null
+                : _parseInt(item['ordem']) + i,
             'status': 'disponivel',
             'created_at': agora,
             'updated_at': agora,
@@ -878,6 +888,18 @@ class PacotesRepository {
       limit: 1,
     );
     if (vendas.isEmpty) throw StateError('Venda não encontrada.');
+    final contratado = _parseDouble(vendas.first['valor_final']);
+    final pagos = await txn.rawQuery(
+      '''SELECT COALESCE(SUM(valor), 0) AS total
+         FROM movimentacoes_financeiras
+         WHERE comercio_id=? AND tipo='entrada' AND status='pago'
+           AND observacoes=?''',
+      [_comercioId, 'pacote_venda_id=$vendaId'],
+    );
+    final totalPago = _parseDouble(pagos.first['total']);
+    if (totalPago + valor > contratado) {
+      throw StateError('O pagamento supera o saldo pendente do pacote.');
+    }
     final pagamentoId = _id('ppg');
     final movimentoId = _id('fin');
     final agora = _agora();
@@ -919,7 +941,10 @@ class PacotesRepository {
     _exigir(AcaoPermissao.visualizarPacotes);
     final db = await _databaseProvider();
     final rows = await db.rawQuery(
-      '''SELECT v.*, p.nome AS pacote_nome, c.nome AS cliente_nome,
+      '''SELECT v.*, p.nome AS pacote_nome, c.nome AS cliente_nome, c.id AS cliente_id,
+       COALESCE((SELECT SUM(m.valor) FROM movimentacoes_financeiras m
+         WHERE m.comercio_id=v.business_id AND m.tipo='entrada'
+         AND m.status='pago' AND m.observacoes='pacote_venda_id=' || v.id), 0) AS valor_pago,
        SUM(CASE WHEN s.status='realizada' THEN 1 ELSE 0 END) realizadas,
        SUM(CASE WHEN s.status='agendada' THEN 1 ELSE 0 END) agendadas,
        SUM(CASE WHEN s.status='disponivel' THEN 1 ELSE 0 END) disponiveis,
@@ -938,33 +963,76 @@ class PacotesRepository {
       return ResumoVendaPacote(
         id: e['id'] as String,
         pacoteNome: e['pacote_nome'] as String,
+        clienteId: e['cliente_id'] as String,
         clienteNome: e['cliente_nome'] as String,
         valorContratado: _parseDouble(e['valor_final']),
-        valorPago: _parseDouble(e['valor_final']),
-        valorPendente: 0,
+        valorPago: _parseDouble(e['valor_pago']),
+        valorPendente:
+            (_parseDouble(e['valor_final']) - _parseDouble(e['valor_pago']))
+                .clamp(0, double.infinity),
         contratadas: _parseInt(e['quantidade_sessoes']),
         realizadas: n('realizadas'),
         agendadas: n('agendadas'),
         disponiveis: n('disponiveis'),
         canceladas: n('canceladas'),
         vencidas: n('vencidas'),
-        validade: DateTime.parse(e['validade_fim'] as String),
-        status: e['status'] as String,
+        validade: _parseDateTimeOrNull(e['validade_fim']),
+        status: (e['status'] as String?) ?? 'ativo',
       );
     }).toList();
   }
 
-  Future<List<Map<String, Object?>>> listarSessoes(String vendaId) async {
+  Future<List<ResumoVendaPacote>> listarPacotesVendidosAtivosDoCliente(
+    String clienteId,
+  ) async {
+    final vendas = await listarVendas(clienteId: clienteId);
+    return vendas
+        .where((venda) => venda.status == 'ativo' && venda.disponiveis > 0)
+        .toList();
+  }
+
+  Future<List<SessaoPacoteDetalheRegistro>> listarSessoesDisponiveisDoPacote(
+    String pacoteVendidoId,
+  ) async {
+    final sessoes = await listarSessoes(pacoteVendidoId);
+    return sessoes.where((sessao) => sessao.status == 'disponivel').toList();
+  }
+
+  Future<List<SessaoPacoteDetalheRegistro>> listarSessoes(
+    String vendaId,
+  ) async {
     final db = await _databaseProvider();
-    return db.rawQuery(
-      '''SELECT ps.*, s.nome AS servico_nome, p.nome AS profissional_nome
+    final rows = await db.rawQuery(
+      '''SELECT ps.*, s.nome AS servico_nome, p.nome AS profissional_nome,
+                pv.pacote_id, pc.nome AS pacote_nome, s.duracao_minutos AS duracao_prevista
          FROM sessoes_pacotes ps
          JOIN servicos s ON s.id=ps.servico_id_previsto
          LEFT JOIN profissionais p ON p.id=ps.profissional_id
+         JOIN pacotes_vendidos pv ON pv.id=ps.pacote_vendido_id
+         JOIN pacotes pc ON pc.id=pv.pacote_id
          WHERE ps.business_id=? AND ps.pacote_vendido_id=?
          ORDER BY COALESCE(ps.ordem, 9999)''',
       [_comercioId, vendaId],
     );
+
+    return rows.map((row) {
+      return SessaoPacoteDetalheRegistro(
+        id: row['id'] as String,
+        pacoteVendidoId: row['pacote_vendido_id'] as String,
+        pacoteNome: row['pacote_nome'] as String,
+        servicoId: row['servico_id_previsto'] as String,
+        servicoNome: row['servico_nome'] as String,
+        ordem: PacoteServicoParser.parseIntSeguro(row['ordem']),
+        status: _textoLegado(row['status'], fallback: 'disponivel'),
+        profissionalNome: row['profissional_nome'] as String?,
+        dataAgendada: _textoLegadoOrNull(row['data_agendada']),
+        horarioInicio: _textoLegadoOrNull(row['horario_inicio']),
+        agendamentoId: _textoLegadoOrNull(row['agendamento_id']),
+        duracaoMinutos: _parseInt(row['duracao_prevista'], fallback: 60),
+        valorAtribuido: _parseDouble(row['valor_atribuido']),
+        creditoConsumido: _parseDouble(row['estoque_consumido']),
+      );
+    }).toList();
   }
 
   Future<PreviaAgendaPacote> gerarPrevia(
@@ -1041,7 +1109,8 @@ class PacotesRepository {
             !solicitacao.diasSemana.contains(data.weekday)) {
           continue;
         }
-        if (data.isAfter(DateTime.parse(sessao['validade_em'] as String))) {
+        if (sessao['validade_em'] != null &&
+            data.isAfter(DateTime.parse(sessao['validade_em'] as String))) {
           break;
         }
         final livres = await agenda.horariosDisponiveis(
@@ -1054,7 +1123,14 @@ class PacotesRepository {
             (p) =>
                 inicio.isBefore(p.fim) &&
                 inicio
-                    .add(Duration(minutes: _parseInt(sessao['duracao_minutos'], fallback: 30)))
+                    .add(
+                      Duration(
+                        minutes: _parseInt(
+                          sessao['duracao_minutos'],
+                          fallback: 30,
+                        ),
+                      ),
+                    )
                     .isAfter(p.inicio),
           ),
         );
@@ -1302,6 +1378,31 @@ class PacotesRepository {
       );
       if (rows.isEmpty) throw StateError('Sessão de pacote não encontrada.');
       final row = rows.first;
+      final regraRows = await txn.rawQuery(
+        '''SELECT p.regras_uso FROM pacotes p
+           JOIN pacotes_vendidos pv ON pv.pacote_id=p.id
+           WHERE pv.id=? AND pv.business_id=? LIMIT 1''',
+        [row['pacote_venda_id'], _comercioId],
+      );
+      var regra = RegraFaltaPacote.manter;
+      if (regraRows.isNotEmpty) {
+        try {
+          final dados =
+              jsonDecode(
+                    _textoLegado(regraRows.first['regras_uso'], fallback: '{}'),
+                  )
+                  as Map<String, dynamic>;
+          regra = RegraFaltaPacote.values.firstWhere(
+            (item) => item.name == dados['regra_falta'],
+            orElse: () => RegraFaltaPacote.manter,
+          );
+        } catch (_) {
+          regra = RegraFaltaPacote.manter;
+        }
+      }
+      final consumir =
+          regra == RegraFaltaPacote.consumir ||
+          (regra == RegraFaltaPacote.aprovar && aprovada);
       await txn.update(
         'agendamentos',
         {'status': 'faltou', 'compareceu': 0, 'updated_at': _agora()},
@@ -1311,9 +1412,14 @@ class PacotesRepository {
       await txn.update(
         'sessoes_pacotes',
         {
-          'status': 'faltou_consumida',
-          'estoque_consumido': 1.0,
-          'agendamento_id': agendamentoId,
+          'status': consumir ? 'faltou_consumida' : 'disponivel',
+          'estoque_consumido': consumir ? 1 : 0,
+          'agendamento_id': consumir ? agendamentoId : null,
+          'data_agendada': null,
+          'horario_inicio': null,
+          'horario_fim': null,
+          'profissional_id': null,
+          'observacoes': 'Falta no agendamento $agendamentoId',
           'updated_at': _agora(),
         },
         where: 'id=? AND business_id=?',
@@ -1324,9 +1430,153 @@ class PacotesRepository {
         acao: 'falta_registrada',
         vendaId: row['pacote_venda_id'] as String,
         sessaoId: row['sessao_id'] as String,
-        dados: {'credito_consumido': 1.0},
+        dados: {'credito_consumido': consumir ? 1.0 : 0.0},
       );
     });
+  }
+
+  Future<void> agendarSessoesLote(
+    List<SessaoPacoteAgendamentoDraft> sessoes,
+  ) async {
+    if (sessoes.isEmpty) return;
+    _exigir(AcaoPermissao.venderPacotes);
+    final db = await _databaseProvider();
+    await db.transaction((txn) async {
+      for (final draft in sessoes) {
+        final origemRows = await txn.rawQuery(
+          '''SELECT ps.*, pv.cliente_id, pv.status AS venda_status,
+                    pv.validade_fim
+             FROM sessoes_pacotes ps
+             JOIN pacotes_vendidos pv ON pv.id=ps.pacote_vendido_id
+             WHERE ps.id=? AND ps.business_id=? AND ps.status='disponivel' ''',
+          [draft.sessaoId, _comercioId],
+        );
+        if (origemRows.isEmpty) {
+          throw StateError('Sessão disponível não encontrada ou já agendada.');
+        }
+        final sessao = origemRows.first;
+        if (sessao['venda_status'] != 'ativo') {
+          throw StateError('O pacote vendido não está ativo.');
+        }
+        final validade = _parseDateTimeOrNull(sessao['validade_fim']);
+        if (validade != null && draft.inicio.isAfter(validade)) {
+          throw StateError('A sessão está fora da validade do pacote.');
+        }
+        final jornada = await txn.query(
+          'horarios_profissionais',
+          where:
+              'comercio_id=? AND profissional_id=? AND dia_semana=? AND ativo=1',
+          whereArgs: [_comercioId, draft.profissionalId, draft.inicio.weekday],
+          limit: 1,
+        );
+        if (jornada.isEmpty ||
+            !_dentroDaJornada(draft.inicio, draft.fim, jornada.first)) {
+          throw StateError('Horário fora da jornada do profissional.');
+        }
+
+        final conflitos = await txn.query(
+          'agendamentos',
+          columns: ['id'],
+          where:
+              "comercio_id=? AND profissional_id=? AND status!='cancelado' AND inicio<? AND fim>?",
+          whereArgs: [
+            _comercioId,
+            draft.profissionalId,
+            draft.fim.toIso8601String(),
+            draft.inicio.toIso8601String(),
+          ],
+          limit: 1,
+        );
+        final bloqueios = await txn.query(
+          'bloqueios_agenda',
+          columns: ['id'],
+          where:
+              'comercio_id=? AND (profissional_id IS NULL OR profissional_id=?) AND inicio<? AND fim>?',
+          whereArgs: [
+            _comercioId,
+            draft.profissionalId,
+            draft.fim.toIso8601String(),
+            draft.inicio.toIso8601String(),
+          ],
+          limit: 1,
+        );
+        if (conflitos.isNotEmpty || bloqueios.isNotEmpty) {
+          throw StateError(
+            'Um dos horários escolhidos não está mais disponível.',
+          );
+        }
+
+        final agendamentoId = _id('ag');
+        await txn.insert('agendamentos', {
+          'id': agendamentoId,
+          'comercio_id': _comercioId,
+          'cliente_id': sessao['cliente_id'],
+          'profissional_id': draft.profissionalId,
+          'servico_id': sessao['servico_id_previsto'],
+          'inicio': draft.inicio.toIso8601String(),
+          'fim': draft.fim.toIso8601String(),
+          'status': 'agendado',
+          'forma_pagamento': 'Pacote',
+          'valor_servico': 0,
+          'desconto': 0,
+          'valor_recebido': 0,
+          'confirmado': 0,
+          'compareceu': 0,
+          'observacoes': 'Sessão de pacote; receita registrada na venda.',
+          'data_criacao': _agora(),
+          'created_by': _usuarioId,
+          'created_at': _agora(),
+          'updated_at': _agora(),
+        });
+
+        await txn.update(
+          'sessoes_pacotes',
+          {
+            'profissional_id': draft.profissionalId,
+            'agendamento_id': agendamentoId,
+            'data_agendada': draft.inicio.toIso8601String(),
+            'horario_inicio':
+                '${draft.inicio.hour.toString().padLeft(2, '0')}:${draft.inicio.minute.toString().padLeft(2, '0')}',
+            'horario_fim':
+                '${draft.fim.hour.toString().padLeft(2, '0')}:${draft.fim.minute.toString().padLeft(2, '0')}',
+            'status': 'agendada',
+            'updated_at': _agora(),
+          },
+          where: 'id=? AND business_id=? AND status=?',
+          whereArgs: [draft.sessaoId, _comercioId, 'disponivel'],
+        );
+
+        await _enfileirar(txn, 'pacote_agenda', draft.sessaoId, 'criar');
+      }
+    });
+  }
+
+  Future<void> agendarSessao({
+    required String sessaoId,
+    required DateTime inicio,
+    required String profissionalId,
+  }) async {
+    final db = await _databaseProvider();
+    final row = await db.rawQuery(
+      '''SELECT pi.duracao_prevista as duracao_minutos
+         FROM sessoes_pacotes ps
+         JOIN pacotes_vendidos pv ON pv.id=ps.pacote_vendido_id
+         JOIN pacote_itens pi ON pi.pacote_id=pv.pacote_id AND pi.servico_id=ps.servico_id_previsto
+         WHERE ps.id=? AND ps.business_id=? LIMIT 1''',
+      [sessaoId, _comercioId],
+    );
+    final duracao = row.isNotEmpty
+        ? _parseInt(row.first['duracao_minutos'], fallback: 30)
+        : 30;
+
+    await agendarSessoesLote([
+      SessaoPacoteAgendamentoDraft(
+        sessaoId: sessaoId,
+        inicio: inicio,
+        profissionalId: profissionalId,
+        duracaoMinutos: duracao,
+      ),
+    ]);
   }
 
   Future<void> reagendarSessoes({
@@ -1367,7 +1617,15 @@ class PacotesRepository {
       for (final sessao in selecionadas) {
         final atual = DateTime.parse(sessao['data_agendada'] as String);
         final inicio = atual.add(delta);
-        final fim = inicio.add(const Duration(minutes: 60));
+        final servico = await txn.rawQuery(
+          '''SELECT s.duracao_minutos FROM servicos s
+             WHERE s.id=? LIMIT 1''',
+          [sessao['servico_id_previsto']],
+        );
+        final duracao = servico.isEmpty
+            ? 60
+            : _parseInt(servico.first['duracao_minutos'], fallback: 60);
+        final fim = inicio.add(Duration(minutes: duracao));
         final jornada = await txn.query(
           'horarios_profissionais',
           where:
@@ -1446,6 +1704,10 @@ class PacotesRepository {
           {
             'profissional_id': profissionalId,
             'data_agendada': inicio.toIso8601String(),
+            'horario_inicio':
+                '${inicio.hour.toString().padLeft(2, '0')}:${inicio.minute.toString().padLeft(2, '0')}',
+            'horario_fim':
+                '${fim.hour.toString().padLeft(2, '0')}:${fim.minute.toString().padLeft(2, '0')}',
             'updated_at': _agora(),
           },
           where: 'id=? AND business_id=?',
@@ -1496,23 +1758,51 @@ class PacotesRepository {
     await db.transaction((txn) async {
       final rows = await txn.query(
         'sessoes_pacotes',
-        columns: ['id'],
+        columns: ['id', 'pacote_vendido_id'],
         where: 'agendamento_id=? AND business_id=?',
         whereArgs: [agendamentoId, _comercioId],
         limit: 1,
       );
       if (rows.isEmpty) return;
+      final agora = _agora();
+      await txn.update(
+        'agendamentos',
+        {
+          'status': 'cancelado',
+          'observacoes':
+              'Sessão de pacote cancelada; sessão devolvida ao saldo.',
+          'updated_at': agora,
+        },
+        where: 'id=? AND comercio_id=?',
+        whereArgs: [agendamentoId, _comercioId],
+      );
       await txn.update(
         'sessoes_pacotes',
         {
           'status': 'disponivel',
           'agendamento_id': null,
           'data_agendada': null,
+          'horario_inicio': null,
+          'horario_fim': null,
           'profissional_id': null,
-          'updated_at': _agora(),
+          'observacoes': 'Agendamento cancelado: $agendamentoId',
+          'updated_at': agora,
         },
         where: 'id=? AND business_id=? AND estoque_consumido=0',
         whereArgs: [rows.first['id'], _comercioId],
+      );
+      await _auditar(
+        txn,
+        acao: 'agendamento_cancelado_sessao_devolvida',
+        vendaId: rows.first['pacote_vendido_id'] as String,
+        sessaoId: rows.first['id'] as String,
+        dados: {'agendamento_id': agendamentoId},
+      );
+      await _enfileirar(
+        txn,
+        'pacote_agenda',
+        rows.first['id'] as String,
+        'cancelar',
       );
     });
   }
@@ -1642,10 +1932,16 @@ class PacotesRepository {
     final de = (inicio ?? DateTime(2000)).toIso8601String();
     final ate = (fim ?? DateTime(2100)).toIso8601String();
     final vendas = await db.rawQuery(
-      '''SELECT COUNT(*) quantidade, COALESCE(SUM(valor_original),0) vendido,
-         COALESCE(SUM(valor_final),0) recebido, 0 pendente
+      '''SELECT COUNT(*) quantidade, COALESCE(SUM(valor_final),0) vendido,
+         COALESCE((SELECT SUM(m.valor) FROM movimentacoes_financeiras m
+           WHERE m.comercio_id=? AND m.tipo='entrada' AND m.status='pago'
+             AND m.observacoes LIKE 'pacote_venda_id=%'), 0) recebido,
+         COALESCE(SUM(valor_final),0) - COALESCE((SELECT SUM(m.valor)
+           FROM movimentacoes_financeiras m WHERE m.comercio_id=?
+             AND m.tipo='entrada' AND m.status='pago'
+             AND m.observacoes LIKE 'pacote_venda_id=%'), 0) pendente
          FROM pacotes_vendidos WHERE business_id=? AND data_venda BETWEEN ? AND ?''',
-      [_comercioId, de, ate],
+      [_comercioId, _comercioId, _comercioId, de, ate],
     );
     final sessoes = await db.rawQuery(
       '''SELECT status, COUNT(*) quantidade FROM sessoes_pacotes
@@ -1953,23 +2249,41 @@ class PacotesRepository {
     if (value == null) return fallback;
     if (value is int) return value;
     if (value is num) return value.toInt();
-    if (value is String) return int.tryParse(value) ?? fallback;
-    return fallback;
+    final texto = value.toString().trim();
+    if (texto.isEmpty || texto.toLowerCase() == 'null') return fallback;
+    return int.tryParse(texto) ?? fallback;
   }
 
   int? _parseIntOrNull(dynamic value) {
     if (value == null) return null;
     if (value is int) return value;
     if (value is num) return value.toInt();
-    if (value is String) return int.tryParse(value);
-    return null;
+    final texto = value.toString().trim();
+    if (texto.isEmpty || texto.toLowerCase() == 'null') return null;
+    return int.tryParse(texto);
+  }
+
+  String? _textoLegadoOrNull(dynamic value) {
+    if (value == null) return null;
+    final texto = value.toString().trim();
+    if (texto.isEmpty || texto.toLowerCase() == 'null') return null;
+    return texto;
+  }
+
+  String _textoLegado(dynamic value, {required String fallback}) =>
+      _textoLegadoOrNull(value) ?? fallback;
+
+  DateTime? _parseDateTimeOrNull(dynamic value) {
+    final texto = _textoLegadoOrNull(value);
+    return texto == null ? null : DateTime.tryParse(texto);
   }
 
   double _parseDouble(dynamic value, {double fallback = 0.0}) {
     if (value == null) return fallback;
     if (value is double) return value;
     if (value is num) return value.toDouble();
-    if (value is String) return double.tryParse(value) ?? fallback;
-    return fallback;
+    final texto = value.toString().trim();
+    if (texto.isEmpty || texto.toLowerCase() == 'null') return fallback;
+    return double.tryParse(texto) ?? fallback;
   }
 }

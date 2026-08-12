@@ -490,6 +490,13 @@ class LojaRepository {
       });
       for (var index = 0; index < itens.length; index++) {
         final item = itens[index];
+        final pecas = await txn.query(
+          'pecas_unicas',
+          where: 'id = ? AND comercio_id = ?',
+          whereArgs: [item.produto.id, u.comercioId],
+          limit: 1,
+        );
+        final peca = pecas.firstOrNull;
         await txn.insert('pdv_venda_itens', {
           'id': '${vendaId}_$index',
           'pdv_venda_id': vendaId,
@@ -498,7 +505,7 @@ class LojaRepository {
           'valor_unitario': item.produto.precoVenda,
         });
 
-        if (item.produto.id.startsWith('peca_')) {
+        if (peca != null) {
           if (item.quantidade > 1) {
             throw StateError(
               'Peça única não pode ser vendida mais de uma vez na mesma venda.',
@@ -508,6 +515,7 @@ class LojaRepository {
             'pecas_unicas',
             {
               'status': 'vendida',
+              'cliente_id': clienteId,
               'profissional_vendedor_id': profissionalId,
               'data_venda': DateTime.now().toIso8601String(),
             },
@@ -517,6 +525,29 @@ class LojaRepository {
           if (changed == 0) {
             throw StateError('Peça única já vendida ou indisponível.');
           }
+          final now = DateTime.now().toUtc().toIso8601String();
+          await txn.insert('consignacao_eventos', {
+            'id': IdGenerator.temporal(),
+            'comercio_id': u.comercioId,
+            'consignacao_id': peca['lote_id'],
+            'peca_id': item.produto.id,
+            'tipo': 'venda',
+            'quantidade': 1,
+            'valor': item.produto.precoVenda,
+            'cliente_id': clienteId,
+            'profissional_id': profissionalId,
+            'venda_id': vendaId,
+            'forma_pagamento': pagamentos.keys.join(','),
+            'criado_em': now,
+          });
+          await txn.rawUpdate(
+            '''UPDATE consignacoes SET
+              quantidade_vendida=COALESCE(quantidade_vendida,0)+1,
+              quantidade_disponivel=MAX(0,COALESCE(quantidade_disponivel,0)-1),
+              valor_vendido=COALESCE(valor_vendido,0)+?
+              WHERE id=? AND comercio_id=?''',
+            [item.produto.precoVenda, peca['lote_id'], u.comercioId],
+          );
         } else {
           await _movimentarTxn(
             txn,
@@ -622,7 +653,14 @@ class LojaRepository {
         whereArgs: [vendaId],
       );
       for (final item in itens) {
-        if ((item['produto_id'] as String).startsWith('peca_')) {
+        final pecas = await txn.query(
+          'pecas_unicas',
+          where: 'id = ? AND comercio_id = ?',
+          whereArgs: [item['produto_id'], u.comercioId],
+          limit: 1,
+        );
+        if (pecas.isNotEmpty) {
+          final peca = pecas.single;
           await txn.update(
             'pecas_unicas',
             {
@@ -634,6 +672,26 @@ class LojaRepository {
             },
             where: 'id = ? AND comercio_id = ?',
             whereArgs: [item['produto_id'], u.comercioId],
+          );
+          await txn.insert('consignacao_eventos', {
+            'id': IdGenerator.temporal(),
+            'comercio_id': u.comercioId,
+            'consignacao_id': peca['lote_id'],
+            'peca_id': item['produto_id'],
+            'tipo': 'cancelamento_venda',
+            'quantidade': 1,
+            'valor': item['valor_unitario'],
+            'observacoes': motivo,
+            'venda_id': vendaId,
+            'criado_em': DateTime.now().toUtc().toIso8601String(),
+          });
+          await txn.rawUpdate(
+            '''UPDATE consignacoes SET
+              quantidade_vendida=MAX(0,COALESCE(quantidade_vendida,0)-1),
+              quantidade_disponivel=COALESCE(quantidade_disponivel,0)+1,
+              valor_vendido=MAX(0,COALESCE(valor_vendido,0)-?)
+              WHERE id=? AND comercio_id=?''',
+            [item['valor_unitario'], peca['lote_id'], u.comercioId],
           );
         } else {
           await _movimentarTxn(

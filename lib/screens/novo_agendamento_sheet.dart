@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/domain/agendamento_grupo_registro.dart';
 import '../models/domain/pacote_servico.dart';
+import '../models/domain/atendimento.dart';
 import '../repositories/agenda_repository.dart';
 import '../repositories/cadastros_basicos_repository.dart';
 import '../repositories/cliente_repository.dart';
@@ -15,12 +16,16 @@ class NovoAgendamentoSheet extends StatefulWidget {
   final DateTime dataBase;
   final List<ProfissionalBasicoRegistro> profissionais;
   final ClienteRegistro? clienteInicial;
+  final ResumoVendaPacote? pacoteInicial;
+  final SessaoPacoteDetalheRegistro? sessaoInicial;
 
   const NovoAgendamentoSheet({
     super.key,
     required this.dataBase,
     required this.profissionais,
     this.clienteInicial,
+    this.pacoteInicial,
+    this.sessaoInicial,
   });
 
   @override
@@ -33,6 +38,7 @@ class _ItemServico {
   ProfissionalBasicoRegistro? profissional;
   DateTime? inicioPrevisto;
   DateTime? fimPrevisto;
+  bool selecionado = true;
 
   _ItemServico({this.profissional})
     : servico = null,
@@ -46,13 +52,22 @@ class _NovoAgendamentoSheetState extends State<NovoAgendamentoSheet> {
   final TextEditingController _observacoesController = TextEditingController();
   final AgendaRepository _agendaRepository = AgendaRepository();
   final PacotesRepository _pacotesRepository = PacotesRepository();
+  final AgendaCompletaRepository _agendaCompletaRepository =
+      AgendaCompletaRepository();
+  final TextEditingController _bloqueioDescricaoController =
+      TextEditingController();
 
   ClienteRegistro? _clienteSelecionado;
   late DateTime _dataSelecionada;
   TimeOfDay _horarioSelecionado = const TimeOfDay(hour: 9, minute: 0);
 
   bool _modoPacote = false;
-  List<SessaoDisponivelRegistro> _sessoesDisponiveis = [];
+  bool _modoBloqueio = false;
+  bool _bloqueioDiaInteiro = false;
+  TimeOfDay _bloqueioFim = const TimeOfDay(hour: 10, minute: 0);
+  ProfissionalBasicoRegistro? _profissionalBloqueio;
+  List<ResumoVendaPacote> _pacotesAtivos = [];
+  ResumoVendaPacote? _pacoteSelecionado;
   bool _carregandoSessoes = false;
 
   final List<_ItemServico> _itens = [];
@@ -68,22 +83,94 @@ class _NovoAgendamentoSheetState extends State<NovoAgendamentoSheet> {
       widget.dataBase.day,
     );
     _clienteSelecionado = widget.clienteInicial;
-    _adicionarItem();
-    if (_clienteSelecionado != null) {
-      _carregarSessoesPacote();
+    _profissionalBloqueio = widget.profissionais.isNotEmpty
+        ? widget.profissionais.first
+        : null;
+    _modoPacote = widget.pacoteInicial != null || widget.sessaoInicial != null;
+
+    if (widget.pacoteInicial != null) {
+      _pacoteSelecionado = widget.pacoteInicial;
+      _pacotesAtivos = [widget.pacoteInicial!];
+      _carregarSessoesDoPacote().then((_) {
+        if (widget.sessaoInicial != null) {
+          if (!mounted) return;
+          setState(() {
+            for (final item in _itens) {
+              item.selecionado =
+                  item.sessao?.sessaoId == widget.sessaoInicial!.id;
+            }
+          });
+        }
+      });
+    } else {
+      _adicionarItem();
+      if (_clienteSelecionado != null && _modoPacote) {
+        _carregarPacotesAtivos();
+      }
     }
   }
 
-  Future<void> _carregarSessoesPacote() async {
+  Future<void> _carregarPacotesAtivos() async {
     if (_clienteSelecionado == null) return;
-    setState(() => _carregandoSessoes = true);
+    setState(() {
+      _carregandoSessoes = true;
+      _pacotesAtivos = [];
+      _pacoteSelecionado = null;
+      for (var item in _itens) {
+        item.sessao = null;
+      }
+    });
     try {
-      final sessoes = await _pacotesRepository.listarSessoesDisponiveisCliente(
-        _clienteSelecionado!.id,
-      );
-      if (mounted) setState(() => _sessoesDisponiveis = sessoes);
+      final pacotes = await _pacotesRepository
+          .listarPacotesVendidosAtivosDoCliente(_clienteSelecionado!.id);
+      if (mounted) {
+        setState(() {
+          _pacotesAtivos = pacotes;
+        });
+      }
     } catch (e) {
       _mostrarErro('Erro ao carregar pacotes: $e');
+    } finally {
+      if (mounted) setState(() => _carregandoSessoes = false);
+    }
+  }
+
+  Future<void> _carregarSessoesDoPacote() async {
+    if (_pacoteSelecionado == null) return;
+    setState(() => _carregandoSessoes = true);
+    try {
+      final todasSessoes = await _pacotesRepository
+          .listarSessoesDisponiveisDoPacote(_pacoteSelecionado!.id);
+      final sessoes = todasSessoes
+          .map(
+            (s) => SessaoDisponivelRegistro(
+              sessaoId: s.id,
+              pacoteNome: _pacoteSelecionado!.pacoteNome,
+              servicoId: s.servicoId,
+              servicoNome: s.servicoNome,
+              pacoteVendidoId: _pacoteSelecionado!.id,
+              duracaoMinutos: s.duracaoMinutos,
+            ),
+          )
+          .toList();
+      if (mounted) {
+        setState(() {
+          _itens
+            ..clear()
+            ..addAll(
+              sessoes.map(
+                (sessao) => _ItemServico(
+                  profissional: widget.profissionais.isNotEmpty
+                      ? widget.profissionais.first
+                      : null,
+                )..sessao = sessao,
+              ),
+            );
+          _recalcularHorarios();
+        });
+      }
+    } catch (e) {
+      _mostrarErro('Erro ao carregar sessões: $e');
     } finally {
       if (mounted) setState(() => _carregandoSessoes = false);
     }
@@ -120,6 +207,11 @@ class _NovoAgendamentoSheetState extends State<NovoAgendamentoSheet> {
     );
 
     for (var item in _itens) {
+      if (_modoPacote && item.inicioPrevisto != null) {
+        final duracao = item.sessao?.duracaoMinutos ?? 30;
+        item.fimPrevisto = item.inicioPrevisto!.add(Duration(minutes: duracao));
+        continue;
+      }
       item.inicioPrevisto = current;
       int duracao = 30;
       if (_modoPacote && item.sessao != null) {
@@ -132,12 +224,55 @@ class _NovoAgendamentoSheetState extends State<NovoAgendamentoSheet> {
     }
   }
 
+  Future<void> _selecionarHorarioDoItem(_ItemServico item) async {
+    final atual =
+        item.inicioPrevisto ??
+        DateTime(
+          _dataSelecionada.year,
+          _dataSelecionada.month,
+          _dataSelecionada.day,
+          _horarioSelecionado.hour,
+          _horarioSelecionado.minute,
+        );
+    final data = await showDatePicker(
+      context: context,
+      initialDate: atual,
+      firstDate: DateTime.now().subtract(const Duration(days: 1)),
+      lastDate: DateTime.now().add(const Duration(days: 730)),
+      locale: const Locale('pt', 'BR'),
+    );
+    if (data == null || !mounted) return;
+    final hora = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(atual),
+    );
+    if (hora == null) return;
+    setState(() {
+      item.inicioPrevisto = DateTime(
+        data.year,
+        data.month,
+        data.day,
+        hora.hour,
+        hora.minute,
+      );
+      final duracao = item.sessao?.duracaoMinutos ?? 30;
+      item.fimPrevisto = item.inicioPrevisto!.add(Duration(minutes: duracao));
+    });
+  }
+
   Future<void> _salvar() async {
+    final itensSelecionados = _modoPacote
+        ? _itens.where((item) => item.selecionado).toList()
+        : _itens;
     if (_clienteSelecionado == null) {
       _mostrarErro('Selecione um cliente.');
       return;
     }
-    if (_itens.any(
+    if (itensSelecionados.isEmpty) {
+      _mostrarErro('Selecione pelo menos uma sessão.');
+      return;
+    }
+    if (itensSelecionados.any(
       (i) =>
           (_modoPacote ? i.sessao == null : i.servico == null) ||
           i.profissional == null,
@@ -145,77 +280,85 @@ class _NovoAgendamentoSheetState extends State<NovoAgendamentoSheet> {
       _mostrarErro('Preencha todos os serviços/sessões e profissionais.');
       return;
     }
+    if (_modoPacote) {
+      final ids = itensSelecionados
+          .map((item) => item.sessao!.sessaoId)
+          .toList();
+      if (ids.toSet().length != ids.length) {
+        _mostrarErro('Selecione cada sessão apenas uma vez.');
+        return;
+      }
+    }
 
     setState(() => _salvando = true);
 
     try {
       final agora = DateTime.now();
-      final grupoId = agora.microsecondsSinceEpoch.toString();
-
-      final grupo = AgendamentoGrupoRegistro(
-        id: grupoId,
-        businessId:
-            '', // O repository injeta o comercioId real, podemos deixar vazio aqui e o banco fará se o repositório suportar, ou preenchemos.
-        // Na verdade o inserirGrupo no AgendaRepository já ignora o business_id da classe e injeta o _comercioId da sessão.
-        clienteId: _clienteSelecionado!.id,
-        status: 'agendado',
-        observacoes: _observacoesController.text.trim(),
-        createdAt: agora,
-        updatedAt: agora,
-      );
-
-      final listaAgendamentos = <AgendamentoRegistro>[];
-      for (var i = 0; i < _itens.length; i++) {
-        final item = _itens[i];
-        final servId = _modoPacote ? item.sessao!.servicoId : item.servico!.id;
-        final servNome = _modoPacote
-            ? item.sessao!.servicoNome
-            : item.servico!.nome;
-        final servValor = _modoPacote ? 0.0 : item.servico!.preco;
-
-        listaAgendamentos.add(
-          AgendamentoRegistro(
-            id: '${grupoId}_$i',
-            clienteId: _clienteSelecionado!.id,
-            clienteNome: _clienteSelecionado!.nome,
-            profissionalId: item.profissional!.id,
-            profissionalNome: item.profissional!.nome,
-            servicoId: servId,
-            servicoNome: servNome,
+      if (_modoPacote) {
+        final drafts = itensSelecionados.map((item) {
+          return SessaoPacoteAgendamentoDraft(
+            sessaoId: item.sessao!.sessaoId,
             inicio: item.inicioPrevisto!,
-            fim: item.fimPrevisto!,
-            status: 'agendado',
-            valorServico: servValor,
-            desconto: 0,
-            valorRecebido: 0,
-            confirmado: false,
-            compareceu: false,
-            grupoAgendamentoId: grupoId,
-            ordemNoGrupo: i,
-            observacoes: '',
-            dataCriacao: agora,
-          ),
-        );
-      }
+            profissionalId: item.profissional!.id,
+            duracaoMinutos: item.sessao!.duracaoMinutos,
+          );
+        }).toList();
 
-      await _agendaRepository.inserirGrupo(grupo, listaAgendamentos);
+        await _pacotesRepository.agendarSessoesLote(drafts);
+      } else {
+        final grupoId = agora.microsecondsSinceEpoch.toString();
 
-      // Registrar log e vincular sessões de pacote
-      final agendaCompleta = AgendaCompletaRepository();
-      for (var i = 0; i < listaAgendamentos.length; i++) {
-        final ag = listaAgendamentos[i];
-        final item = _itens[i];
-        await agendaCompleta.registrarStatus(
-          agendamentoId: ag.id,
+        final grupo = AgendamentoGrupoRegistro(
+          id: grupoId,
+          businessId: '',
+          clienteId: _clienteSelecionado!.id,
           status: 'agendado',
-          detalhes: 'Agendamento criado via grupo.',
+          observacoes: _observacoesController.text.trim(),
+          createdAt: agora,
+          updatedAt: agora,
         );
 
-        if (_modoPacote && item.sessao != null) {
-          await _pacotesRepository.vincularAgendamentoSessao(
-            ag.id,
-            item.sessao!.sessaoId,
-            ag.inicio,
+        final listaAgendamentos = <AgendamentoRegistro>[];
+        for (var i = 0; i < _itens.length; i++) {
+          final item = _itens[i];
+          final servId = item.servico!.id;
+          final servNome = item.servico!.nome;
+          final servValor = item.servico!.preco;
+
+          listaAgendamentos.add(
+            AgendamentoRegistro(
+              id: '${grupoId}_$i',
+              clienteId: _clienteSelecionado!.id,
+              clienteNome: _clienteSelecionado!.nome,
+              profissionalId: item.profissional!.id,
+              profissionalNome: item.profissional!.nome,
+              servicoId: servId,
+              servicoNome: servNome,
+              inicio: item.inicioPrevisto!,
+              fim: item.fimPrevisto!,
+              status: 'agendado',
+              valorServico: servValor,
+              desconto: 0,
+              valorRecebido: 0,
+              confirmado: false,
+              compareceu: false,
+              grupoAgendamentoId: grupoId,
+              ordemNoGrupo: i,
+              observacoes: '',
+              dataCriacao: agora,
+            ),
+          );
+        }
+
+        await _agendaRepository.inserirGrupo(grupo, listaAgendamentos);
+
+        final agendaCompleta = AgendaCompletaRepository();
+        for (var i = 0; i < listaAgendamentos.length; i++) {
+          final ag = listaAgendamentos[i];
+          await agendaCompleta.registrarStatus(
+            agendamentoId: ag.id,
+            status: 'agendado',
+            detalhes: 'Agendamento criado via grupo.',
           );
         }
       }
@@ -232,6 +375,177 @@ class _NovoAgendamentoSheetState extends State<NovoAgendamentoSheet> {
     }
   }
 
+  Future<void> _salvarBloqueio() async {
+    if (_profissionalBloqueio == null) {
+      _mostrarErro('Selecione o profissional do bloqueio.');
+      return;
+    }
+    final inicio = _bloqueioDiaInteiro
+        ? DateTime(
+            _dataSelecionada.year,
+            _dataSelecionada.month,
+            _dataSelecionada.day,
+          )
+        : DateTime(
+            _dataSelecionada.year,
+            _dataSelecionada.month,
+            _dataSelecionada.day,
+            _horarioSelecionado.hour,
+            _horarioSelecionado.minute,
+          );
+    final fim = _bloqueioDiaInteiro
+        ? inicio.add(const Duration(days: 1))
+        : DateTime(
+            _dataSelecionada.year,
+            _dataSelecionada.month,
+            _dataSelecionada.day,
+            _bloqueioFim.hour,
+            _bloqueioFim.minute,
+          );
+    if (!fim.isAfter(inicio)) {
+      _mostrarErro('O fim do bloqueio deve ser posterior ao início.');
+      return;
+    }
+    setState(() => _salvando = true);
+    try {
+      await _agendaCompletaRepository.adicionarBloqueio(
+        BloqueioAgenda(
+          id: '',
+          profissionalId: _profissionalBloqueio!.id,
+          profissionalNome: _profissionalBloqueio!.nome,
+          inicio: inicio,
+          fim: fim,
+          tipo: _bloqueioDiaInteiro ? 'dia_inteiro' : 'bloqueio',
+          motivo: _bloqueioDescricaoController.text.trim(),
+        ),
+      );
+      if (mounted) Navigator.pop(context, true);
+    } catch (erro) {
+      _mostrarErro('Não foi possível salvar o bloqueio: $erro');
+    } finally {
+      if (mounted) setState(() => _salvando = false);
+    }
+  }
+
+  Widget _seletorModoPrincipal() => SegmentedButton<bool>(
+    segments: const [
+      ButtonSegment(
+        value: false,
+        label: Text('Agendamento'),
+        icon: Icon(Icons.event_available),
+      ),
+      ButtonSegment(
+        value: true,
+        label: Text('Bloqueio'),
+        icon: Icon(Icons.event_busy),
+      ),
+    ],
+    selected: {_modoBloqueio},
+    onSelectionChanged: (valor) => setState(() => _modoBloqueio = valor.first),
+  );
+
+  Widget _buildBloqueio(double teclado) => Container(
+    padding: EdgeInsets.fromLTRB(22, 22, 22, teclado + 25),
+    decoration: const BoxDecoration(
+      color: _corFundo,
+      borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+    ),
+    child: SingleChildScrollView(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            'Novo item da agenda',
+            style: TextStyle(fontSize: 25, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 14),
+          _seletorModoPrincipal(),
+          const SizedBox(height: 18),
+          SegmentedButton<bool>(
+            segments: const [
+              ButtonSegment(value: true, label: Text('Dia inteiro')),
+              ButtonSegment(value: false, label: Text('Por horário')),
+            ],
+            selected: {_bloqueioDiaInteiro},
+            onSelectionChanged: (valor) =>
+                setState(() => _bloqueioDiaInteiro = valor.first),
+          ),
+          const SizedBox(height: 14),
+          DropdownButtonFormField<ProfissionalBasicoRegistro>(
+            initialValue: _profissionalBloqueio,
+            decoration: const InputDecoration(labelText: 'Profissional'),
+            items: widget.profissionais
+                .map((p) => DropdownMenuItem(value: p, child: Text(p.nome)))
+                .toList(),
+            onChanged: (valor) => setState(() => _profissionalBloqueio = valor),
+          ),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Data'),
+            subtitle: Text(DateFormat('dd/MM/yyyy').format(_dataSelecionada)),
+            onTap: () async {
+              final data = await showDatePicker(
+                context: context,
+                initialDate: _dataSelecionada,
+                firstDate: DateTime.now().subtract(const Duration(days: 1)),
+                lastDate: DateTime.now().add(const Duration(days: 730)),
+              );
+              if (data != null) setState(() => _dataSelecionada = data);
+            },
+          ),
+          if (!_bloqueioDiaInteiro)
+            Row(
+              children: [
+                Expanded(
+                  child: ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Início'),
+                    subtitle: Text(_horarioSelecionado.format(context)),
+                    onTap: () async {
+                      final hora = await showTimePicker(
+                        context: context,
+                        initialTime: _horarioSelecionado,
+                      );
+                      if (hora != null) {
+                        setState(() => _horarioSelecionado = hora);
+                      }
+                    },
+                  ),
+                ),
+                Expanded(
+                  child: ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Fim'),
+                    subtitle: Text(_bloqueioFim.format(context)),
+                    onTap: () async {
+                      final hora = await showTimePicker(
+                        context: context,
+                        initialTime: _bloqueioFim,
+                      );
+                      if (hora != null) setState(() => _bloqueioFim = hora);
+                    },
+                  ),
+                ),
+              ],
+            ),
+          TextField(
+            controller: _bloqueioDescricaoController,
+            decoration: const InputDecoration(
+              labelText: 'Descrição (opcional)',
+            ),
+          ),
+          const SizedBox(height: 22),
+          FilledButton.icon(
+            onPressed: _salvando ? null : _salvarBloqueio,
+            icon: const Icon(Icons.block),
+            label: const Text('Salvar bloqueio'),
+          ),
+        ],
+      ),
+    ),
+  );
+
   void _mostrarErro(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
@@ -239,6 +553,7 @@ class _NovoAgendamentoSheetState extends State<NovoAgendamentoSheet> {
   @override
   Widget build(BuildContext context) {
     final teclado = MediaQuery.viewInsetsOf(context).bottom;
+    if (_modoBloqueio) return _buildBloqueio(teclado);
 
     double valorTotal = 0;
     Duration duracaoTotal = Duration.zero;
@@ -288,57 +603,44 @@ class _NovoAgendamentoSheetState extends State<NovoAgendamentoSheet> {
                     color: Color(0xFF2D2140),
                   ),
                 ),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextButton.icon(
-                      onPressed: () {
-                        setState(() {
-                          _modoPacote = false;
-                          _itens.clear();
-                          _adicionarItem();
-                        });
-                      },
-                      style: TextButton.styleFrom(
-                        foregroundColor: !_modoPacote
-                            ? const Color(0xFF5D408B)
-                            : Colors.grey,
-                      ),
-                      icon: const Icon(Icons.add),
-                      label: const Text('Serviço'),
+                SegmentedButton<bool>(
+                  segments: const [
+                    ButtonSegment<bool>(
+                      value: false,
+                      label: Text('Serviço'),
+                      icon: Icon(Icons.add),
                     ),
-                    const SizedBox(width: 8),
-                    TextButton.icon(
-                      onPressed: () {
-                        setState(() {
-                          _modoPacote = true;
-                          _itens.clear();
-                          _adicionarItem();
-                        });
-                        if (_clienteSelecionado != null &&
-                            _sessoesDisponiveis.isEmpty) {
-                          _carregarSessoesPacote();
-                        }
-                      },
-                      style: TextButton.styleFrom(
-                        foregroundColor: _modoPacote
-                            ? const Color(0xFF5D408B)
-                            : Colors.grey,
-                      ),
-                      icon: const Icon(Icons.add_box),
-                      label: const Text('Pacote'),
+                    ButtonSegment<bool>(
+                      value: true,
+                      label: Text('Pacote'),
+                      icon: Icon(Icons.add_box),
                     ),
                   ],
+                  selected: {_modoPacote},
+                  onSelectionChanged: (Set<bool> newSelection) {
+                    setState(() {
+                      _modoPacote = newSelection.first;
+                      _itens.clear();
+                      _adicionarItem();
+                    });
+                    if (_modoPacote &&
+                        _clienteSelecionado != null &&
+                        _pacotesAtivos.isEmpty) {
+                      _carregarPacotesAtivos();
+                    }
+                  },
                 ),
               ],
             ),
+            const SizedBox(height: 14),
+            _seletorModoPrincipal(),
             const SizedBox(height: 22),
             InkWell(
               onTap: () async {
                 final cliente = await ClienteSmartSelector.show(context);
                 if (cliente != null) {
                   setState(() => _clienteSelecionado = cliente);
-                  _carregarSessoesPacote();
+                  if (_modoPacote) _carregarPacotesAtivos();
                 }
               },
               child: InputDecorator(
@@ -356,6 +658,43 @@ class _NovoAgendamentoSheetState extends State<NovoAgendamentoSheet> {
                 ),
               ),
             ),
+            if (_modoPacote) ...[
+              const SizedBox(height: 14),
+              Text(
+                _carregandoSessoes && _pacoteSelecionado == null
+                    ? 'Carregando pacotes...'
+                    : 'Pacotes vendidos ativos',
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              if (!_carregandoSessoes && _pacotesAtivos.isEmpty)
+                const Card(
+                  child: ListTile(
+                    title: Text('Nenhum pacote vendido com saldo disponível.'),
+                  ),
+                ),
+              ..._pacotesAtivos.map(
+                (pacote) => Card(
+                  color: _pacoteSelecionado?.id == pacote.id
+                      ? const Color(0xFFEDE4F5)
+                      : null,
+                  child: ListTile(
+                    leading: const Icon(Icons.inventory_2_outlined),
+                    title: Text(pacote.pacoteNome),
+                    subtitle: Text(
+                      '${pacote.disponiveis} de ${pacote.contratadas} disponíveis',
+                    ),
+                    trailing: _pacoteSelecionado?.id == pacote.id
+                        ? const Icon(Icons.check_circle)
+                        : const Icon(Icons.chevron_right),
+                    onTap: () {
+                      setState(() => _pacoteSelecionado = pacote);
+                      _carregarSessoesDoPacote();
+                    },
+                  ),
+                ),
+              ),
+            ],
             const SizedBox(height: 14),
             Row(
               children: [
@@ -443,32 +782,18 @@ class _NovoAgendamentoSheetState extends State<NovoAgendamentoSheet> {
                             const SizedBox(width: 8),
                             Expanded(
                               child: _modoPacote
-                                  ? DropdownButtonFormField<
-                                      SessaoDisponivelRegistro
-                                    >(
-                                      decoration: InputDecoration(
-                                        labelText: _carregandoSessoes
-                                            ? 'Carregando pacotes...'
-                                            : 'Sessão do Pacote',
-                                        isDense: true,
-                                        contentPadding: const EdgeInsets.all(8),
+                                  ? CheckboxListTile(
+                                      contentPadding: EdgeInsets.zero,
+                                      controlAffinity:
+                                          ListTileControlAffinity.leading,
+                                      value: item.selecionado,
+                                      title: Text(
+                                        item.sessao?.servicoNome ?? 'Sessão',
                                       ),
-                                      isExpanded: true,
-                                      initialValue: item.sessao,
-                                      items: _sessoesDisponiveis.map((s) {
-                                        return DropdownMenuItem(
-                                          value: s,
-                                          child: Text(
-                                            '${s.pacoteNome} - ${s.servicoNome}',
-                                          ),
-                                        );
-                                      }).toList(),
-                                      onChanged: (val) {
-                                        setState(() {
-                                          item.sessao = val;
-                                          _recalcularHorarios();
-                                        });
-                                      },
+                                      subtitle: const Text('DISPONÍVEL'),
+                                      onChanged: (valor) => setState(
+                                        () => item.selecionado = valor ?? false,
+                                      ),
                                     )
                                   : InkWell(
                                       onTap: () async {
@@ -495,7 +820,7 @@ class _NovoAgendamentoSheetState extends State<NovoAgendamentoSheet> {
                                       ),
                                     ),
                             ),
-                            if (_itens.length > 1 || _modoPacote)
+                            if (!_modoPacote)
                               IconButton(
                                 icon: const Icon(
                                   Icons.add_circle,
@@ -503,7 +828,7 @@ class _NovoAgendamentoSheetState extends State<NovoAgendamentoSheet> {
                                 ),
                                 onPressed: _adicionarItem,
                               ),
-                            if (_itens.length > 1)
+                            if (!_modoPacote && _itens.length > 1)
                               IconButton(
                                 icon: const Icon(
                                   Icons.delete,
@@ -542,7 +867,21 @@ class _NovoAgendamentoSheetState extends State<NovoAgendamentoSheet> {
                             ),
                           ],
                         ),
-                        if (item.inicioPrevisto != null)
+                        if (_modoPacote && item.inicioPrevisto != null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8, left: 32),
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: OutlinedButton.icon(
+                                onPressed: () => _selecionarHorarioDoItem(item),
+                                icon: const Icon(Icons.edit_calendar_outlined),
+                                label: Text(
+                                  '${DateFormat('dd/MM HH:mm').format(item.inicioPrevisto!)} às ${DateFormat('HH:mm').format(item.fimPrevisto!)}',
+                                ),
+                              ),
+                            ),
+                          )
+                        else if (item.inicioPrevisto != null)
                           Padding(
                             padding: const EdgeInsets.only(top: 8, left: 32),
                             child: Align(

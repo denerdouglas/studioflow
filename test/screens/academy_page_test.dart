@@ -139,10 +139,7 @@ void main() {
       await tester.testTextInput.receiveAction(TextInputAction.done);
       await tester.pumpAndSettle();
 
-      expect(
-        find.textContaining('Falha ao buscar cursos'),
-        findsOneWidget,
-      );
+      expect(find.textContaining('Falha ao buscar cursos'), findsOneWidget);
     });
 
     testWidgets('7. Categorias exibidas e clicáveis', (tester) async {

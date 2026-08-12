@@ -237,18 +237,27 @@ class _DisponibilidadePageState extends State<DisponibilidadePage> {
     }
   }
 
-  Future<void> _adicionarBloqueio() async {
-    String? profissionalId;
-    var tipo = 'bloqueio';
-    var data = DateTime.now();
-    var inicio = const TimeOfDay(hour: 9, minute: 0);
-    var fim = const TimeOfDay(hour: 10, minute: 0);
-    final motivo = TextEditingController();
+  Future<void> _adicionarBloqueio([BloqueioAgenda? atual]) async {
+    String? profissionalId = atual?.profissionalId;
+    var tipo = atual?.tipo ?? 'bloqueio';
+    var data = atual?.inicio ?? DateTime.now();
+    var inicio = atual == null
+        ? const TimeOfDay(hour: 9, minute: 0)
+        : TimeOfDay.fromDateTime(atual.inicio);
+    var fim = atual == null
+        ? const TimeOfDay(hour: 10, minute: 0)
+        : TimeOfDay.fromDateTime(atual.fim);
+    var diaInteiro =
+        atual != null &&
+        atual.inicio.hour == 0 &&
+        atual.inicio.minute == 0 &&
+        atual.fim.difference(atual.inicio).inHours >= 24;
+    final motivo = TextEditingController(text: atual?.motivo ?? '');
     final salvar = await showDialog<bool>(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setLocal) => AlertDialog(
-          title: const Text('Novo bloqueio ou folga'),
+          title: Text(atual == null ? 'Novo bloqueio' : 'Editar bloqueio'),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -302,28 +311,39 @@ class _DisponibilidadePageState extends State<DisponibilidadePage> {
                     if (v != null) setLocal(() => data = v);
                   },
                 ),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: Text('Início: ${inicio.format(context)}'),
-                  onTap: () async {
-                    final v = await showTimePicker(
-                      context: context,
-                      initialTime: inicio,
-                    );
-                    if (v != null) setLocal(() => inicio = v);
-                  },
+                SegmentedButton<bool>(
+                  segments: const [
+                    ButtonSegment(value: true, label: Text('Dia inteiro')),
+                    ButtonSegment(value: false, label: Text('Por horário')),
+                  ],
+                  selected: {diaInteiro},
+                  onSelectionChanged: (valor) =>
+                      setLocal(() => diaInteiro = valor.first),
                 ),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: Text('Fim: ${fim.format(context)}'),
-                  onTap: () async {
-                    final v = await showTimePicker(
-                      context: context,
-                      initialTime: fim,
-                    );
-                    if (v != null) setLocal(() => fim = v);
-                  },
-                ),
+                if (!diaInteiro) ...[
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text('Início: ${inicio.format(context)}'),
+                    onTap: () async {
+                      final v = await showTimePicker(
+                        context: context,
+                        initialTime: inicio,
+                      );
+                      if (v != null) setLocal(() => inicio = v);
+                    },
+                  ),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text('Fim: ${fim.format(context)}'),
+                    onTap: () async {
+                      final v = await showTimePicker(
+                        context: context,
+                        initialTime: fim,
+                      );
+                      if (v != null) setLocal(() => fim = v);
+                    },
+                  ),
+                ],
                 TextField(
                   controller: motivo,
                   decoration: const InputDecoration(labelText: 'Motivo'),
@@ -338,7 +358,7 @@ class _DisponibilidadePageState extends State<DisponibilidadePage> {
             ),
             FilledButton(
               onPressed: () => Navigator.pop(context, true),
-              child: const Text('Adicionar'),
+              child: Text(atual == null ? 'Adicionar' : 'Salvar'),
             ),
           ],
         ),
@@ -348,16 +368,24 @@ class _DisponibilidadePageState extends State<DisponibilidadePage> {
     try {
       await _repository.adicionarBloqueio(
         BloqueioAgenda(
-          id: '',
+          id: atual?.id ?? '',
           profissionalId: profissionalId,
-          inicio: DateTime(
-            data.year,
-            data.month,
-            data.day,
-            inicio.hour,
-            inicio.minute,
-          ),
-          fim: DateTime(data.year, data.month, data.day, fim.hour, fim.minute),
+          inicio: diaInteiro
+              ? DateTime(data.year, data.month, data.day)
+              : DateTime(
+                  data.year,
+                  data.month,
+                  data.day,
+                  inicio.hour,
+                  inicio.minute,
+                ),
+          fim: diaInteiro
+              ? DateTime(
+                  data.year,
+                  data.month,
+                  data.day,
+                ).add(const Duration(days: 1))
+              : DateTime(data.year, data.month, data.day, fim.hour, fim.minute),
           tipo: tipo,
           motivo: motivo.text.trim(),
         ),
@@ -472,6 +500,7 @@ class _DisponibilidadePageState extends State<DisponibilidadePage> {
                       '${b.inicio.day}/${b.inicio.month} ${b.inicio.hour.toString().padLeft(2, '0')}:${b.inicio.minute.toString().padLeft(2, '0')}–${b.fim.hour.toString().padLeft(2, '0')}:${b.fim.minute.toString().padLeft(2, '0')}\n${b.motivo}',
                     ),
                     isThreeLine: b.motivo.isNotEmpty,
+                    onTap: () => _adicionarBloqueio(b),
                     trailing: IconButton(
                       icon: const Icon(Icons.delete_outline),
                       onPressed: () async {

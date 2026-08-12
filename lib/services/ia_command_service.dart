@@ -627,7 +627,6 @@ class IaCommandService {
         );
         pending++;
       } catch (e) {
-
         failures++;
       }
     }

@@ -39,6 +39,7 @@ import 'migrations/migration_v34.dart';
 import 'migrations/migration_v35.dart';
 import 'migrations/migration_v36.dart';
 import 'migrations/migration_v37.dart';
+import 'migrations/migration_v38.dart';
 
 abstract final class DatabaseSchemaLatest {
   static Future<void> criar(Database db, int version) async {
@@ -80,6 +81,7 @@ abstract final class DatabaseSchemaLatest {
     await MigrationV35.executar(db);
     await MigrationV36.executar(db);
     await MigrationV37.executar(db);
+    await MigrationV38.executar(db);
   }
 
   static Future<void> migrar(
@@ -197,6 +199,9 @@ abstract final class DatabaseSchemaLatest {
     }
     if (versaoAnterior < 37 && novaVersao >= 37) {
       await MigrationV37.executar(db);
+    }
+    if (versaoAnterior < 38 && novaVersao >= 38) {
+      await MigrationV38.executar(db);
     }
   }
 }

@@ -25,6 +25,8 @@ void main() {
 
       // Assert
       expect(find.text('Novo Agendamento'), findsOneWidget);
+      expect(find.text('Agendamento'), findsOneWidget);
+      expect(find.text('Bloqueio'), findsOneWidget);
 
       // Procura pelo botão "+ Serviço"
       expect(

@@ -203,6 +203,7 @@ class PreviaAgendaPacote {
 class ResumoVendaPacote {
   final String id;
   final String pacoteNome;
+  final String clienteId;
   final String clienteNome;
   final double valorContratado;
   final double valorPago;
@@ -213,12 +214,13 @@ class ResumoVendaPacote {
   final int disponiveis;
   final int canceladas;
   final int vencidas;
-  final DateTime validade;
+  final DateTime? validade;
   final String status;
 
   const ResumoVendaPacote({
     required this.id,
     required this.pacoteNome,
+    required this.clienteId,
     required this.clienteNome,
     required this.valorContratado,
     required this.valorPago,
@@ -289,5 +291,75 @@ class SessaoDisponivelRegistro {
     required this.servicoNome,
     required this.pacoteVendidoId,
     required this.duracaoMinutos,
+  });
+}
+
+class SessaoPacoteAgendamentoDraft {
+  final String sessaoId;
+  final DateTime inicio;
+  final String profissionalId;
+  final int duracaoMinutos;
+
+  const SessaoPacoteAgendamentoDraft({
+    required this.sessaoId,
+    required this.inicio,
+    required this.profissionalId,
+    required this.duracaoMinutos,
+  });
+
+  DateTime get fim => inicio.add(Duration(minutes: duracaoMinutos));
+}
+
+class PacoteServicoParser {
+  static int? parseIntSeguro(dynamic value) {
+    if (value == null) return null;
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    final texto = value.toString().trim();
+    if (texto.isEmpty || texto.toLowerCase() == 'null') return null;
+    return int.tryParse(texto);
+  }
+
+  static double? parseDoubleSeguro(dynamic value) {
+    if (value == null) return null;
+    if (value is double) return value;
+    if (value is num) return value.toDouble();
+    final texto = value.toString().trim();
+    if (texto.isEmpty || texto.toLowerCase() == 'null') return null;
+    return double.tryParse(texto);
+  }
+}
+
+class SessaoPacoteDetalheRegistro {
+  final String id;
+  final String pacoteVendidoId;
+  final String pacoteNome;
+  final String servicoId;
+  final String servicoNome;
+  final int? ordem;
+  final String status;
+  final String? profissionalNome;
+  final String? dataAgendada;
+  final String? horarioInicio;
+  final String? agendamentoId;
+  final int duracaoMinutos;
+  final double valorAtribuido;
+  final double creditoConsumido;
+
+  const SessaoPacoteDetalheRegistro({
+    required this.id,
+    required this.pacoteVendidoId,
+    required this.pacoteNome,
+    required this.servicoId,
+    required this.servicoNome,
+    this.ordem,
+    required this.status,
+    this.profissionalNome,
+    this.dataAgendada,
+    this.horarioInicio,
+    this.agendamentoId,
+    this.duracaoMinutos = 60,
+    this.valorAtribuido = 0.0,
+    this.creditoConsumido = 0.0,
   });
 }
