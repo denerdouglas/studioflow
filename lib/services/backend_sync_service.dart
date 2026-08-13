@@ -11,6 +11,11 @@ import 'backend_api_client.dart';
 import 'backend_token_vault.dart';
 
 class BackendSyncService {
+  static final Map<String, Future<ResultadoSincronizacao>> _syncEmAndamento =
+      <String, Future<ResultadoSincronizacao>>{};
+  static final Map<String, Future<SessaoBackend>> _refreshEmAndamento =
+      <String, Future<SessaoBackend>>{};
+
   static const _excludedTables = {
     'backups_logicos',
     'fila_sincronizacao',
@@ -182,7 +187,29 @@ class BackendSyncService {
     );
   }
 
-  Future<ResultadoSincronizacao> sincronizar(String comercioId) async {
+  Future<ResultadoSincronizacao> sincronizar(String comercioId) {
+    final existente = _syncEmAndamento[comercioId];
+    if (existente != null) return existente;
+
+    final futuro = _executarSincronizacaoSerializada(comercioId);
+    _syncEmAndamento[comercioId] = futuro;
+    return futuro;
+  }
+
+  Future<ResultadoSincronizacao> _executarSincronizacaoSerializada(
+    String comercioId,
+  ) async {
+    try {
+      return await _sincronizarInterno(comercioId);
+    } finally {
+      final atual = _syncEmAndamento[comercioId];
+      if (atual != null) {
+        _syncEmAndamento.remove(comercioId);
+      }
+    }
+  }
+
+  Future<ResultadoSincronizacao> _sincronizarInterno(String comercioId) async {
     final db = await _databaseProvider();
     final configRows = await db.query(
       'integracoes_configuracao',
@@ -648,26 +675,61 @@ class BackendSyncService {
     return result;
   }
 
-  Future<SessaoBackend> _refreshSession(
+  Future<SessaoBackend> _refreshSession(Uri endpoint, SessaoBackend session) {
+    final comercioId = session.comercioId;
+    final existente = _refreshEmAndamento[comercioId];
+    if (existente != null) return existente;
+
+    final futuro = _executarRefreshSerializado(endpoint, session);
+    _refreshEmAndamento[comercioId] = futuro;
+    return futuro;
+  }
+
+  Future<SessaoBackend> _executarRefreshSerializado(
     Uri endpoint,
     SessaoBackend session,
   ) async {
-    if (!session.refreshExpiraEm.isAfter(DateTime.now().toUtc())) {
+    try {
+      return await _refreshSessionInterno(endpoint, session);
+    } finally {
+      final atual = _refreshEmAndamento[session.comercioId];
+      if (atual != null) {
+        _refreshEmAndamento.remove(session.comercioId);
+      }
+    }
+  }
+
+  Future<SessaoBackend> _refreshSessionInterno(
+    Uri endpoint,
+    SessaoBackend session,
+  ) async {
+    final armazenada = await _vault.read(session.comercioId);
+
+    // Outra execução pode ter renovado a sessão enquanto esta chamada aguardava.
+    if (armazenada != null && armazenada.refreshToken != session.refreshToken) {
+      return armazenada;
+    }
+
+    final atual = armazenada ?? session;
+    if (!atual.refreshExpiraEm.isAfter(DateTime.now().toUtc())) {
       throw StateError('A sessão online expirou. Entre novamente.');
     }
+
     final response = await _api.refresh(
       endpoint: endpoint,
-      refreshToken: session.refreshToken,
+      refreshToken: atual.refreshToken,
     );
+
     final updated = SessaoBackend(
-      comercioId: session.comercioId,
-      usuarioId: session.usuarioId,
+      comercioId: atual.comercioId,
+      usuarioId: atual.usuarioId,
       accessToken: response['accessToken'] as String,
       refreshToken: response['refreshToken'] as String,
       refreshExpiraEm: DateTime.parse(
         response['refreshTokenExpiresAt'] as String,
       ),
     );
+
     await _vault.write(updated);
     return updated;
   }
