@@ -3,7 +3,7 @@ BEGIN;
 CREATE TABLE IF NOT EXISTS accounts (
   id TEXT PRIMARY KEY,
   login TEXT NOT NULL,
-  password_hash TEXT NOT NULL,
+  password_hash TEXT,
   name TEXT NOT NULL,
   phone TEXT NOT NULL DEFAULT '',
   active BOOLEAN NOT NULL DEFAULT TRUE,
@@ -12,10 +12,19 @@ CREATE TABLE IF NOT EXISTS accounts (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS uq_accounts_login ON accounts(lower(login));
 
-INSERT INTO accounts(id,login,password_hash,name,phone)
-SELECT 'acc_' || md5(lower(login)), lower(login), min(password_hash),
-       min(name), min(phone)
-FROM users GROUP BY lower(login) ON CONFLICT DO NOTHING;
+INSERT INTO accounts(id, login, password_hash, name, phone)
+SELECT
+  'acc_' || md5(lower(login)),
+  lower(login),
+  CASE
+    WHEN COUNT(*) = 1 THEN MIN(password_hash)
+    ELSE NULL
+  END,
+  MIN(name),
+  MIN(phone)
+FROM users
+GROUP BY lower(login)
+ON CONFLICT DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS business_memberships (
   id TEXT PRIMARY KEY,
