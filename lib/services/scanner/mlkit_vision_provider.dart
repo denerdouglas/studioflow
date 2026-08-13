@@ -1,6 +1,7 @@
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import '../../models/domain/scanner_product_draft.dart';
 import '../../core/validation/gtin_validator.dart';
+import '../vision_ocr_service.dart';
 import 'scanner_coordinator.dart';
 
 class MlKitVisionProvider implements ScannerProvider {
@@ -44,12 +45,24 @@ class MlKitVisionProvider implements ScannerProvider {
     String? marca;
     double? quantidade;
     String? unidade;
+    String? tamanho;
 
     // Uma referência comercial precisa conter ao menos um dígito. Isso evita
     // classificar palavras em caixa alta (marca/material) como código.
     final referencePattern = RegExp(r'^(?=.*\d)[A-Z][A-Z0-9]{2,19}$');
 
     for (final line in lines) {
+      if (RegExp(r'(?:R\$|RS|\$)\s*\d', caseSensitive: false).hasMatch(line)) {
+        continue;
+      }
+      final sizeMatch = RegExp(
+        r'^(?:TAM(?:ANHO)?\s*[:\-]?\s*)?(PP|P|M|G|GG|XG|\d{1,3})$',
+        caseSensitive: false,
+      ).firstMatch(line);
+      if (sizeMatch != null && !RegExp(r'^\d{4,}$').hasMatch(line)) {
+        tamanho ??= sizeMatch.group(1)!.toUpperCase();
+        continue;
+      }
       final quantityMatch = RegExp(
         r'^(?:QTD(?:ADE)?\s*[:\-]?\s*)?(\d+(?:[.,]\d+)?)\s*(ML|L|G|KG|UN)?$',
         caseSensitive: false,
@@ -64,6 +77,10 @@ class MlKitVisionProvider implements ScannerProvider {
       final compact = line.replaceAll(RegExp(r'[\s-]'), '');
       if (codigo == null && GtinValidator.isValid(compact)) {
         codigo = compact;
+        continue;
+      }
+      if (referencia == null && RegExp(r'^\d{4,10}$').hasMatch(compact)) {
+        referencia = compact;
         continue;
       }
       final lower = line.toLowerCase();
@@ -97,6 +114,12 @@ class MlKitVisionProvider implements ScannerProvider {
       }
     }
 
+    final tag = VisionOcrService.parseText(text);
+    final commercialReference =
+        referencia ??
+        (tag.codigoTipo == ExtractedCodeKind.referenciaComercial
+            ? tag.codigo
+            : null);
     return ScannerProductDraft(
       gtin: codigo != null
           ? ScannerField(
@@ -105,9 +128,9 @@ class MlKitVisionProvider implements ScannerProvider {
               confidence: ScannerConfidence.baixa,
             )
           : null,
-      referenciaComercial: referencia != null
+      referenciaComercial: commercialReference != null
           ? ScannerField(
-              referencia,
+              commercialReference,
               source: 'mlkit_ocr',
               confidence: ScannerConfidence.baixa,
               reviewReason:
@@ -144,6 +167,40 @@ class MlKitVisionProvider implements ScannerProvider {
               confidence: ScannerConfidence.baixa,
               reviewReason: 'Unidade reconhecida por OCR.',
             ),
+      preco: tag.preco == null
+          ? null
+          : ScannerField(
+              tag.preco,
+              source: 'mlkit_ocr',
+              confidence: ScannerConfidence.baixa,
+              reviewReason: 'Preço reconhecido por OCR.',
+            ),
+      material: tag.material == null
+          ? null
+          : ScannerField(
+              tag.material,
+              source: 'mlkit_ocr',
+              confidence: ScannerConfidence.baixa,
+            ),
+      tamanhoVariacao: tamanho == null
+          ? null
+          : ScannerField(
+              tamanho,
+              source: 'mlkit_ocr',
+              confidence: ScannerConfidence.baixa,
+              reviewReason: 'Tamanho reconhecido por OCR.',
+            ),
+      quantidade: quantidade == null
+          ? null
+          : ScannerField(
+              quantidade,
+              source: 'mlkit_ocr',
+              confidence: ScannerConfidence.baixa,
+            ),
+      rawSignals: lines,
+      reviewReasons: [
+        if (tag.precisaRevisao) 'Código OCR pode conter caracteres ambíguos.',
+      ],
     );
   }
 }

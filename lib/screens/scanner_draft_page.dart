@@ -112,6 +112,22 @@ class _ScannerDraftPageState extends State<ScannerDraftPage> {
         source: 'user_confirmed',
         confidence: ScannerConfidence.alta,
       ),
+      qr: widget.draft.qr,
+      referenciaComercial: widget.draft.referenciaComercial,
+      referenciaInterna: widget.draft.referenciaInterna,
+      descricao: widget.draft.descricao,
+      quantidadeEmbalagem: widget.draft.quantidadeEmbalagem,
+      unidade: widget.draft.unidade,
+      validade: widget.draft.validade,
+      lote: widget.draft.lote,
+      categoriaSugerida: widget.draft.categoriaSugerida,
+      preco: widget.draft.preco,
+      material: widget.draft.material,
+      tamanhoVariacao: widget.draft.tamanhoVariacao,
+      quantidade: widget.draft.quantidade,
+      imagemFrente: widget.draft.imagemFrente,
+      imagemVerso: widget.draft.imagemVerso,
+      rawSignals: widget.draft.rawSignals,
     );
 
     Navigator.pop(context, {

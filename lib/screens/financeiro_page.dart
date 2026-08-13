@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../repositories/financeiro_repository.dart';
+import 'gestao_financeira_page.dart';
+import 'assistente_gestao_page.dart';
 
 class FinanceiroPage extends StatefulWidget {
   const FinanceiroPage({super.key});
@@ -327,6 +329,22 @@ class _FinanceiroPageState extends State<FinanceiroPage> {
           style: TextStyle(fontWeight: FontWeight.bold, color: _textoEscuro),
         ),
         actions: [
+          IconButton(
+            tooltip: 'Centros de resultado',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const GestaoFinanceiraPage()),
+            ),
+            icon: const Icon(Icons.insights_outlined, color: _corPrincipal),
+          ),
+          IconButton(
+            tooltip: 'Assistente de Gestão',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const AssistenteGestaoPage()),
+            ),
+            icon: const Icon(Icons.auto_awesome_outlined, color: _corPrincipal),
+          ),
           IconButton(
             tooltip: 'Selecionar período',
             onPressed: _selecionarPeriodo,
@@ -1085,6 +1103,7 @@ class _MovimentacaoFinanceiraFormSheetState
   String _categoria = 'Serviços';
   String _formaPagamento = 'Pix';
   String _status = 'pago';
+  String _centroResultado = 'geral';
 
   DateTime _dataSelecionada = DateTime.now();
 
@@ -1140,6 +1159,7 @@ class _MovimentacaoFinanceiraFormSheetState
         : movimentacao.formaPagamento;
 
     _status = movimentacao.status;
+    _centroResultado = movimentacao.centroResultado ?? 'geral';
 
     _dataSelecionada = movimentacao.data;
 
@@ -1243,6 +1263,9 @@ class _MovimentacaoFinanceiraFormSheetState
       servicoId: existente?.servicoId,
       usuarioResponsavelId: existente?.usuarioResponsavelId,
       observacoes: _observacoesController.text.trim(),
+      centroResultado: _centroResultado,
+      entidadeOrigem: existente?.entidadeOrigem ?? 'lancamento_manual',
+      entidadeOrigemId: existente?.entidadeOrigemId,
     );
 
     Navigator.pop(context, movimentacao);
@@ -1338,6 +1361,25 @@ class _MovimentacaoFinanceiraFormSheetState
                 prefixText: 'R\$ ',
                 prefixIcon: Icon(Icons.attach_money),
               ),
+            ),
+            const SizedBox(height: 14),
+            DropdownButtonFormField<String>(
+              initialValue: _centroResultado,
+              decoration: const InputDecoration(
+                labelText: 'Centro de resultado',
+                prefixIcon: Icon(Icons.account_tree_outlined),
+              ),
+              items: const [
+                DropdownMenuItem(
+                  value: 'geral',
+                  child: Text('Geral / Administrativo'),
+                ),
+                DropdownMenuItem(value: 'salao', child: Text('Salão')),
+                DropdownMenuItem(value: 'loja', child: Text('Loja')),
+              ],
+              onChanged: (value) {
+                if (value != null) setState(() => _centroResultado = value);
+              },
             ),
             const SizedBox(height: 14),
             DropdownButtonFormField<String>(

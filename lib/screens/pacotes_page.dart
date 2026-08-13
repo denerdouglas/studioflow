@@ -8,6 +8,8 @@ import 'novo_agendamento_sheet.dart';
 import 'pacote_vendido_detalhe_page.dart';
 import '../repositories/cliente_repository.dart';
 import '../repositories/cadastros_basicos_repository.dart';
+import 'assistente_gestao_page.dart';
+import '../models/domain/centro_resultado.dart';
 
 class PacotesPage extends StatefulWidget {
   const PacotesPage({super.key});
@@ -83,6 +85,17 @@ class _PacotesPageState extends State<PacotesPage>
       appBar: AppBar(
         title: const Text('Pacotes de serviços'),
         actions: [
+          IconButton(
+            tooltip: 'Assistente de Gestão',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) =>
+                    const AssistenteGestaoPage(contexto: CentroResultado.salao),
+              ),
+            ),
+            icon: const Icon(Icons.auto_awesome_outlined),
+          ),
           IconButton(
             tooltip: 'Alertas',
             onPressed: _mostrarAlertas,

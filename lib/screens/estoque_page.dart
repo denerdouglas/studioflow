@@ -172,15 +172,15 @@ class _EstoquePageState extends State<EstoquePage> {
                   'Entradas, saídas e histórico',
                   Icons.swap_vert,
                   AcaoPermissao.movimentarEstoque,
-                  () => abrir(const ProdutosLojaPage(somenteUsoInterno: true)),
+                  () => abrir(const EstoqueMovimentacoesPage()),
                 ),
                 _buildItem(
                   'Perdas e avarias',
                   'Registros de dano ou validade',
                   Icons.delete_outline,
                   AcaoPermissao.movimentarEstoque,
-                  () => abrir(const ProdutosLojaPage(somenteUsoInterno: true)),
-                ), // Ideal seria uma tela de histórico focada
+                  () => abrir(const EstoqueMovimentacoesPage(perdas: true)),
+                ),
                 _buildItem(
                   'Estoque baixo',
                   'Reposição necessária',
@@ -226,4 +226,58 @@ class _EstoquePageState extends State<EstoquePage> {
             ),
     );
   }
+}
+
+class EstoqueMovimentacoesPage extends StatelessWidget {
+  final bool perdas;
+  const EstoqueMovimentacoesPage({super.key, this.perdas = false});
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: Text(perdas ? 'Perdas e avarias' : 'Movimentações')),
+    body: FutureBuilder<List<MovimentacaoEstoqueRegistro>>(
+      future: EstoqueRepository().listarMovimentacoes(limite: 500),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        final rows = snapshot.data!.where((movement) {
+          if (!perdas) return true;
+          final text = '${movement.tipo} ${movement.motivo}'.toLowerCase();
+          return [
+            'perda',
+            'avaria',
+            'dano',
+            'validade',
+            'desperdício',
+          ].any(text.contains);
+        }).toList();
+        if (rows.isEmpty) {
+          return Center(
+            child: Text(
+              perdas
+                  ? 'Nenhuma perda ou avaria registrada.'
+                  : 'Nenhuma movimentação registrada.',
+            ),
+          );
+        }
+        return ListView.builder(
+          itemCount: rows.length,
+          itemBuilder: (_, index) {
+            final movement = rows[index];
+            return ListTile(
+              leading: Icon(
+                perdas ? Icons.report_problem_outlined : Icons.swap_vert,
+              ),
+              title: Text('${movement.tipo} • ${movement.quantidade}'),
+              subtitle: Text(
+                '${movement.motivo}\n${movement.quantidadeAnterior} → ${movement.quantidadePosterior}',
+              ),
+              isThreeLine: true,
+            );
+          },
+        );
+      },
+    ),
+  );
 }

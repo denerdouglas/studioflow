@@ -9,6 +9,8 @@ import 'clientes_page.dart';
 import 'mais_sprint2_page.dart';
 import 'ia_local_page.dart';
 import 'configuracoes_page.dart';
+import 'gestao_financeira_page.dart';
+import 'assistente_gestao_page.dart';
 import '../models/domain/acesso.dart';
 import '../services/session_controller.dart';
 
@@ -324,6 +326,35 @@ class _DashboardPageState extends State<DashboardPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.insights_outlined),
+                title: const Text('Gestão financeira'),
+                subtitle: const Text('Geral • Salão • Loja'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const GestaoFinanceiraPage(),
+                  ),
+                ),
+              ),
+            ),
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.auto_awesome_outlined),
+                title: const Text('Assistente de Gestão'),
+                subtitle: const Text('Análises e precificação com dados reais'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const AssistenteGestaoPage(),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 18),
             _construirResumoIa(),
 
             const SizedBox(height: 18),

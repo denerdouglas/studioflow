@@ -2,7 +2,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:studioflow/database/database_schema_latest.dart';
 import 'package:studioflow/models/domain/acesso.dart';
+import 'package:studioflow/models/domain/loja.dart';
 import 'package:studioflow/repositories/consignacao_repository.dart';
+import 'package:studioflow/repositories/loja_repository.dart';
 import 'package:studioflow/services/session_controller.dart';
 
 void main() {
@@ -172,6 +174,128 @@ void main() {
     );
     expect((await repo.detalhe(id))['quantidade_real'], 3);
   });
+
+  test('comanda de três peças cria uma venda e três itens', () async {
+    final id = await _createLot(repo, 'Comanda múltipla', quantity: 3);
+    final pieces = await repo.pecas(id);
+    final saleId = await repo.venderPecas(
+      pieces.map((piece) => piece['id'] as String),
+      clienteId: 'client-1',
+      formaPagamento: 'pix',
+      dataVenda: DateTime.utc(2026, 8, 12),
+      dataPagamento: DateTime.utc(2026, 8, 20),
+    );
+    expect(await db.query('pdv_vendas'), hasLength(1));
+    expect(
+      await db.query(
+        'pdv_venda_itens',
+        where: 'pdv_venda_id=?',
+        whereArgs: [saleId],
+      ),
+      hasLength(3),
+    );
+    expect((await db.query('pdv_vendas')).single['valor_total'], 186.0);
+    expect(
+      (await db.query('movimentacoes_financeiras')).single['valor'],
+      186.0,
+    );
+    expect(await repo.pecas(id, status: 'vendida'), hasLength(3));
+  });
+
+  test('falha em uma peça reverte toda a comanda', () async {
+    final id = await _createLot(repo, 'Comanda atômica', quantity: 2);
+    final pieces = await repo.pecas(id);
+    await repo.venderPeca(pieces.first['id'] as String);
+    await expectLater(
+      repo.venderPecas(
+        pieces.map((piece) => piece['id'] as String),
+        clienteId: 'client-1',
+      ),
+      throwsStateError,
+    );
+    expect(await db.query('pdv_vendas'), hasLength(1));
+    expect(await db.query('pdv_venda_itens'), hasLength(1));
+  });
+
+  test(
+    'venda mista cria uma venda para produto próprio e peça consignada',
+    () async {
+      final now = DateTime.utc(2026, 8, 12).toIso8601String();
+      await db.insert('estoque', {
+        'id': 'own-product',
+        'comercio_id': 'commerce-1',
+        'estoque_destino': 'loja',
+        'nome': 'Shampoo',
+        'categoria': 'Cabelo',
+        'tipo': 'produto',
+        'tipo_produto': 'venda',
+        'modalidade': 'proprio',
+        'custo_unitario': 30.0,
+        'preco_venda': 60.0,
+        'margem': 30.0,
+        'quantidade_atual': 2.0,
+        'estoque_minimo': 0.0,
+        'quantidade_sugerida': 0.0,
+        'unidade': 'un',
+        'quantidade_embalagem': 1.0,
+        'ativo': 1,
+        'data_cadastro': now,
+        'atualizado_em': now,
+      });
+      await db.insert('estoque_saldos', {
+        'id': 'own-product-sale-balance',
+        'business_id': 'commerce-1',
+        'estoque_id': 'own-product',
+        'finalidade': 'venda',
+        'quantidade_atual': 2.0,
+        'quantidade_reservada': 0.0,
+        'estoque_minimo': 0.0,
+        'created_at': now,
+        'updated_at': now,
+      });
+      final lotId = await _createLot(repo, 'Venda mista', quantity: 1);
+      final loja = LojaRepository(databaseProvider: () async => db);
+      final available = await loja.listarItensParaVenda();
+      final own = available.singleWhere((item) => item.id == 'own-product');
+      final piece = available.singleWhere((item) => item.tipo == 'peca_unica');
+      final saleId = await loja.finalizarVenda(
+        itens: [ItemCarrinho(own, 1), ItemCarrinho(piece, 1)],
+        desconto: 0,
+        pagamentos: const {'pix': 122},
+        profissionalId: 'user-1',
+        clienteId: 'client-1',
+      );
+      expect(await db.query('pdv_vendas'), hasLength(1));
+      expect(
+        await db.query(
+          'pdv_venda_itens',
+          where: 'pdv_venda_id=?',
+          whereArgs: [saleId],
+        ),
+        hasLength(2),
+      );
+      expect((await db.query('pdv_vendas')).single['valor_total'], 122.0);
+      expect((await loja.buscarProduto('own-product'))!.quantidadeAtual, 1.0);
+      expect((await repo.pecas(lotId)).single['status'], 'vendida');
+    },
+  );
+
+  test(
+    'estorno preserva venda e histórico, devolvendo peça e financeiro',
+    () async {
+      final id = await _createLot(repo, 'Estorno', quantity: 1);
+      final piece = (await repo.pecas(id)).single;
+      await repo.venderPeca(piece['id'] as String, clienteId: 'client-1');
+      await repo.estornarVendaDaPeca(piece['id'] as String, 'Cliente devolveu');
+      expect((await db.query('pdv_vendas')).single['status'], 'estornada');
+      expect((await repo.pecas(id)).single['status'], 'disponivel');
+      expect(
+        await db.query('consignacao_eventos', where: "tipo='estorno_venda'"),
+        hasLength(1),
+      );
+      expect(await db.query('movimentacoes_financeiras'), hasLength(2));
+    },
+  );
 
   test('fechamento preserva peças/eventos e remessas são isoladas', () async {
     final first = await _createLot(repo, 'Remessa 07', quantity: 2);

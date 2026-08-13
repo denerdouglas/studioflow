@@ -87,7 +87,9 @@ class ScannerCoordinator {
       imagemFrente: frontPath,
       imagemVerso: backPath,
       gtin: finalDraft.gtin,
+      qr: finalDraft.qr,
       referenciaComercial: finalDraft.referenciaComercial,
+      referenciaInterna: finalDraft.referenciaInterna,
       nome: finalDraft.nome,
       marca: finalDraft.marca,
       descricao: finalDraft.descricao,
@@ -96,7 +98,12 @@ class ScannerCoordinator {
       validade: finalDraft.validade,
       lote: finalDraft.lote,
       categoriaSugerida: finalDraft.categoriaSugerida,
+      preco: finalDraft.preco,
+      material: finalDraft.material,
+      tamanhoVariacao: finalDraft.tamanhoVariacao,
+      quantidade: finalDraft.quantidade,
       reviewReasons: finalDraft.reviewReasons,
+      rawSignals: finalDraft.rawSignals,
     );
   }
 
@@ -120,10 +127,16 @@ class ScannerCoordinator {
 
     return ScannerProductDraft(
       gtin: choose('GTIN', front.gtin, back.gtin),
+      qr: choose('QR', front.qr, back.qr),
       referenciaComercial: choose(
         'Referência comercial',
         front.referenciaComercial,
         back.referenciaComercial,
+      ),
+      referenciaInterna: choose(
+        'Referência interna',
+        front.referenciaInterna,
+        back.referenciaInterna,
       ),
       nome: choose('Nome', front.nome, back.nome),
       marca: choose('Marca', front.marca, back.marca),
@@ -141,9 +154,18 @@ class ScannerCoordinator {
         front.categoriaSugerida,
         back.categoriaSugerida,
       ),
+      preco: choose('Preço', front.preco, back.preco),
+      material: choose('Material', front.material, back.material),
+      tamanhoVariacao: choose(
+        'Tamanho/variação',
+        front.tamanhoVariacao,
+        back.tamanhoVariacao,
+      ),
+      quantidade: choose('Quantidade', front.quantidade, back.quantidade),
       imagemFrente: front.imagemFrente,
       imagemVerso: back.imagemVerso,
       reviewReasons: conflicts,
+      rawSignals: {...front.rawSignals, ...back.rawSignals}.toList(),
     );
   }
 }

@@ -29,6 +29,18 @@ class ConsignmentImportItem {
   };
 }
 
+class ConsignmentPendingLine {
+  final int lineNumber;
+  final String originalText;
+  final String reason;
+
+  const ConsignmentPendingLine({
+    required this.lineNumber,
+    required this.originalText,
+    required this.reason,
+  });
+}
+
 class ConsignmentDocumentImport {
   final String? representante;
   final String? contrato;
@@ -38,7 +50,7 @@ class ConsignmentDocumentImport {
   final DateTime? dataPagamento;
   final String? zonaVenda;
   final List<ConsignmentImportItem> itens;
-  final List<String> linhasPendentes;
+  final List<ConsignmentPendingLine> linhasPendentes;
   final bool usedOcr;
   final int? quantidadeDeclarada;
   final double? totalDeclarado;

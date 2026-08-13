@@ -12,6 +12,7 @@ import '../models/domain/mensagem_modelo.dart';
 import '../models/domain/atendimento.dart';
 import '../repositories/configuracoes_repository.dart';
 import '../repositories/modelos_mensagens_repository.dart';
+import '../repositories/pagamento_repository.dart';
 import '../services/mensagem_service.dart';
 import '../services/session_controller.dart';
 import '../services/whatsapp_queue_service.dart';
@@ -37,6 +38,7 @@ class _AgendaPageState extends State<AgendaPage> {
   final ModalidadesRepository _modalidadesRepository = ModalidadesRepository();
   final AgendaCompletaRepository _agendaCompletaRepository =
       AgendaCompletaRepository();
+  final PagamentoRepository _pagamentoRepository = PagamentoRepository();
 
   final CadastrosBasicosRepository _cadastrosRepository =
       CadastrosBasicosRepository();
@@ -225,6 +227,11 @@ class _AgendaPageState extends State<AgendaPage> {
       return;
     }
 
+    if (acao == 'registrar_pagamento') {
+      await _registrarPagamento(agendamento);
+      return;
+    }
+
     if (acao == 'reagendar') {
       await _reagendarAgendamento(agendamento);
       return;
@@ -330,7 +337,10 @@ class _AgendaPageState extends State<AgendaPage> {
     final valorRecebido = await showDialog<double>(
       context: context,
       builder: (_) {
-        return ConcluirAgendamentoDialog(valorInicial: agendamento.valorFinal);
+        return ConcluirAgendamentoDialog(
+          valorInicial: (agendamento.valorFinal - agendamento.valorRecebido)
+              .clamp(0, double.infinity),
+        );
       },
     );
 
@@ -370,6 +380,43 @@ class _AgendaPageState extends State<AgendaPage> {
         const SnackBar(
           content: Text('Não foi possível concluir o atendimento.'),
           behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  Future<void> _registrarPagamento(AgendamentoRegistro agendamento) async {
+    final saldo = (agendamento.valorFinal - agendamento.valorRecebido)
+        .clamp(0, double.infinity)
+        .toDouble();
+    final valor = await showDialog<double>(
+      context: context,
+      builder: (_) => ConcluirAgendamentoDialog(
+        valorInicial: saldo,
+        titulo: 'Registrar pagamento',
+        instrucao: 'Informe o valor efetivamente recebido.',
+        rotuloBotao: 'Registrar',
+      ),
+    );
+    if (valor == null || valor <= 0) return;
+    try {
+      await _pagamentoRepository.registrarPagamentoAtendimento(
+        agendamentoId: agendamento.id,
+        valor: valor,
+        formaPagamento: agendamento.formaPagamento ?? 'Não informado',
+        referencia:
+            '${agendamento.id}_${DateTime.now().microsecondsSinceEpoch}',
+      );
+      await _carregarTudo();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Pagamento registrado no financeiro.')),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Não foi possível registrar o pagamento.'),
         ),
       );
     }
@@ -1370,6 +1417,17 @@ class OpcoesAgendamentoSheet extends StatelessWidget {
                     Navigator.pop(context, 'concluir');
                   },
                 ),
+                if (agendamento.status == 'concluido' &&
+                    agendamento.pagamentoPendente &&
+                    agendamento.formaPagamento != 'Pacote')
+                  _OpcaoAgendamento(
+                    titulo: 'Registrar pagamento',
+                    icone: Icons.payments_outlined,
+                    cor: const Color(0xFF2EA779),
+                    onTap: () {
+                      Navigator.pop(context, 'registrar_pagamento');
+                    },
+                  ),
                 _OpcaoAgendamento(
                   titulo: 'Reagendar este serviço',
                   icone: Icons.edit_calendar_outlined,
@@ -1497,8 +1555,17 @@ class _OpcaoAgendamento extends StatelessWidget {
 
 class ConcluirAgendamentoDialog extends StatefulWidget {
   final double valorInicial;
+  final String titulo;
+  final String instrucao;
+  final String rotuloBotao;
 
-  const ConcluirAgendamentoDialog({super.key, required this.valorInicial});
+  const ConcluirAgendamentoDialog({
+    super.key,
+    required this.valorInicial,
+    this.titulo = 'Concluir atendimento',
+    this.instrucao = 'Informe o valor recebido.',
+    this.rotuloBotao = 'Concluir',
+  });
 
   @override
   State<ConcluirAgendamentoDialog> createState() =>
@@ -1545,12 +1612,12 @@ class _ConcluirAgendamentoDialogState extends State<ConcluirAgendamentoDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Concluir atendimento'),
+      title: Text(widget.titulo),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Informe o valor recebido.'),
+          Text(widget.instrucao),
           const SizedBox(height: 14),
           TextField(
             controller: _valorController,
@@ -1569,7 +1636,7 @@ class _ConcluirAgendamentoDialogState extends State<ConcluirAgendamentoDialog> {
           },
           child: const Text('Cancelar'),
         ),
-        FilledButton(onPressed: _confirmar, child: const Text('Concluir')),
+        FilledButton(onPressed: _confirmar, child: Text(widget.rotuloBotao)),
       ],
     );
   }

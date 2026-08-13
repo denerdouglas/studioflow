@@ -4,6 +4,7 @@ import '../core/utils/id_generator.dart';
 import '../database/database_service.dart';
 import '../models/domain/acesso.dart';
 import '../services/session_controller.dart';
+import '../services/purchase_receipt_service.dart';
 
 class ComandaLojaRepository {
   final Future<Database> Function() _databaseProvider;
@@ -460,24 +461,40 @@ class ComandaLojaRepository {
   }
 
   Future<String> resumoCompartilhavel(String comandaId) async {
+    return PurchaseReceiptService.whatsappMessage(await comprovante(comandaId));
+  }
+
+  Future<PurchaseReceiptData> comprovante(String comandaId) async {
     final user = _require(AcaoPermissao.realizarVenda);
     final db = await _databaseProvider();
     final rows = await db.rawQuery(
-      '''SELECT c.*, cl.nome cliente_nome FROM comandas_loja c
-      JOIN clientes cl ON cl.id=c.cliente_id WHERE c.id=? AND c.comercio_id=?''',
+      '''SELECT c.*, cl.nome cliente_nome, co.nome_exibicao comercio_nome,
+      cp.forma forma_pagamento, cp.registrado_em data_pagamento
+      FROM comandas_loja c JOIN clientes cl ON cl.id=c.cliente_id
+      JOIN comercios co ON co.id=c.comercio_id
+      LEFT JOIN comanda_loja_pagamentos cp ON cp.id=(
+        SELECT p.id FROM comanda_loja_pagamentos p
+        WHERE p.comanda_id=c.id ORDER BY p.registrado_em DESC LIMIT 1)
+      WHERE c.id=? AND c.comercio_id=? LIMIT 1''',
       [comandaId, user.comercioId],
     );
     if (rows.isEmpty) throw StateError('Comanda não encontrada.');
     final command = rows.single;
-    final products = await itens(comandaId);
-    final lines = products
-        .map(
-          (item) =>
-              '${item['quantidade']}x ${item['nome']} — R\$ ${(item['subtotal'] as num).toStringAsFixed(2)}',
-        )
-        .join('\n');
-    return 'StudioFlow — Comanda ${command['numero']}\nCliente: ${command['cliente_nome']}\n'
-        '$lines\nTotal: R\$ ${(command['total'] as num).toStringAsFixed(2)}\nStatus: ${command['status']}';
+    return PurchaseReceiptData(
+      establishment: '${command['comercio_nome'] ?? user.nomeComercio}',
+      client: '${command['cliente_nome']}',
+      purchaseDate:
+          DateTime.tryParse(
+            '${command['finalizada_em'] ?? command['criado_em']}',
+          ) ??
+          DateTime.now(),
+      paymentDate:
+          DateTime.tryParse('${command['data_pagamento'] ?? ''}') ??
+          DateTime.tryParse('${command['vencimento'] ?? ''}'),
+      paymentMethod: '${command['forma_pagamento'] ?? 'Não informado'}',
+      notes: command['observacoes'] as String?,
+      items: await itens(comandaId),
+    );
   }
 
   Future<void> estornar(String comandaId, String motivo) async {
@@ -732,6 +749,9 @@ class ComandaLojaRepository {
       'data': now,
       'data_criacao': now,
       'categoria': 'venda de produto',
+      'centro_resultado': 'loja',
+      'entidade_origem': 'comanda',
+      'entidade_origem_id': commandId,
       'cliente_id': command['cliente_id'],
       'profissional_id': command['profissional_id'] ?? user.id,
       'usuario_responsavel_id': user.id,

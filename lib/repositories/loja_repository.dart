@@ -62,10 +62,10 @@ class LojaRepository {
     if (pesquisa.trim().isNotEmpty) {
       where.add(
         '''(e.nome LIKE ? OR e.codigo_barras LIKE ? OR e.codigo_interno LIKE ?
-        OR e.marca LIKE ?)''',
+        OR e.marca LIKE ? OR e.categoria LIKE ?)''',
       );
       final termo = '%${pesquisa.trim()}%';
-      args.addAll([termo, termo, termo, termo]);
+      args.addAll([termo, termo, termo, termo, termo]);
     }
     if (categoria != null && categoria.isNotEmpty) {
       where.add('e.categoria = ?');
@@ -158,6 +158,54 @@ class LojaRepository {
     ''';
     final maps = await db.rawQuery(query, [u.comercioId, valor]);
     return maps.isEmpty ? null : ProdutoLoja.fromMap(maps.first);
+  }
+
+  Future<List<ProdutoLoja>> listarItensParaVenda({String pesquisa = ''}) async {
+    final products = await listarProdutos(pesquisa: pesquisa);
+    final user = _exigir(AcaoPermissao.visualizarEstoque);
+    final db = await _databaseProvider();
+    final where = <String>["comercio_id=?", "status='disponivel'"];
+    final args = <Object?>[user.comercioId];
+    if (pesquisa.trim().isNotEmpty) {
+      where.add('(nome LIKE ? OR codigo_exclusivo LIKE ? OR categoria LIKE ?)');
+      final query = '%${pesquisa.trim()}%';
+      args.addAll([query, query, query]);
+    }
+    final pieces = await db.query(
+      'pecas_unicas',
+      where: where.join(' AND '),
+      whereArgs: args,
+      orderBy: 'nome COLLATE NOCASE',
+      limit: 500,
+    );
+    return [
+      ...products,
+      ...pieces.map(
+        (piece) => ProdutoLoja(
+          id: piece['id'] as String,
+          comercioId: user.comercioId,
+          nome: piece['nome'] as String,
+          descricao: piece['descricao'] as String?,
+          categoria: piece['categoria'] as String? ?? 'Consignação',
+          tipoProduto: 'venda',
+          tipo: 'peca_unica',
+          modalidade: ModalidadeProduto.consignado,
+          custo: (piece['custo'] as num?)?.toDouble() ?? 0,
+          precoVenda: (piece['preco'] as num).toDouble(),
+          margem: 0,
+          quantidadeAtual: 1,
+          estoqueMinimo: 0,
+          quantidadeSugerida: 0,
+          unidade: 'un',
+          quantidadeEmbalagem: 1,
+          ativo: true,
+          codigoInterno: piece['codigo_exclusivo'] as String,
+          criadoEm:
+              DateTime.tryParse('${piece['data_cadastro']}') ?? DateTime.now(),
+          atualizadoEm: DateTime.now(),
+        ),
+      ),
+    ];
   }
 
   Future<void> salvarProduto(ProdutoLoja produto) async {
@@ -303,6 +351,18 @@ class LojaRepository {
     String? justificativaNegativo,
   }) async {
     final usuario = _exigir(AcaoPermissao.movimentarEstoque);
+    final manual = const {
+      TipoMovimentoLoja.entradaManual,
+      TipoMovimentoLoja.saidaManual,
+      TipoMovimentoLoja.ajuste,
+      TipoMovimentoLoja.perda,
+      TipoMovimentoLoja.avaria,
+    }.contains(tipo);
+    if (usuario.funcao == FuncaoUsuario.gerente &&
+        manual &&
+        (observacao ?? '').trim().isEmpty) {
+      throw StateError('Informe o motivo da movimentação manual.');
+    }
     if (permitirNegativo && usuario.funcao != FuncaoUsuario.dono) {
       throw StateError('Somente o Dono pode autorizar estoque negativo.');
     }
@@ -458,6 +518,21 @@ class LojaRepository {
     }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
+  Future<void> alterarStatusFornecedor(String id, bool ativo) async {
+    final user = _exigir(AcaoPermissao.cadastrarFornecedor);
+    final db = await _databaseProvider();
+    final changed = await db.update(
+      'fornecedores',
+      {
+        'ativo': ativo ? 1 : 0,
+        'atualizado_em': DateTime.now().toUtc().toIso8601String(),
+      },
+      where: 'id=? AND comercio_id=?',
+      whereArgs: [id, user.comercioId],
+    );
+    if (changed == 0) throw StateError('Fornecedor não encontrado.');
+  }
+
   Future<String> finalizarVenda({
     required List<ItemCarrinho> itens,
     required double desconto,
@@ -582,6 +657,9 @@ class LojaRepository {
           'data': DateTime.now().toIso8601String(),
           'data_criacao': DateTime.now().toIso8601String(),
           'categoria': 'venda de produto',
+          'centro_resultado': 'loja',
+          'entidade_origem': 'pdv_venda',
+          'entidade_origem_id': vendaId,
           'cliente_id': clienteId,
           'profissional_id': profissionalId,
           'usuario_responsavel_id': u.id,
@@ -711,14 +789,45 @@ class LojaRepository {
         where: "id = ? AND comercio_id = ?",
         whereArgs: [vendaId, u.comercioId],
       );
-      // Removendo as movimentações financeiras relacionadas
-      await txn.delete(
+      // Histórico financeiro e comissões nunca são apagados. A origem é
+      // marcada como estornada e um contramovimento registra o efeito.
+      final finances = await txn.query(
         'movimentacoes_financeiras',
-        where: 'descricao = ? OR id LIKE ?',
-        whereArgs: ['Venda PDV', '${vendaId}_p%'],
+        where: 'id LIKE ?',
+        whereArgs: ['${vendaId}_p%'],
       );
-      await txn.delete(
+      final now = DateTime.now().toUtc().toIso8601String();
+      for (var index = 0; index < finances.length; index++) {
+        final finance = finances[index];
+        if (finance['status'] == 'estornado') continue;
+        await txn.update(
+          'movimentacoes_financeiras',
+          {'status': 'estornado'},
+          where: 'id = ?',
+          whereArgs: [finance['id']],
+        );
+        await txn.insert('movimentacoes_financeiras', {
+          'id': '${vendaId}_estorno_$index',
+          'tipo': 'estorno',
+          'descricao': 'Estorno da venda $vendaId',
+          'valor': -((finance['valor'] as num?)?.toDouble() ?? 0),
+          'forma_pagamento': finance['forma_pagamento'],
+          'status': 'pago',
+          'data': now,
+          'data_criacao': now,
+          'categoria': 'estorno de venda',
+          'centro_resultado': 'loja',
+          'entidade_origem': 'pdv_venda',
+          'entidade_origem_id': vendaId,
+          'cliente_id': finance['cliente_id'],
+          'profissional_id': finance['profissional_id'],
+          'usuario_responsavel_id': u.id,
+          'observacoes': motivo.trim(),
+        });
+      }
+      await txn.update(
         'comissoes',
+        {'status': 'estornada', 'observacoes': motivo.trim()},
         where: 'id LIKE ?',
         whereArgs: ['${vendaId}_com%'],
       );
@@ -730,13 +839,49 @@ class LojaRepository {
     final db = await _databaseProvider();
     return db.rawQuery(
       '''
-      SELECT id, substr(id, 1, 8) as numero, valor_total as total, status, data_venda as criada_em
-      FROM pdv_vendas
-      WHERE comercio_id = ?
-      ORDER BY data_venda DESC
+      SELECT v.id, substr(v.id, 1, 8) numero, v.valor_total total,
+        v.status, v.data_venda criada_em, c.nome cliente_nome,
+        GROUP_CONCAT(COALESCE(e.nome,p.nome,vi.produto_id),' ') produtos,
+        GROUP_CONCAT(COALESCE(e.codigo_barras,e.codigo_interno,p.codigo_exclusivo,vi.produto_id),' ') codigos
+      FROM pdv_vendas v
+      LEFT JOIN clientes c ON c.id=v.cliente_id
+      LEFT JOIN pdv_venda_itens vi ON vi.pdv_venda_id=v.id
+      LEFT JOIN estoque e ON e.id=vi.produto_id
+      LEFT JOIN pecas_unicas p ON p.id=vi.produto_id
+      WHERE v.comercio_id = ?
+      GROUP BY v.id
+      ORDER BY v.data_venda DESC
     ''',
       [u.comercioId],
     );
+  }
+
+  Future<Map<String, Object?>> detalheVenda(String vendaId) async {
+    final user = _usuario;
+    final db = await _databaseProvider();
+    final sales = await db.rawQuery(
+      '''SELECT v.*, c.nome cliente_nome, p.nome profissional_nome
+      FROM pdv_vendas v LEFT JOIN clientes c ON c.id=v.cliente_id
+      LEFT JOIN profissionais p ON p.id=v.profissional_id
+      WHERE v.id=? AND v.comercio_id=? LIMIT 1''',
+      [vendaId, user.comercioId],
+    );
+    if (sales.isEmpty) throw StateError('Venda não encontrada.');
+    final items = await db.rawQuery(
+      '''SELECT vi.*, COALESCE(e.nome,p.nome,vi.produto_id) nome,
+      COALESCE(e.codigo_barras,e.codigo_interno,p.codigo_exclusivo) codigo
+      FROM pdv_venda_itens vi LEFT JOIN estoque e ON e.id=vi.produto_id
+      LEFT JOIN pecas_unicas p ON p.id=vi.produto_id
+      WHERE vi.pdv_venda_id=?''',
+      [vendaId],
+    );
+    final payments = await db.query(
+      'movimentacoes_financeiras',
+      where: 'id LIKE ?',
+      whereArgs: ['$vendaId%'],
+      orderBy: 'data',
+    );
+    return {...sales.single, 'itens': items, 'pagamentos': payments};
   }
 
   Future<void> _sincronizarReposicaoTxn(

@@ -1,6 +1,13 @@
 abstract final class AppFormatters {
   static String moeda(double valor) {
-    return 'R\$ ${valor.toStringAsFixed(2).replaceAll('.', ',')}';
+    final negative = valor < 0;
+    final parts = valor.abs().toStringAsFixed(2).split('.');
+    final digits = parts.first;
+    final groups = <String>[];
+    for (var end = digits.length; end > 0; end -= 3) {
+      groups.insert(0, digits.substring((end - 3).clamp(0, end), end));
+    }
+    return 'R\$ ${negative ? '-' : ''}${groups.join('.')},${parts.last}';
   }
 
   static String data(DateTime valor) {

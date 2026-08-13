@@ -40,6 +40,9 @@ void main() {
     expect(result.itens.last.categoria, 'Brinco');
     expect(result.itens.last.material, 'Prata');
     expect(result.linhasPendentes, hasLength(1));
+    expect(result.linhasPendentes.single.lineNumber, 12);
+    expect(result.linhasPendentes.single.originalText, contains('999999'));
+    expect(result.linhasPendentes.single.reason, 'Quantidade ambígua');
     expect(result.quantidadeDeclarada, 338);
     expect(result.totalDeclarado, 26390.0);
     expect(result.divergeDoDeclarado, isTrue);

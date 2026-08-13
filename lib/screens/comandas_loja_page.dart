@@ -1,8 +1,13 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../repositories/comanda_loja_repository.dart';
 import '../repositories/contas_receber_repository.dart';
 import '../services/external_action_service.dart';
+import '../services/purchase_receipt_service.dart';
 import 'clientes_page.dart';
 import 'vision_scanner_page.dart';
 
@@ -14,8 +19,15 @@ class ComandasLojaPage extends StatefulWidget {
 
 class _ComandasLojaPageState extends State<ComandasLojaPage> {
   final repo = ComandaLojaRepository();
+  final pesquisa = TextEditingController();
   late Future<List<Map<String, Object?>>> future = repo.listar();
   void reload() => setState(() => future = repo.listar());
+
+  @override
+  void dispose() {
+    pesquisa.dispose();
+    super.dispose();
+  }
 
   Future<void> create() async {
     final clients = await repo.clientesDisponiveis();
@@ -173,44 +185,71 @@ class _ComandasLojaPageState extends State<ComandasLojaPage> {
         if (!snapshot.hasData) {
           return const Center(child: CircularProgressIndicator());
         }
-        if (snapshot.data!.isEmpty) {
+        final query = pesquisa.text.trim().toLowerCase();
+        final commands = snapshot.data!
+            .where(
+              (command) =>
+                  query.isEmpty ||
+                  '${command['numero']} ${command['cliente_nome']} ${command['status']}'
+                      .toLowerCase()
+                      .contains(query),
+            )
+            .toList();
+        if (commands.isEmpty && query.isEmpty) {
           return const Center(child: Text('Nenhuma comanda cadastrada.'));
         }
-        return RefreshIndicator(
-          onRefresh: () async => reload(),
-          child: ListView(
-            children: snapshot.data!
-                .map(
-                  (command) => Card(
-                    child: ListTile(
-                      title: Text(
-                        '${command['numero']} • ${command['cliente_nome']}',
-                      ),
-                      subtitle: Text(
-                        '${command['status']} • R\$ ${(command['total'] as num).toStringAsFixed(2)}',
-                      ),
-                      onTap: () async {
-                        await Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => ComandaDetalhePage(
-                              comandaId: command['id'] as String,
+        return Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: TextField(
+                controller: pesquisa,
+                onChanged: (_) => setState(() {}),
+                decoration: const InputDecoration(
+                  prefixIcon: Icon(Icons.search),
+                  labelText: 'Pesquisar cliente, status ou identificador',
+                ),
+              ),
+            ),
+            Expanded(
+              child: RefreshIndicator(
+                onRefresh: () async => reload(),
+                child: ListView(
+                  children: commands
+                      .map(
+                        (command) => Card(
+                          child: ListTile(
+                            title: Text(
+                              '${command['numero']} • ${command['cliente_nome']}',
                             ),
+                            subtitle: Text(
+                              '${command['status']} • R\$ ${(command['total'] as num).toStringAsFixed(2)}',
+                            ),
+                            onTap: () async {
+                              await Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => ComandaDetalhePage(
+                                    comandaId: command['id'] as String,
+                                  ),
+                                ),
+                              );
+                              reload();
+                            },
+                            trailing: command['status'] == 'aberta'
+                                ? IconButton(
+                                    icon: const Icon(Icons.delete_outline),
+                                    onPressed: () => cancel(command),
+                                  )
+                                : const Icon(Icons.chevron_right),
                           ),
-                        );
-                        reload();
-                      },
-                      trailing: command['status'] == 'aberta'
-                          ? IconButton(
-                              icon: const Icon(Icons.delete_outline),
-                              onPressed: () => cancel(command),
-                            )
-                          : const Icon(Icons.chevron_right),
-                    ),
-                  ),
-                )
-                .toList(),
-          ),
+                        ),
+                      )
+                      .toList(),
+                ),
+              ),
+            ),
+          ],
         );
       },
     ),
@@ -228,6 +267,47 @@ class _ComandaDetalhePageState extends State<ComandaDetalhePage> {
   final repo = ComandaLojaRepository();
   late Future<List<Map<String, Object?>>> future = repo.itens(widget.comandaId);
   void reload() => setState(() => future = repo.itens(widget.comandaId));
+
+  Future<void> changeClient() async {
+    try {
+      final clients = await repo.clientesDisponiveis();
+      if (!mounted) return;
+      final selected = await showDialog<String>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Trocar cliente'),
+          content: SizedBox(
+            width: 420,
+            child: ListView(
+              shrinkWrap: true,
+              children: clients
+                  .map(
+                    (client) => ListTile(
+                      title: Text('${client['nome']}'),
+                      onTap: () =>
+                          Navigator.pop(context, client['id'] as String),
+                    ),
+                  )
+                  .toList(),
+            ),
+          ),
+        ),
+      );
+      if (selected == null) return;
+      await repo.editar(comandaId: widget.comandaId, clienteId: selected);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Cliente da comanda atualizado.')),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('$error')));
+      }
+    }
+  }
 
   Future<void> addCode([String? initial]) async {
     final code = TextEditingController(text: initial);
@@ -381,8 +461,46 @@ class _ComandaDetalhePageState extends State<ComandaDetalhePage> {
         formaPagamento: method.text,
         vencimento: due,
       );
+      if (!mounted) return;
+      final action = await showDialog<String>(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => AlertDialog(
+          title: const Text('Venda finalizada com sucesso'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, 'whatsapp'),
+              child: const Text('Enviar no WhatsApp'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, 'pdf'),
+              child: const Text('Gerar PDF'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, 'close'),
+              child: const Text('Fechar'),
+            ),
+          ],
+        ),
+      );
+      if (action == 'whatsapp') await share(whatsapp: true);
+      if (action == 'pdf') await sharePdf();
       if (mounted) Navigator.pop(context);
     }
+  }
+
+  Future<void> sharePdf() async {
+    final data = await repo.comprovante(widget.comandaId);
+    final bytes = await PurchaseReceiptService.pdfBytes(data);
+    final directory = await getTemporaryDirectory();
+    final file = File('${directory.path}/comprovante_${widget.comandaId}.pdf');
+    await file.writeAsBytes(bytes, flush: true);
+    await SharePlus.instance.share(
+      ShareParams(
+        files: [XFile(file.path, mimeType: 'application/pdf')],
+        text: 'Comprovante de compra • StudioFlow',
+      ),
+    );
   }
 
   Future<void> share({bool whatsapp = false, bool copy = false}) async {
@@ -402,6 +520,11 @@ class _ComandaDetalhePageState extends State<ComandaDetalhePage> {
     appBar: AppBar(
       title: const Text('Comanda'),
       actions: [
+        IconButton(
+          tooltip: 'Trocar cliente',
+          onPressed: changeClient,
+          icon: const Icon(Icons.person_outline),
+        ),
         IconButton(
           onPressed: () => share(copy: true),
           icon: const Icon(Icons.copy),

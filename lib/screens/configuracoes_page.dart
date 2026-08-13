@@ -11,6 +11,8 @@ import 'configuracao_comercial_page.dart';
 import 'modelos_mensagens_page.dart';
 import 'modalidades_page.dart';
 import 'pagamentos_sprint4_page.dart';
+import 'equipe_page.dart';
+import 'minhas_unidades_page.dart';
 
 class ConfiguracoesPage extends StatefulWidget {
   const ConfiguracoesPage({super.key});
@@ -143,6 +145,32 @@ class _ConfiguracoesPageState extends State<ConfiguracoesPage> {
           : ListView(
               padding: const EdgeInsets.all(20),
               children: [
+                Card(
+                  child: ListTile(
+                    leading: const Icon(Icons.groups_outlined),
+                    title: const Text('Equipe'),
+                    subtitle: const Text('Ativos, solicitações e inativos'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => Navigator.push(
+                      context,
+                      AppRoutes.material(builder: (_) => const EquipePage()),
+                    ),
+                  ),
+                ),
+                Card(
+                  child: ListTile(
+                    leading: const Icon(Icons.swap_horiz),
+                    title: const Text('Minhas unidades'),
+                    subtitle: const Text('Trocar de unidade com segurança'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => Navigator.push(
+                      context,
+                      AppRoutes.material(
+                        builder: (_) => const MinhasUnidadesPage(),
+                      ),
+                    ),
+                  ),
+                ),
                 _titulo('Comércio'),
                 _campo(_nome, 'Nome do comércio *', Icons.storefront),
                 _campo(_nomeExibicao, 'Nome exibido *', Icons.badge),

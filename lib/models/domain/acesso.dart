@@ -44,6 +44,9 @@ extension FuncaoUsuarioDados on FuncaoUsuario {
   };
 
   static FuncaoUsuario pelaChave(String? chave) {
+    if (chave == 'owner') return FuncaoUsuario.dono;
+    if (chave == 'manager') return FuncaoUsuario.gerente;
+    if (chave == 'collaborator') return FuncaoUsuario.colaborador;
     return FuncaoUsuario.values.firstWhere(
       (item) => item.name == chave,
       orElse: () => FuncaoUsuario.colaborador,
@@ -84,6 +87,7 @@ enum AcaoPermissao {
   visualizarConversas,
   configurarPix,
   gerenciarAgenda,
+  agendaVerTodas,
   excluirAgendamento,
   acessarFinanceiro,
   visualizarPacotes,
@@ -119,6 +123,7 @@ extension AcaoPermissaoDados on AcaoPermissao {
     AcaoPermissao.visualizarConversas => 'Visualizar conversas',
     AcaoPermissao.configurarPix => 'Configurar Pix',
     AcaoPermissao.gerenciarAgenda => 'Gerenciar agenda',
+    AcaoPermissao.agendaVerTodas => 'Ver agendas de todos',
     AcaoPermissao.excluirAgendamento => 'Excluir agendamento',
     AcaoPermissao.acessarFinanceiro => 'Acessar financeiro',
     AcaoPermissao.visualizarPacotes => 'Visualizar pacotes',
@@ -155,6 +160,7 @@ extension AcaoPermissaoDados on AcaoPermissao {
     AcaoPermissao.configurarPix ||
     AcaoPermissao.acessarFinanceiro => 'Financeiro e Pix',
     AcaoPermissao.gerenciarAgenda ||
+    AcaoPermissao.agendaVerTodas ||
     AcaoPermissao.excluirAgendamento => 'Agenda',
     AcaoPermissao.visualizarPacotes ||
     AcaoPermissao.criarPacotes ||
@@ -225,6 +231,7 @@ Set<ModuloPermissao> permissoesPadrao(FuncaoUsuario funcao) {
 
 class UsuarioAcesso {
   final String id;
+  final String? profissionalId;
   final String comercioId;
   final String codigoComercio;
   final String nomeComercio;
@@ -247,6 +254,7 @@ class UsuarioAcesso {
 
   const UsuarioAcesso({
     required this.id,
+    this.profissionalId,
     required this.comercioId,
     required this.codigoComercio,
     required this.nomeComercio,

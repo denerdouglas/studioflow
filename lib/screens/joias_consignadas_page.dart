@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 
+import '../core/helpers/app_formatters.dart';
 import '../repositories/consignacao_repository.dart';
 import '../repositories/cliente_repository.dart';
+import '../repositories/consignacao_acerto_repository.dart';
 import 'nova_remessa_consignacao_page.dart';
+import 'consignacao_conferencia_page.dart';
+import 'consignacao_acerto_page.dart';
 
 class JoiasConsignadasPage extends StatefulWidget {
   const JoiasConsignadasPage({super.key});
@@ -117,6 +121,7 @@ class _JoiasLotePageState extends State<JoiasLotePage> {
   final repo = ConsignacaoRepository();
   final pesquisa = TextEditingController();
   String? filtro;
+  final selecionadas = <String>{};
   late Future<List<Map<String, Object?>>> future;
   late Future<Map<String, Object?>> detail;
 
@@ -221,6 +226,192 @@ class _JoiasLotePageState extends State<JoiasLotePage> {
     reload();
   }
 
+  Future<void> finalizarComanda() async {
+    final clients = await ClienteRepository().listar();
+    if (!mounted) return;
+    var clientId = clients.firstOrNull?.id ?? '';
+    var payment = 'pix';
+    final accepted = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialog) => AlertDialog(
+          title: Text('Finalizar comanda • ${selecionadas.length} peça(s)'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              DropdownButtonFormField<String>(
+                initialValue: clientId,
+                decoration: const InputDecoration(labelText: 'Cliente'),
+                items: clients
+                    .map(
+                      (client) => DropdownMenuItem(
+                        value: client.id,
+                        child: Text(client.nome),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (value) => setDialog(() => clientId = value ?? ''),
+              ),
+              DropdownButtonFormField<String>(
+                initialValue: payment,
+                decoration: const InputDecoration(labelText: 'Pagamento'),
+                items: const [
+                  DropdownMenuItem(value: 'pix', child: Text('Pix')),
+                  DropdownMenuItem(value: 'dinheiro', child: Text('Dinheiro')),
+                  DropdownMenuItem(value: 'cartao', child: Text('Cartão')),
+                ],
+                onChanged: (value) => setDialog(() => payment = value ?? 'pix'),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Adicionar mais itens'),
+            ),
+            FilledButton(
+              onPressed: clientId.isEmpty
+                  ? null
+                  : () => Navigator.pop(context, true),
+              child: const Text('Finalizar comanda'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (accepted != true) return;
+    await repo.venderPecas(
+      selecionadas,
+      clienteId: clientId,
+      formaPagamento: payment,
+    );
+    setState(selecionadas.clear);
+    reload();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Venda finalizada com sucesso')),
+      );
+    }
+  }
+
+  Future<void> acaoVenda(Map<String, Object?> piece, String action) async {
+    final sale = await repo.vendaDaPeca(piece['id'] as String);
+    if (!mounted) return;
+    if (action == 'view') {
+      await showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Venda da peça'),
+          content: Text(
+            '${piece['codigo_exclusivo']} • ${piece['nome']}\n'
+            'Cliente: ${sale['cliente_nome'] ?? 'Não informado'}\n'
+            'Valor: ${_money(sale['valor_total'])}\n'
+            'Pagamento: ${sale['forma_pagamento'] ?? 'Não informado'}\n'
+            'Data: ${sale['data_venda']}',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Fechar'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+    if (action == 'refund') {
+      final reason = TextEditingController();
+      final accepted = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Devolver/Estornar'),
+          content: TextField(
+            controller: reason,
+            decoration: const InputDecoration(labelText: 'Motivo obrigatório'),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Estornar'),
+            ),
+          ],
+        ),
+      );
+      if (accepted == true) {
+        await repo.estornarVendaDaPeca(piece['id'] as String, reason.text);
+        reload();
+      }
+      return;
+    }
+    final clients = await ClienteRepository().listar();
+    if (!mounted) return;
+    var clientId = '${sale['cliente_id'] ?? ''}';
+    final payment = TextEditingController(
+      text: '${sale['forma_pagamento'] ?? 'pix'}',
+    );
+    final notes = TextEditingController(text: '${sale['observacoes'] ?? ''}');
+    final accepted = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialog) => AlertDialog(
+          title: const Text('Editar venda'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              DropdownButtonFormField<String>(
+                initialValue: clientId,
+                decoration: const InputDecoration(labelText: 'Cliente'),
+                items: [
+                  const DropdownMenuItem(value: '', child: Text('Sem cliente')),
+                  ...clients.map(
+                    (client) => DropdownMenuItem(
+                      value: client.id,
+                      child: Text(client.nome),
+                    ),
+                  ),
+                ],
+                onChanged: (value) => setDialog(() => clientId = value ?? ''),
+              ),
+              TextField(
+                controller: payment,
+                decoration: const InputDecoration(
+                  labelText: 'Forma de pagamento',
+                ),
+              ),
+              TextField(
+                controller: notes,
+                decoration: const InputDecoration(labelText: 'Observação'),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Salvar'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (accepted == true) {
+      await repo.editarVendaDaPeca(
+        piece['id'] as String,
+        clienteId: clientId.isEmpty ? null : clientId,
+        formaPagamento: payment.text,
+        observacoes: notes.text,
+      );
+      reload();
+    }
+  }
+
   Future<void> fechar() async {
     final available = await repo.pecas(
       widget.lote['id'] as String,
@@ -255,11 +446,160 @@ class _JoiasLotePageState extends State<JoiasLotePage> {
     if (mounted) Navigator.pop(context);
   }
 
+  Future<void> acerto() async {
+    final quantidade = TextEditingController();
+    final valor = TextEditingController();
+    final repasse = TextEditingController();
+    final taxas = TextEditingController(text: '0');
+    final perdas = TextEditingController(text: '0');
+    final ajustes = TextEditingController(text: '0');
+    var confirmarDivergencia = false;
+    var marcarPago = false;
+    final accepted = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setLocal) => AlertDialog(
+          title: const Text('Acerto da remessa'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: quantidade,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Quantidade informada pela fornecedora',
+                  ),
+                ),
+                TextField(
+                  controller: valor,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Valor informado pela fornecedora',
+                  ),
+                ),
+                TextField(
+                  controller: repasse,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'Repasse'),
+                ),
+                TextField(
+                  controller: taxas,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'Taxas'),
+                ),
+                TextField(
+                  controller: perdas,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'Perdas'),
+                ),
+                TextField(
+                  controller: ajustes,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'Ajuste (+/-)'),
+                ),
+                CheckboxListTile(
+                  value: confirmarDivergencia,
+                  onChanged: (value) =>
+                      setLocal(() => confirmarDivergencia = value ?? false),
+                  title: const Text('Confirmar eventual divergência'),
+                ),
+                CheckboxListTile(
+                  value: marcarPago,
+                  onChanged: (value) =>
+                      setLocal(() => marcarPago = value ?? false),
+                  title: const Text('Pagamento realmente efetuado'),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Conferir acerto'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (accepted != true) return;
+    double number(String text) =>
+        double.tryParse(text.replaceAll(',', '.')) ?? 0;
+    try {
+      final repository = ConsignacaoAcertoRepository();
+      final saved = await repository.salvar(
+        widget.lote['id'] as String,
+        ConsignacaoAcertoInput(
+          quantidadeFornecedor: int.tryParse(quantidade.text),
+          valorFornecedor: valor.text.trim().isEmpty
+              ? null
+              : number(valor.text),
+          repasse: number(repasse.text),
+          taxas: number(taxas.text),
+          perdasFinanceiras: number(perdas.text),
+          ajustes: number(ajustes.text),
+          confirmarDivergencia: confirmarDivergencia,
+        ),
+      );
+      final id = saved['id'] as String;
+      await repository.marcarConferido(id);
+      if (marcarPago) await repository.pagar(id);
+      reload();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('$error')));
+    }
+  }
+
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
       title: Text('${widget.lote['nome_lote'] ?? 'Remessa'}'),
       actions: [
+        IconButton(
+          tooltip: 'Acerto financeiro',
+          onPressed: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) =>
+                  ConsignacaoAcertoPage(remessaId: widget.lote['id'] as String),
+            ),
+          ).then((_) => reload()),
+          icon: const Icon(Icons.request_quote_outlined),
+        ),
+        IconButton(
+          tooltip: 'Conferir por Bip',
+          onPressed: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => ConsignacaoConferenciaPage(
+                remessaId: widget.lote['id'] as String,
+                finalidade: 'inventario',
+              ),
+            ),
+          ).then((_) => reload()),
+          icon: const Icon(Icons.qr_code_scanner),
+        ),
+        if (widget.lote['status'] == 'aberta')
+          IconButton(
+            tooltip: 'Devolução por Bip',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ConsignacaoConferenciaPage(
+                  remessaId: widget.lote['id'] as String,
+                  finalidade: 'devolucao',
+                ),
+              ),
+            ).then((_) => reload()),
+            icon: const Icon(Icons.assignment_return_outlined),
+          ),
         if (widget.lote['status'] == 'aberta')
           IconButton(
             tooltip: 'Fechar/trocar remessa',
@@ -287,11 +627,9 @@ class _JoiasLotePageState extends State<JoiasLotePage> {
                     Text('Vendidas: ${data['vendidas_real'] ?? 0}'),
                     Text('Disponíveis: ${data['disponiveis_real'] ?? 0}'),
                     Text('Devolvidas: ${data['devolvidas_real'] ?? 0}'),
-                    Text(
-                      'Mercadoria: R\$ ${_money(data['valor_recebido_real'])}',
-                    ),
-                    Text('Vendido: R\$ ${_money(data['valor_vendido_real'])}'),
-                    Text('Em posse: R\$ ${_money(data['valor_posse_real'])}'),
+                    Text('Mercadoria: ${_money(data['valor_recebido_real'])}'),
+                    Text('Vendido: ${_money(data['valor_vendido_real'])}'),
+                    Text('Em posse: ${_money(data['valor_posse_real'])}'),
                   ],
                 ),
               ),
@@ -343,12 +681,26 @@ class _JoiasLotePageState extends State<JoiasLotePage> {
                       vertical: 4,
                     ),
                     child: ListTile(
+                      leading: piece['status'] == 'disponivel'
+                          ? Checkbox(
+                              value: selecionadas.contains(piece['id']),
+                              onChanged: (selected) => setState(() {
+                                final id = piece['id'] as String;
+                                selected == true
+                                    ? selecionadas.add(id)
+                                    : selecionadas.remove(id);
+                              }),
+                            )
+                          : null,
                       title: Text(
                         '${piece['codigo_exclusivo']} • ${piece['nome']}',
                       ),
                       subtitle: Text(
-                        '${piece['status']} • R\$ ${_money(piece['preco'])}',
+                        '${piece['status']} • ${_money(piece['preco'])}',
                       ),
+                      onTap: piece['status'] == 'vendida'
+                          ? () => acaoVenda(piece, 'view')
+                          : null,
                       trailing: piece['status'] == 'disponivel'
                           ? PopupMenuButton<String>(
                               onSelected: (value) => value == 'vendida'
@@ -365,6 +717,24 @@ class _JoiasLotePageState extends State<JoiasLotePage> {
                                 ),
                               ],
                             )
+                          : piece['status'] == 'vendida'
+                          ? PopupMenuButton<String>(
+                              onSelected: (value) => acaoVenda(piece, value),
+                              itemBuilder: (_) => const [
+                                PopupMenuItem(
+                                  value: 'view',
+                                  child: Text('Ver venda'),
+                                ),
+                                PopupMenuItem(
+                                  value: 'edit',
+                                  child: Text('Editar venda'),
+                                ),
+                                PopupMenuItem(
+                                  value: 'refund',
+                                  child: Text('Devolver/Estornar'),
+                                ),
+                              ],
+                            )
                           : null,
                     ),
                   );
@@ -373,10 +743,21 @@ class _JoiasLotePageState extends State<JoiasLotePage> {
             },
           ),
         ),
+        if (selecionadas.isNotEmpty)
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: FilledButton.icon(
+                onPressed: finalizarComanda,
+                icon: const Icon(Icons.receipt_long_outlined),
+                label: Text('Finalizar comanda (${selecionadas.length} peças)'),
+              ),
+            ),
+          ),
       ],
     ),
   );
 
   static String _money(Object? value) =>
-      (value is num ? value.toDouble() : 0).toStringAsFixed(2);
+      AppFormatters.moeda(value is num ? value.toDouble() : 0);
 }

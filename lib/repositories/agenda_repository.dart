@@ -9,6 +9,7 @@ import '../models/domain/agendamento_grupo_registro.dart';
 import '../domain/services/agenda_conflict_checker.dart';
 import 'agenda_completa_repository.dart';
 import 'pacotes_repository.dart';
+import 'recebimento_servico_writer.dart';
 
 class ConflitoAgendaException implements Exception {
   final String mensagem;
@@ -198,6 +199,19 @@ class AgendaRepository {
     return usuario.comercioId;
   }
 
+  UsuarioAcesso get _usuario => SessionController.instance.usuario!;
+  String get _escopoProfissional {
+    final usuario = _usuario;
+    if (usuario.funcao == FuncaoUsuario.dono ||
+        usuario.podeAcao(AcaoPermissao.agendaVerTodas)) {
+      return '';
+    }
+    if (usuario.profissionalId == null) {
+      throw StateError('Usuário sem profissional vinculado.');
+    }
+    return usuario.profissionalId!;
+  }
+
   Future<List<AgendamentoRegistro>> listarPorDia(DateTime data) async {
     final Database db = await _databaseService.database;
 
@@ -222,10 +236,16 @@ class AgendaRepository {
       WHERE a.inicio >= ?
         AND a.inicio < ?
         AND a.comercio_id = ?
+        ${_escopoProfissional.isEmpty ? '' : 'AND a.profissional_id = ?'}
         AND a.excluido = 0
       ORDER BY a.inicio ASC
       ''',
-      [inicioDia.toIso8601String(), fimDia.toIso8601String(), _comercioId],
+      [
+        inicioDia.toIso8601String(),
+        fimDia.toIso8601String(),
+        _comercioId,
+        if (_escopoProfissional.isNotEmpty) _escopoProfissional,
+      ],
     );
 
     return registros.map(AgendamentoRegistro.doMapa).toList();
@@ -249,10 +269,11 @@ class AgendaRepository {
       INNER JOIN servicos s
         ON s.id = a.servico_id
       WHERE a.comercio_id = ?
+        ${_escopoProfissional.isEmpty ? '' : 'AND a.profissional_id = ?'}
         AND a.excluido = 0
       ORDER BY a.inicio ASC
       ''',
-      [_comercioId],
+      [_comercioId, if (_escopoProfissional.isNotEmpty) _escopoProfissional],
     );
 
     return registros.map(AgendamentoRegistro.doMapa).toList();
@@ -279,10 +300,15 @@ class AgendaRepository {
         ON s.id = a.servico_id
       WHERE a.comercio_id = ?
         AND a.grupo_agendamento_id = ?
+        ${_escopoProfissional.isEmpty ? '' : 'AND a.profissional_id = ?'}
         AND a.excluido = 0
       ORDER BY a.ordem_no_grupo ASC
       ''',
-      [_comercioId, grupoAgendamentoId],
+      [
+        _comercioId,
+        grupoAgendamentoId,
+        if (_escopoProfissional.isNotEmpty) _escopoProfissional,
+      ],
     );
 
     return registros.map(AgendamentoRegistro.doMapa).toList();
@@ -290,6 +316,7 @@ class AgendaRepository {
 
   Future<void> inserir(AgendamentoRegistro agendamento) async {
     final Database db = await _databaseService.database;
+    await _validarHabilitacao(db, agendamento);
 
     final possuiConflito = await verificarConflito(
       profissionalId: agendamento.profissionalId,
@@ -403,6 +430,7 @@ class AgendaRepository {
 
       // 2. Inserir cada serviço associado
       for (var item in agendamentos) {
+        await _validarHabilitacao(txn, item);
         final consumoPrevisto = await _calcularConsumoPrevisto(
           txn,
           item.servicoId,
@@ -472,6 +500,8 @@ class AgendaRepository {
 
   Future<void> atualizar(AgendamentoRegistro agendamento) async {
     final Database db = await _databaseService.database;
+    await _validarAcessoAoProfissional(agendamento.profissionalId);
+    await _validarHabilitacao(db, agendamento);
 
     final possuiConflito = await verificarConflito(
       profissionalId: agendamento.profissionalId,
@@ -713,9 +743,14 @@ class AgendaRepository {
       INNER JOIN servicos s
         ON s.id = a.servico_id
       WHERE a.id = ? AND a.comercio_id = ? AND a.excluido = 0
+        ${_escopoProfissional.isEmpty ? '' : 'AND a.profissional_id = ?'}
       LIMIT 1
       ''',
-      [agendamentoId, _comercioId],
+      [
+        agendamentoId,
+        _comercioId,
+        if (_escopoProfissional.isNotEmpty) _escopoProfissional,
+      ],
     );
 
     if (registros.isEmpty) {
@@ -723,6 +758,49 @@ class AgendaRepository {
     }
 
     return AgendamentoRegistro.doMapa(registros.first);
+  }
+
+  Future<void> _validarAcessoAoProfissional(String profissionalId) async {
+    final escopo = _escopoProfissional;
+    if (escopo.isNotEmpty && escopo != profissionalId) {
+      throw StateError('Acesso restrito à própria agenda.');
+    }
+  }
+
+  Future<void> _validarHabilitacao(
+    DatabaseExecutor db,
+    AgendamentoRegistro agendamento,
+  ) async {
+    await _validarAcessoAoProfissional(agendamento.profissionalId);
+    final entities = await db.rawQuery(
+      '''SELECT
+        (SELECT COUNT(*) FROM profissionais
+          WHERE id=? AND comercio_id=? AND ativo=1) profissional_ok,
+        (SELECT COUNT(*) FROM servicos
+          WHERE id=? AND comercio_id=? AND ativo=1) servico_ok,
+        (SELECT COUNT(*) FROM profissional_servicos
+          WHERE profissional_id=? AND servico_id=?) vinculo_ok,
+        (SELECT COUNT(*) FROM profissional_servicos
+          WHERE servico_id=?) vinculos_servico''',
+      [
+        agendamento.profissionalId,
+        _comercioId,
+        agendamento.servicoId,
+        _comercioId,
+        agendamento.profissionalId,
+        agendamento.servicoId,
+        agendamento.servicoId,
+      ],
+    );
+    final row = entities.single;
+    if ((row['profissional_ok'] as num).toInt() != 1 ||
+        (row['servico_ok'] as num).toInt() != 1) {
+      throw StateError('Profissional ou serviço não pertence à unidade ativa.');
+    }
+    if ((row['vinculos_servico'] as num).toInt() > 0 &&
+        (row['vinculo_ok'] as num).toInt() != 1) {
+      throw StateError('Profissional não habilitado para este serviço.');
+    }
   }
 
   Future<void> concluirAtendimentoComEstoque({
@@ -826,12 +904,22 @@ class AgendaRepository {
           'status': 'concluido',
           'confirmado': 1,
           'compareceu': 1,
-          'valor_recebido': valorRecebido,
           'estoque_consumido': 1,
           'consumo_realizado_json': consumoRealizadoJson,
         },
         where: 'id = ? AND comercio_id = ? AND excluido = 0',
         whereArgs: [agendamentoId, _comercioId],
+      );
+
+      await RecebimentoServicoWriter.registrar(
+        txn,
+        comercioId: _comercioId,
+        agendamentoId: agendamentoId,
+        valor: valorRecebido,
+        formaPagamento:
+            agendamento['forma_pagamento'] as String? ?? 'Não informado',
+        referencia: '${agendamentoId}_conclusao',
+        entidadeOrigem: 'pagamento_atendimento',
       );
 
       // Suporte legado
@@ -861,17 +949,31 @@ class AgendaRepository {
       return;
     }
 
-    await db.update(
-      'agendamentos',
-      {
-        'status': 'concluido',
-        'confirmado': 1,
-        'compareceu': 1,
-        'valor_recebido': valorRecebido,
-      },
-      where: 'id = ? AND comercio_id = ? AND excluido = 0',
-      whereArgs: [agendamentoId, _comercioId],
-    );
+    await db.transaction((txn) async {
+      final rows = await txn.query(
+        'agendamentos',
+        where: 'id = ? AND comercio_id = ? AND excluido = 0',
+        whereArgs: [agendamentoId, _comercioId],
+        limit: 1,
+      );
+      if (rows.isEmpty) throw StateError('Agendamento não encontrado.');
+      final agenda = rows.single;
+      await txn.update(
+        'agendamentos',
+        {'status': 'concluido', 'confirmado': 1, 'compareceu': 1},
+        where: 'id = ? AND comercio_id = ? AND excluido = 0',
+        whereArgs: [agendamentoId, _comercioId],
+      );
+      await RecebimentoServicoWriter.registrar(
+        txn,
+        comercioId: _comercioId,
+        agendamentoId: agendamentoId,
+        valor: valorRecebido,
+        formaPagamento: agenda['forma_pagamento'] as String? ?? 'Não informado',
+        referencia: '${agendamentoId}_conclusao',
+        entidadeOrigem: 'pagamento_atendimento',
+      );
+    });
   }
 
   Future<void> confirmarAgendamento(String agendamentoId) async {

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../core/utils/id_generator.dart';
 import '../models/domain/acesso.dart';
 import '../repositories/acesso_repository.dart';
+import '../repositories/equipe_repository.dart';
 import '../services/preferencias_service.dart';
 import '../services/acesso_online_service.dart';
 import '../services/backend_sync_service.dart';
@@ -31,6 +32,8 @@ class _AcessoPageState extends State<AcessoPage>
   final _email = TextEditingController();
   final _senha = TextEditingController();
   final _confirmacao = TextEditingController();
+  final _codigoUnidade = TextEditingController();
+  bool _cadastroProprietario = true;
   bool _permanecer = true;
   TipoEstabelecimento _tipoEstabelecimento = TipoEstabelecimento.salao;
   bool _ocultarSenha = true;
@@ -67,6 +70,7 @@ class _AcessoPageState extends State<AcessoPage>
       _email,
       _senha,
       _confirmacao,
+      _codigoUnidade,
     ]) {
       controller.dispose();
     }
@@ -314,6 +318,10 @@ class _AcessoPageState extends State<AcessoPage>
   }
 
   Future<void> _cadastrar() async {
+    if (!_cadastroProprietario) {
+      await _solicitarAcesso();
+      return;
+    }
     if ([
       _nomeComercio,
       _nomeExibicao,
@@ -390,6 +398,77 @@ class _AcessoPageState extends State<AcessoPage>
       SessionController.instance.entrar(usuario);
     } catch (erro) {
       if (mounted) _mensagem(_textoErro(erro));
+    } finally {
+      if (mounted) setState(() => _processando = false);
+    }
+  }
+
+  Future<void> _solicitarAcesso() async {
+    if ([
+      _responsavel,
+      _telefone,
+      _email,
+      _senha,
+      _confirmacao,
+      _codigoUnidade,
+    ].any((item) => item.text.trim().isEmpty)) {
+      _mensagem('Preencha todos os campos obrigatórios.');
+      return;
+    }
+    if (_senha.text != _confirmacao.text) {
+      _mensagem('A confirmação de senha não confere.');
+      return;
+    }
+    setState(() => _processando = true);
+    try {
+      final repository = EquipeRepository();
+      final business = await repository.localizarUnidade(_codigoUnidade.text);
+      if (business == null) throw StateError('Unidade não encontrada.');
+      if (!mounted) return;
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Confirmar unidade'),
+          content: Text(business['nome']!),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Voltar'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Enviar solicitação'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true) return;
+      await repository.solicitarAcesso(
+        businessId: business['id']!,
+        nome: _responsavel.text,
+        telefone: _telefone.text,
+        login: _email.text,
+        senha: _senha.text,
+      );
+      if (mounted) {
+        await showDialog<void>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Aguardando aprovação'),
+            content: const Text(
+              'O código não concede acesso. Aguarde a aprovação da proprietária.',
+            ),
+            actions: [
+              FilledButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Entendi'),
+              ),
+            ],
+          ),
+        );
+      }
+    } catch (error) {
+      if (mounted) _mensagem(_textoErro(error));
     } finally {
       if (mounted) setState(() => _processando = false);
     }
@@ -497,6 +576,20 @@ class _AcessoPageState extends State<AcessoPage>
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
+        SegmentedButton<bool>(
+          segments: const [
+            ButtonSegment(value: true, label: Text('Sou proprietário')),
+            ButtonSegment(value: false, label: Text('Sou colaborador')),
+          ],
+          selected: {_cadastroProprietario},
+          onSelectionChanged: (value) =>
+              setState(() => _cadastroProprietario = value.single),
+        ),
+        const SizedBox(height: 16),
+        if (!_cadastroProprietario) ...[
+          _campo(_codigoUnidade, 'Código público da unidade *', Icons.key),
+          const SizedBox(height: 12),
+        ],
         _campo(_nomeComercio, 'Nome do estabelecimento *', Icons.store),
         const SizedBox(height: 12),
         _campo(_nomeExibicao, 'Nome exibido no aplicativo *', Icons.badge),

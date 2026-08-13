@@ -402,6 +402,10 @@ class CatalogoLojaRepository {
   Future<void> alterarStatusProduto(String id, bool active) =>
       editarProduto(id, {'ativo': active ? 1 : 0});
 
+  Future<void> removerProdutoDoCatalogo(String id) async {
+    await editarProduto(id, {'catalogo_id': null});
+  }
+
   Future<void> excluirProduto(String id) async {
     final user = _require(AcaoPermissao.editarProduto);
     final db = await _databaseProvider();

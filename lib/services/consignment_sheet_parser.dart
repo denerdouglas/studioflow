@@ -19,18 +19,19 @@ class ConsignmentSheetParser {
   );
 
   static ConsignmentDocumentImport parse(String text) {
-    final lines = text
-        .replaceAll('\u00a0', ' ')
-        .split(RegExp(r'[\r\n]+'))
+    final rawLines = text.replaceAll('\u00a0', ' ').split(RegExp(r'\r?\n'));
+    final lines = rawLines
         .map((line) => line.replaceAll(RegExp(r'\s+'), ' ').trim())
         .where((line) => line.isNotEmpty)
         .toList();
     String? category;
     String? material;
     final items = <ConsignmentImportItem>[];
-    final pending = <String>[];
+    final pending = <ConsignmentPendingLine>[];
 
-    for (final line in lines) {
+    for (var rawIndex = 0; rawIndex < rawLines.length; rawIndex++) {
+      final line = rawLines[rawIndex].replaceAll(RegExp(r'\s+'), ' ').trim();
+      if (line.isEmpty) continue;
       final categoryMatch = _categoryPattern.firstMatch(line);
       if (categoryMatch != null) {
         category = _title(
@@ -69,7 +70,13 @@ class ConsignmentSheetParser {
           reversedMatches.isEmpty &&
           RegExp(r'\d{4,}').hasMatch(line) &&
           !_isHeader(line)) {
-        pending.add(line);
+        pending.add(
+          ConsignmentPendingLine(
+            lineNumber: rawIndex + 1,
+            originalText: line,
+            reason: _pendingReason(line),
+          ),
+        );
       }
     }
 
@@ -86,6 +93,22 @@ class ConsignmentSheetParser {
       quantidadeDeclarada: _declaredTotal(lines).$1,
       totalDeclarado: _declaredTotal(lines).$2,
     );
+  }
+
+  static String _pendingReason(String line) {
+    if (RegExp(
+      r'(?:R\$\s*)?\?+[.,]?\d*|\d+[.,]\?+',
+      caseSensitive: false,
+    ).hasMatch(line)) {
+      return 'Valor não reconhecido';
+    }
+    if (RegExp(
+      r'\b(?:QTD|QUANTIDADE)\b|\?+\s+\d+[.,]\d{2}',
+      caseSensitive: false,
+    ).hasMatch(line)) {
+      return 'Quantidade ambígua';
+    }
+    return 'Estrutura não reconhecida';
   }
 
   static double _brazilianMoney(String value) => double.parse(

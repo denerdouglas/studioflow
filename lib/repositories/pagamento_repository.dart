@@ -5,6 +5,7 @@ import '../models/domain/acesso.dart';
 import '../models/domain/atendimento.dart';
 import '../services/pix_payload_service.dart';
 import '../services/session_controller.dart';
+import 'recebimento_servico_writer.dart';
 
 class PagamentoRepository {
   final Future<Database> Function() _databaseProvider;
@@ -207,6 +208,46 @@ class PagamentoRepository {
       if (rows.isEmpty) throw StateError('Cobrança não encontrada.');
       final item = rows.first;
       final agora = DateTime.now().toUtc().toIso8601String();
+      final agendamentoId = item['agendamento_id'] as String?;
+      if (agendamentoId != null) {
+        await RecebimentoServicoWriter.registrar(
+          txn,
+          comercioId: _comercioId,
+          agendamentoId: agendamentoId,
+          valor: (item['valor'] as num).toDouble(),
+          formaPagamento: item['forma'] as String,
+          referencia: cobrancaId,
+          entidadeOrigem: 'cobranca',
+          usuarioId: _usuarioId,
+        );
+      } else {
+        final existente = await txn.query(
+          'movimentacoes_financeiras',
+          columns: ['id'],
+          where: 'comercio_id=? AND entidade_origem=? AND entidade_origem_id=?',
+          whereArgs: [_comercioId, 'cobranca', cobrancaId],
+          limit: 1,
+        );
+        if (existente.isEmpty) {
+          await txn.insert('movimentacoes_financeiras', {
+            'id': 'recebimento_$cobrancaId',
+            'comercio_id': _comercioId,
+            'tipo': 'entrada',
+            'descricao': item['descricao'],
+            'valor': item['valor'],
+            'forma_pagamento': item['forma'],
+            'status': 'pago',
+            'data': agora,
+            'data_criacao': agora,
+            'categoria': 'Cobranças',
+            'cliente_id': item['cliente_id'],
+            'usuario_responsavel_id': _usuarioId,
+            'observacoes': 'pagamento_confirmado',
+            'entidade_origem': 'cobranca',
+            'entidade_origem_id': cobrancaId,
+          });
+        }
+      }
       await txn.update(
         'cobrancas',
         {
@@ -218,12 +259,119 @@ class PagamentoRepository {
         where: 'id = ? AND comercio_id = ?',
         whereArgs: [cobrancaId, _comercioId],
       );
-      if (item['agendamento_id'] != null) {
+      if (agendamentoId != null) {
         await txn.update(
           'agendamentos',
           {'sinal_status': 'confirmado_manual'},
           where: 'id = ? AND comercio_id = ?',
-          whereArgs: [item['agendamento_id'], _comercioId],
+          whereArgs: [agendamentoId, _comercioId],
+        );
+      }
+    });
+  }
+
+  Future<bool> registrarPagamentoAtendimento({
+    required String agendamentoId,
+    required double valor,
+    required String formaPagamento,
+    required String referencia,
+  }) async {
+    _exigir(AcaoPermissao.acessarFinanceiro);
+    final db = await _databaseProvider();
+    return db.transaction(
+      (txn) => RecebimentoServicoWriter.registrar(
+        txn,
+        comercioId: _comercioId,
+        agendamentoId: agendamentoId,
+        valor: valor,
+        formaPagamento: formaPagamento,
+        referencia: referencia,
+        entidadeOrigem: 'pagamento_atendimento',
+        usuarioId: _usuarioId,
+      ),
+    );
+  }
+
+  Future<void> estornarRecebimentoAtendimento({
+    required String movimentoId,
+    required String motivo,
+  }) async {
+    _exigir(AcaoPermissao.acessarFinanceiro);
+    if (motivo.trim().length < 3) {
+      throw StateError('Informe o motivo do estorno.');
+    }
+    final db = await _databaseProvider();
+    await db.transaction((txn) async {
+      final rows = await txn.query(
+        'movimentacoes_financeiras',
+        where:
+            "id=? AND comercio_id=? AND tipo='entrada' AND status='pago' AND centro_resultado='salao'",
+        whereArgs: [movimentoId, _comercioId],
+        limit: 1,
+      );
+      if (rows.isEmpty) {
+        throw StateError('Recebimento não encontrado ou já estornado.');
+      }
+      final movimento = rows.single;
+      final agendaId = movimento['agendamento_id'] as String?;
+      if (agendaId == null) throw StateError('Recebimento sem atendimento.');
+      final agora = DateTime.now().toUtc().toIso8601String();
+      await txn.update(
+        'movimentacoes_financeiras',
+        {'status': 'estornado'},
+        where: 'id=? AND comercio_id=?',
+        whereArgs: [movimentoId, _comercioId],
+      );
+      await txn.insert('movimentacoes_financeiras', {
+        ...movimento,
+        'id': '${movimentoId}_estorno',
+        'tipo': 'estorno',
+        'valor': -(movimento['valor'] as num).toDouble(),
+        'status': 'pago',
+        'descricao': 'Estorno - ${movimento['descricao']}',
+        'data': agora,
+        'data_criacao': agora,
+        'observacoes': motivo.trim(),
+        'entidade_origem': 'estorno_recebimento',
+        'entidade_origem_id': movimentoId,
+      });
+      final agendas = await txn.query(
+        'agendamentos',
+        columns: ['valor_recebido', 'valor_servico', 'desconto'],
+        where: 'id=? AND comercio_id=?',
+        whereArgs: [agendaId, _comercioId],
+        limit: 1,
+      );
+      if (agendas.isNotEmpty) {
+        final agenda = agendas.single;
+        final recebido = (agenda['valor_recebido'] as num).toDouble();
+        final novo = (recebido - (movimento['valor'] as num).toDouble()).clamp(
+          0,
+          double.infinity,
+        );
+        await txn.update(
+          'agendamentos',
+          {
+            'valor_recebido': novo,
+            'pagamento_status': novo <= 0.005 ? 'pendente' : 'parcial',
+            'atualizado_em': agora,
+          },
+          where: 'id=? AND comercio_id=?',
+          whereArgs: [agendaId, _comercioId],
+        );
+      }
+      if (movimento['entidade_origem'] == 'cobranca') {
+        await txn.update(
+          'cobrancas',
+          {'status': 'estornada'},
+          where: 'id=? AND comercio_id=?',
+          whereArgs: [movimento['entidade_origem_id'], _comercioId],
+        );
+        await txn.update(
+          'agendamentos',
+          {'sinal_status': 'estornado'},
+          where: 'id=? AND comercio_id=?',
+          whereArgs: [agendaId, _comercioId],
         );
       }
     });

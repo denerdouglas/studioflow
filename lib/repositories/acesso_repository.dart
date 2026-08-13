@@ -16,6 +16,8 @@ class AcessoRepository {
     : _databaseProvider =
           databaseProvider ?? (() => DatabaseService.instance.database);
 
+  Future<Database> get database => _databaseProvider();
+
   Future<UsuarioAcesso> cadastrarComercio(
     CadastroComercioEntrada entrada,
   ) async {
@@ -596,8 +598,18 @@ class AcessoRepository {
     _validarAdministrador(ator);
     _validarEmail(emailLogin);
     final acoesEfetivas = acoes ?? acoesPadrao(funcao);
-    if (funcao == FuncaoUsuario.dono && usuarioId != ator.id) {
-      throw StateError('Não é permitido criar outro usuário dono.');
+    if (funcao == FuncaoUsuario.dono && ator.funcao != FuncaoUsuario.dono) {
+      throw StateError('Somente o proprietário pode administrar propriedade.');
+    }
+    if (usuarioId == ator.id && funcao != ator.funcao) {
+      throw StateError('Não é permitido alterar o próprio cargo.');
+    }
+    if (ator.funcao != FuncaoUsuario.dono &&
+        (!ator.permissoes.containsAll(permissoes) ||
+            !ator.acoes.containsAll(acoesEfetivas))) {
+      throw StateError(
+        'Não é permitido conceder permissão superior à própria.',
+      );
     }
 
     final db = await _databaseProvider();
@@ -850,6 +862,7 @@ class AcessoRepository {
     final funcao = FuncaoUsuarioDados.pelaChave(mapa['funcao'] as String?);
     return UsuarioAcesso(
       id: mapa['id'] as String,
+      profissionalId: mapa['profissional_id'] as String?,
       comercioId: mapa['comercio_id'] as String,
       codigoComercio: mapa['codigo_acesso'] as String,
       nomeComercio: mapa['comercio_nome'] as String,

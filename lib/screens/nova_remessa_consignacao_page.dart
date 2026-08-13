@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import '../repositories/consignacao_repository.dart';
 import '../models/domain/consignment_document_import.dart';
 import '../services/consignment_document_import_service.dart';
+import '../models/domain/universal_reader.dart';
+import 'vision_scanner_page.dart';
 
 class NovaRemessaConsignacaoPage extends StatefulWidget {
   const NovaRemessaConsignacaoPage({super.key});
@@ -31,7 +33,7 @@ class _NovaRemessaConsignacaoPageState
   bool conferindo = false;
   bool salvando = false;
   bool importando = false;
-  int linhasPendentes = 0;
+  final pendencias = <ConsignmentPendingLine>[];
   String? validacaoDocumento;
 
   @override
@@ -80,7 +82,9 @@ class _NovaRemessaConsignacaoPageState
         itens
           ..clear()
           ..addAll(data.itens.map((item) => item.toPieceMap()));
-        linhasPendentes = data.linhasPendentes.length;
+        pendencias
+          ..clear()
+          ..addAll(data.linhasPendentes);
         validacaoDocumento = data.divergeDoDeclarado
             ? 'Documento informa ${data.quantidadeDeclarada ?? "?"} itens / R\$ ${_money(data.totalDeclarado)}. '
                   'Importação identificou ${data.quantidadeImportada} itens / R\$ ${_money(data.totalImportado)}. '
@@ -148,6 +152,10 @@ class _NovaRemessaConsignacaoPageState
             onPressed: () => Navigator.pop(context, 'manual'),
             child: const Text('Preencher manualmente'),
           ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, 'bip'),
+            child: const Text('Cadastrar por Bip'),
+          ),
           FilledButton(
             onPressed: () => Navigator.pop(context, 'retry'),
             child: const Text('Tentar novamente'),
@@ -156,6 +164,35 @@ class _NovaRemessaConsignacaoPageState
       ),
     );
     if (action == 'retry') await _importar(path);
+    if (action == 'bip') await _cadastrarPorBip();
+  }
+
+  Future<void> _cadastrarPorBip() async {
+    final readings = await Navigator.push<List<BipSessionItem>>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => VisionScannerPage(
+          policy: ReaderContextPolicy.forContext(ReaderContext.consignacao),
+        ),
+      ),
+    );
+    if (readings == null || readings.isEmpty || !mounted) return;
+    setState(() {
+      for (final reading in readings.where((item) => !item.ignored)) {
+        final draft = reading.draft;
+        itens.add({
+          'codigo': draft.referenciaComercial?.value ?? draft.gtin?.value ?? '',
+          'categoria': draft.categoriaSugerida?.value ?? '',
+          'nome': draft.nome?.value ?? draft.descricao?.value ?? '',
+          'descricao': draft.descricao?.value ?? draft.nome?.value ?? '',
+          'quantidade': draft.quantidade?.value?.toInt() ?? 1,
+          'preco': draft.preco?.value ?? -1,
+          'material': draft.material?.value ?? '',
+          'observacoes': draft.precisaRevisao ? 'Revisar leitura por Bip' : '',
+        });
+      }
+      conferindo = true;
+    });
   }
 
   Future<void> _editarItem([int? index]) async {
@@ -221,6 +258,61 @@ class _NovaRemessaConsignacaoPageState
     setState(() => index == null ? itens.add(item) : itens[index] = item);
   }
 
+  Future<void> _revisarPendencias() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (context, setSheet) => SafeArea(
+          child: FractionallySizedBox(
+            heightFactor: .85,
+            child: Scaffold(
+              appBar: AppBar(title: const Text('Linhas para revisão')),
+              body: pendencias.isEmpty
+                  ? const Center(child: Text('Nenhuma linha pendente.'))
+                  : ListView.builder(
+                      itemCount: pendencias.length,
+                      itemBuilder: (context, index) {
+                        final pending = pendencias[index];
+                        return Card(
+                          child: ListTile(
+                            title: Text('Linha ${pending.lineNumber}'),
+                            subtitle: Text(
+                              '“${pending.originalText}”\nMotivo: ${pending.reason}',
+                            ),
+                            isThreeLine: true,
+                            trailing: PopupMenuButton<String>(
+                              onSelected: (action) async {
+                                if (action == 'correct') {
+                                  final before = itens.length;
+                                  await _editarItem();
+                                  if (itens.length == before) return;
+                                }
+                                setState(() => pendencias.remove(pending));
+                                setSheet(() {});
+                              },
+                              itemBuilder: (_) => const [
+                                PopupMenuItem(
+                                  value: 'correct',
+                                  child: Text('Corrigir'),
+                                ),
+                                PopupMenuItem(
+                                  value: 'ignore',
+                                  child: Text('Ignorar'),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _field(
     TextEditingController controller,
     String label, {
@@ -266,6 +358,33 @@ class _NovaRemessaConsignacaoPageState
         const SnackBar(content: Text('Confira o cabeçalho e todos os itens.')),
       );
       return;
+    }
+    if (pendencias.isNotEmpty) {
+      final action = await showDialog<String>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Linhas não revisadas'),
+          content: Text(
+            'Existem ${pendencias.length} linhas não revisadas. '
+            'Deseja continuar mesmo assim?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, 'review'),
+              child: const Text('Revisar pendências'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, 'continue'),
+              child: const Text('Continuar sem elas'),
+            ),
+          ],
+        ),
+      );
+      if (action == 'review') {
+        await _revisarPendencias();
+        return;
+      }
+      if (action != 'continue') return;
     }
     setState(() => salvando = true);
     try {
@@ -348,6 +467,11 @@ class _NovaRemessaConsignacaoPageState
               importando ? 'Extraindo documento...' : 'Importar documento',
             ),
           ),
+          OutlinedButton.icon(
+            onPressed: importando ? null : _cadastrarPorBip,
+            icon: const Icon(Icons.qr_code_scanner),
+            label: const Text('Cadastrar peças por Bip'),
+          ),
           if (arquivo != null)
             Text(
               'Arquivo selecionado. Toda extração deve ser conferida.',
@@ -359,7 +483,7 @@ class _NovaRemessaConsignacaoPageState
           children: [
             Expanded(
               child: Text(
-                '${itens.length} itens identificados',
+                '${itens.fold<int>(0, (sum, item) => sum + ((item['quantidade'] as num?)?.toInt() ?? 0))} itens válidos',
                 style: Theme.of(context).textTheme.titleMedium,
               ),
             ),
@@ -368,17 +492,22 @@ class _NovaRemessaConsignacaoPageState
               onPressed: () => _editarItem(),
               icon: const Icon(Icons.add_circle_outline),
             ),
+            IconButton(
+              tooltip: 'Complementar por Bip',
+              onPressed: _cadastrarPorBip,
+              icon: const Icon(Icons.qr_code_scanner),
+            ),
           ],
         ),
-        if (linhasPendentes > 0)
+        if (pendencias.isNotEmpty)
           Card(
             color: Theme.of(context).colorScheme.errorContainer,
             child: ListTile(
               leading: const Icon(Icons.warning_amber_outlined),
-              title: Text('$linhasPendentes linhas ficaram pendentes'),
-              subtitle: const Text(
-                'Revise o documento e inclua/corrija manualmente antes de confirmar.',
-              ),
+              title: Text('${pendencias.length} linhas não interpretadas'),
+              subtitle: const Text('Toque para ver, corrigir ou ignorar.'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: _revisarPendencias,
             ),
           ),
         if (validacaoDocumento != null)

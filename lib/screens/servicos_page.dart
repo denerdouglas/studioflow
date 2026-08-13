@@ -8,6 +8,8 @@ import '../models/domain/unidade.dart';
 import '../database/database_service.dart';
 import '../services/session_controller.dart';
 import 'package:sqflite/sqflite.dart';
+import 'assistente_gestao_page.dart';
+import '../models/domain/centro_resultado.dart';
 
 class ServicosPage extends StatefulWidget {
   const ServicosPage({super.key});
@@ -399,6 +401,17 @@ class _ServicosPageState extends State<ServicosPage> {
                 fontWeight: FontWeight.bold,
               ),
             ),
+          ),
+          IconButton(
+            tooltip: 'Assistente de Gestão',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) =>
+                    const AssistenteGestaoPage(contexto: CentroResultado.salao),
+              ),
+            ),
+            icon: const Icon(Icons.auto_awesome_outlined),
           ),
         ],
       ),

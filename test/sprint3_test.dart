@@ -162,6 +162,22 @@ void main() {
       expect(pagamentos, hasLength(2));
       await loja.cancelarVenda(vendaId, 'Cancelamento de teste');
       expect((await loja.buscarProduto(produto.id))!.quantidadeAtual, 10);
+      expect(
+        await db.query(
+          'movimentacoes_financeiras',
+          where: 'id LIKE ?',
+          whereArgs: ['${vendaId}_p%'],
+        ),
+        hasLength(2),
+      );
+      expect(
+        await db.query(
+          'movimentacoes_financeiras',
+          where: 'id LIKE ?',
+          whereArgs: ['${vendaId}_estorno_%'],
+        ),
+        hasLength(2),
+      );
       final movimentos = await loja.historico(produto.id);
       expect(
         movimentos.map((m) => m['tipo']),

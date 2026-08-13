@@ -1,5 +1,7 @@
 import 'package:sqflite/sqflite.dart';
 import 'package:flutter/foundation.dart';
+import 'migrations/migration_v40.dart';
+import 'migrations/migration_v41.dart';
 
 abstract final class DatabaseSchemaVerifier {
   /// Executa verificações e reparos idempotentes no schema.
@@ -21,6 +23,34 @@ abstract final class DatabaseSchemaVerifier {
   }
 
   static Future<void> _verificarEAdicionarColunas(Transaction txn) async {
+    final colunasFinanceiro = await _getColunas(
+      txn,
+      'movimentacoes_financeiras',
+    );
+    if (colunasFinanceiro.isNotEmpty) {
+      await _addCol(
+        txn,
+        'movimentacoes_financeiras',
+        colunasFinanceiro,
+        'centro_resultado',
+        'TEXT',
+      );
+      await _addCol(
+        txn,
+        'movimentacoes_financeiras',
+        colunasFinanceiro,
+        'entidade_origem',
+        'TEXT',
+      );
+      await _addCol(
+        txn,
+        'movimentacoes_financeiras',
+        colunasFinanceiro,
+        'entidade_origem_id',
+        'TEXT',
+      );
+    }
+
     // ESTOQUE
     final colunasEstoque = await _getColunas(txn, 'estoque');
     if (colunasEstoque.isNotEmpty) {
@@ -163,6 +193,8 @@ abstract final class DatabaseSchemaVerifier {
   }
 
   static Future<void> _garantirTabelasAdicionais(Transaction txn) async {
+    await MigrationV40.executar(txn);
+    await MigrationV41.executar(txn);
     // Pacotes (v32)
     await txn.execute('''
       CREATE TABLE IF NOT EXISTS pacotes (

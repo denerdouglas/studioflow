@@ -1,9 +1,11 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import '../models/domain/acesso.dart';
 import '../models/domain/catalogo_loja.dart';
 import '../repositories/catalogo_loja_repository.dart';
 import '../services/session_controller.dart';
+import '../services/consignment_document_import_service.dart';
 import '../services/undo_action_service.dart';
 import '../widgets/context_action_menu.dart';
 import 'comandas_loja_page.dart';
@@ -13,8 +15,13 @@ import 'vision_scanner_page.dart';
 
 class CatalogosLojaPage extends StatefulWidget {
   final bool abrirCriacao;
+  final bool abrirImportacao;
 
-  const CatalogosLojaPage({super.key, this.abrirCriacao = false});
+  const CatalogosLojaPage({
+    super.key,
+    this.abrirCriacao = false,
+    this.abrirImportacao = false,
+  });
 
   @override
   State<CatalogosLojaPage> createState() => _CatalogosLojaPageState();
@@ -23,6 +30,7 @@ class CatalogosLojaPage extends StatefulWidget {
 class _CatalogosLojaPageState extends State<CatalogosLojaPage> {
   final repo = CatalogoLojaRepository();
   final undo = UndoActionService();
+  final pesquisa = TextEditingController();
   late Future<List<CatalogoLoja>> future = _load();
 
   Future<List<CatalogoLoja>> _load() =>
@@ -31,10 +39,25 @@ class _CatalogosLojaPageState extends State<CatalogosLojaPage> {
   void reload() => setState(() => future = _load());
 
   @override
+  void dispose() {
+    pesquisa.dispose();
+    super.dispose();
+  }
+
+  @override
   void initState() {
     super.initState();
     if (widget.abrirCriacao) {
       WidgetsBinding.instance.addPostFrameCallback((_) => edit());
+    } else if (widget.abrirImportacao) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Abra o catálogo de destino para importar produtos.'),
+          ),
+        );
+      });
     }
   }
 
@@ -323,34 +346,58 @@ class _CatalogosLojaPageState extends State<CatalogosLojaPage> {
         if (!snapshot.hasData) {
           return const Center(child: CircularProgressIndicator());
         }
-        if (snapshot.data!.isEmpty) {
+        final query = pesquisa.text.trim().toLowerCase();
+        final catalogs = snapshot.data!
+            .where((catalog) => catalog.nome.toLowerCase().contains(query))
+            .toList();
+        if (catalogs.isEmpty && query.isEmpty) {
           return const Center(
             child: Text('Crie seu primeiro catálogo personalizado.'),
           );
         }
-        return ListView(
-          padding: const EdgeInsets.only(bottom: 90),
-          children: snapshot.data!
-              .map(
-                (catalog) => Card(
-                  child: ContextActionTile(
-                    semanticLabel: 'Catálogo ${catalog.nome}',
-                    leading: CircleAvatar(child: Icon(_icon(catalog.icone))),
-                    title: Text(catalog.nome),
-                    subtitle: Text(
-                      '${catalog.tipoControle.nome}${catalog.ativo ? '' : ' • Inativo'}',
-                    ),
-                    actions: actions(catalog),
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => CatalogoProdutosPage(catalog: catalog),
-                      ),
-                    ).then((_) => reload()),
-                  ),
+        return Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: TextField(
+                controller: pesquisa,
+                onChanged: (_) => setState(() {}),
+                decoration: const InputDecoration(
+                  prefixIcon: Icon(Icons.search),
+                  labelText: 'Pesquisar catálogo',
                 ),
-              )
-              .toList(),
+              ),
+            ),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.only(bottom: 90),
+                children: catalogs
+                    .map(
+                      (catalog) => Card(
+                        child: ContextActionTile(
+                          semanticLabel: 'Catálogo ${catalog.nome}',
+                          leading: CircleAvatar(
+                            child: Icon(_icon(catalog.icone)),
+                          ),
+                          title: Text(catalog.nome),
+                          subtitle: Text(
+                            '${catalog.tipoControle.nome}${catalog.ativo ? '' : ' • Inativo'}',
+                          ),
+                          actions: actions(catalog),
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  CatalogoProdutosPage(catalog: catalog),
+                            ),
+                          ).then((_) => reload()),
+                        ),
+                      ),
+                    )
+                    .toList(),
+              ),
+            ),
+          ],
         );
       },
     ),
@@ -583,6 +630,36 @@ class _CatalogoProdutosPageState extends State<CatalogoProdutosPage> {
   }
 
   Future<void> importBulk() async {
+    final source = await showModalBottomSheet<String>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const ListTile(title: Text('Importar em lote')),
+            ListTile(
+              leading: const Icon(Icons.picture_as_pdf_outlined),
+              title: const Text('Importar PDF'),
+              onTap: () => Navigator.pop(context, 'pdf'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('Importar Foto(s)'),
+              onTap: () => Navigator.pop(context, 'images'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.table_rows_outlined),
+              title: const Text('Colar lista manual'),
+              onTap: () => Navigator.pop(context, 'text'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (source == null) return;
+    if (source != 'text') return _importDocuments(source == 'pdf');
+    if (!mounted) return;
+
     final input = TextEditingController();
     final accepted = await showDialog<bool>(
       context: context,
@@ -627,8 +704,177 @@ class _CatalogoProdutosPageState extends State<CatalogoProdutosPage> {
           };
         })
         .toList();
+    await _confirmImportRows(rows);
+  }
+
+  Future<void> _importDocuments(bool pdf) async {
+    final selected = await FilePicker.pickFiles(
+      type: FileType.custom,
+      allowMultiple: !pdf,
+      allowedExtensions: pdf ? const ['pdf'] : const ['jpg', 'jpeg', 'png'],
+    );
+    final paths = selected?.files
+        .map((file) => file.path)
+        .whereType<String>()
+        .toList();
+    if (paths == null || paths.isEmpty) return;
+    final importer = ConsignmentDocumentImportService();
+    final rows = <Map<String, Object?>>[];
+    for (final path in paths) {
+      final result = pdf
+          ? await importer.importPdf(path)
+          : await importer.importImage(path);
+      rows.addAll(
+        result.itens.map(
+          (item) => <String, Object?>{
+            'nome': item.descricao.isEmpty ? item.categoria : item.descricao,
+            'preco': item.valorUnitario,
+            'quantidade': item.quantidade.toDouble(),
+            'codigo': item.codigo,
+          },
+        ),
+      );
+    }
+    if (!mounted) return;
+    await _confirmImportRows(rows);
+  }
+
+  Future<void> _confirmImportRows(List<Map<String, Object?>> rows) async {
+    final search = TextEditingController();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setPreview) {
+          final query = search.text.trim().toLowerCase();
+          final visible = rows
+              .where(
+                (row) => row.values.any(
+                  (value) => '$value'.toLowerCase().contains(query),
+                ),
+              )
+              .toList();
+          return AlertDialog(
+            title: const Text('Conferir produtos'),
+            content: SizedBox(
+              width: double.maxFinite,
+              height: 520,
+              child: Column(
+                children: [
+                  TextField(
+                    controller: search,
+                    onChanged: (_) => setPreview(() {}),
+                    decoration: const InputDecoration(
+                      prefixIcon: Icon(Icons.search),
+                      labelText: 'Pesquisar na prévia',
+                    ),
+                  ),
+                  Expanded(
+                    child: ListView.builder(
+                      itemCount: visible.length,
+                      itemBuilder: (_, index) {
+                        final row = visible[index];
+                        return ListTile(
+                          title: Text('${row['codigo']} • ${row['nome']}'),
+                          subtitle: Text(
+                            '${row['quantidade']} ${row['unidade'] ?? 'un'} • ${row['preco']}',
+                          ),
+                          onTap: () async {
+                            await _editImportRow(row);
+                            setPreview(() {});
+                          },
+                          trailing: IconButton(
+                            tooltip: 'Remover da importação',
+                            icon: const Icon(Icons.remove_circle_outline),
+                            onPressed: () => setPreview(() => rows.remove(row)),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancelar'),
+              ),
+              FilledButton(
+                onPressed: rows.isEmpty
+                    ? null
+                    : () => Navigator.pop(context, true),
+                child: Text('Importar ${rows.length} produtos'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+    search.dispose();
+    if (confirmed != true) return;
     await repo.importarLote(widget.catalog.id, rows);
     reload();
+  }
+
+  Future<void> _editImportRow(Map<String, Object?> row) async {
+    final fields = <String, TextEditingController>{
+      for (final key in const [
+        'codigo',
+        'gtin',
+        'nome',
+        'categoria',
+        'marca',
+        'quantidade',
+        'custo',
+        'preco',
+        'unidade',
+        'origem',
+      ])
+        key: TextEditingController(text: '${row[key] ?? ''}'),
+    };
+    final accepted = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Editar produto importado'),
+        content: SingleChildScrollView(
+          child: Column(
+            children: fields.entries
+                .map(
+                  (entry) => TextField(
+                    controller: entry.value,
+                    decoration: InputDecoration(labelText: entry.key),
+                  ),
+                )
+                .toList(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Aplicar'),
+          ),
+        ],
+      ),
+    );
+    if (accepted == true) {
+      for (final entry in fields.entries) {
+        row[entry.key] = switch (entry.key) {
+          'quantidade' || 'custo' || 'preco' =>
+            double.tryParse(entry.value.text.replaceAll(',', '.')) ?? 0,
+          _ => entry.value.text.trim(),
+        };
+      }
+      row['codigo'] = '${row['gtin']}'.trim().isNotEmpty
+          ? row['gtin']
+          : row['codigo'];
+    }
+    for (final controller in fields.values) {
+      controller.dispose();
+    }
   }
 
   Future<void> toggle(Map<String, Object?> product) async {
@@ -744,6 +990,37 @@ class _CatalogoProdutosPageState extends State<CatalogoProdutosPage> {
         destructive: true,
         enabled: canEdit,
         onSelected: () => remove(product),
+      ),
+      ContextMenuAction(
+        id: 'remove_catalog',
+        label: 'Remover do catálogo',
+        icon: Icons.folder_off_outlined,
+        enabled: canEdit,
+        onSelected: () async {
+          final confirmed = await showDialog<bool>(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: const Text('Remover do catálogo?'),
+              content: const Text(
+                'O produto continuará cadastrado na Loja e manterá todo o histórico.',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: const Text('Cancelar'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.pop(context, true),
+                  child: const Text('Remover do catálogo'),
+                ),
+              ],
+            ),
+          );
+          if (confirmed == true) {
+            await repo.removerProdutoDoCatalogo(product['id'] as String);
+            reload();
+          }
+        },
       ),
     ];
   }

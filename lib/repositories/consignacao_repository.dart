@@ -433,6 +433,9 @@ class ConsignacaoRepository {
         'data': now,
         'data_criacao': now,
         'categoria': 'venda de produto',
+        'centro_resultado': 'loja',
+        'entidade_origem': 'pdv_venda',
+        'entidade_origem_id': saleId,
         'cliente_id': clienteId,
         'profissional_id': profissionalId ?? user.id,
         'usuario_responsavel_id': user.id,
@@ -445,6 +448,131 @@ class ConsignacaoRepository {
         [salePrice, piece['lote_id'], user.comercioId],
       );
     });
+  }
+
+  /// Finaliza várias peças físicas como uma única venda/comanda.
+  /// A validação de todas as peças ocorre antes de qualquer gravação e a
+  /// transação inteira é revertida se uma delas já não estiver disponível.
+  Future<String> venderPecas(
+    Iterable<String> pecaIds, {
+    required String clienteId,
+    String? profissionalId,
+    String formaPagamento = 'pix',
+    DateTime? dataVenda,
+    DateTime? dataPagamento,
+    String? observacoes,
+  }) async {
+    final user = _usuario;
+    final ids = pecaIds.toSet().toList();
+    if (ids.isEmpty || clienteId.trim().isEmpty) {
+      throw StateError('Selecione a cliente e ao menos uma peça.');
+    }
+    if (formaPagamento.trim().isEmpty) {
+      throw StateError('Informe a forma de pagamento.');
+    }
+    final db = await _databaseProvider();
+    final saleId = IdGenerator.temporal();
+    await db.transaction((tx) async {
+      final clients = await tx.query(
+        'clientes',
+        columns: ['id'],
+        where: 'id=? AND comercio_id=? AND ativo=1',
+        whereArgs: [clienteId, user.comercioId],
+        limit: 1,
+      );
+      if (clients.isEmpty) throw StateError('Cliente não encontrado.');
+      final pieces = <Map<String, Object?>>[];
+      for (final id in ids) {
+        final rows = await tx.query(
+          'pecas_unicas',
+          where: "id=? AND comercio_id=? AND status='disponivel'",
+          whereArgs: [id, user.comercioId],
+          limit: 1,
+        );
+        if (rows.isEmpty) throw StateError('Peça indisponível: $id.');
+        pieces.add(rows.single);
+      }
+      final soldAt = (dataVenda ?? DateTime.now()).toUtc().toIso8601String();
+      final paymentAt = (dataPagamento ?? dataVenda ?? DateTime.now())
+          .toUtc()
+          .toIso8601String();
+      final total = pieces.fold<double>(
+        0,
+        (sum, piece) => sum + _money(piece['preco']),
+      );
+      await tx.insert('pdv_vendas', {
+        'id': saleId,
+        'comercio_id': user.comercioId,
+        'profissional_id': profissionalId ?? user.id,
+        'cliente_id': clienteId,
+        'valor_total': total,
+        'data_venda': soldAt,
+        'status': 'concluida',
+      });
+      for (var index = 0; index < pieces.length; index++) {
+        final piece = pieces[index];
+        final pieceId = piece['id'] as String;
+        final price = _money(piece['preco']);
+        await tx.insert('pdv_venda_itens', {
+          'id': '${saleId}_$index',
+          'pdv_venda_id': saleId,
+          'produto_id': pieceId,
+          'quantidade': 1,
+          'valor_unitario': price,
+        });
+        await tx.update(
+          'pecas_unicas',
+          {
+            'status': 'vendida',
+            'cliente_id': clienteId,
+            'profissional_vendedor_id': profissionalId ?? user.id,
+            'data_venda': soldAt,
+          },
+          where: "id=? AND comercio_id=? AND status='disponivel'",
+          whereArgs: [pieceId, user.comercioId],
+        );
+        await tx.insert('consignacao_eventos', {
+          'id': IdGenerator.temporal(),
+          'comercio_id': user.comercioId,
+          'consignacao_id': piece['lote_id'],
+          'peca_id': pieceId,
+          'tipo': 'venda',
+          'quantidade': 1,
+          'valor': price,
+          'cliente_id': clienteId,
+          'profissional_id': profissionalId ?? user.id,
+          'venda_id': saleId,
+          'forma_pagamento': formaPagamento.trim().toLowerCase(),
+          'observacoes': observacoes,
+          'criado_em': soldAt,
+        });
+        await tx.rawUpdate(
+          '''UPDATE consignacoes SET quantidade_vendida=quantidade_vendida+1,
+          quantidade_disponivel=quantidade_disponivel-1,
+          valor_vendido=valor_vendido+? WHERE id=? AND comercio_id=?''',
+          [price, piece['lote_id'], user.comercioId],
+        );
+      }
+      await tx.insert('movimentacoes_financeiras', {
+        'id': '${saleId}_p0',
+        'tipo': 'receita',
+        'descricao': 'Venda PDV • ${pieces.length} peça(s) consignada(s)',
+        'valor': total,
+        'forma_pagamento': formaPagamento.trim().toLowerCase(),
+        'status': 'pago',
+        'data': paymentAt,
+        'data_criacao': soldAt,
+        'categoria': 'venda de produto',
+        'centro_resultado': 'loja',
+        'entidade_origem': 'pdv_venda',
+        'entidade_origem_id': saleId,
+        'cliente_id': clienteId,
+        'profissional_id': profissionalId ?? user.id,
+        'usuario_responsavel_id': user.id,
+        'observacoes': observacoes ?? 'Venda de peças consignadas',
+      });
+    });
+    return saleId;
   }
 
   Future<void> devolverPeca(String pecaId, {String? observacoes}) async {
@@ -484,6 +612,183 @@ class ConsignacaoRepository {
         quantidade_disponivel=quantidade_disponivel-1, valor_devolvido=valor_devolvido+?
         WHERE id=? AND comercio_id=?''',
         [piece['preco'], piece['lote_id'], user.comercioId],
+      );
+    });
+  }
+
+  Future<Map<String, Object?>> vendaDaPeca(String pecaId) async {
+    final user = _usuario;
+    final db = await _databaseProvider();
+    final rows = await db.rawQuery(
+      '''SELECT v.*, e.forma_pagamento, e.observacoes, c.nome cliente_nome
+      FROM consignacao_eventos e JOIN pdv_vendas v ON v.id=e.venda_id
+      LEFT JOIN clientes c ON c.id=v.cliente_id
+      WHERE e.peca_id=? AND e.comercio_id=? AND e.tipo='venda'
+      ORDER BY e.criado_em DESC LIMIT 1''',
+      [pecaId, user.comercioId],
+    );
+    if (rows.isEmpty) throw StateError('Venda não encontrada.');
+    return rows.single;
+  }
+
+  Future<void> editarVendaDaPeca(
+    String pecaId, {
+    String? clienteId,
+    required String formaPagamento,
+    DateTime? dataPagamento,
+    String? observacoes,
+    String? profissionalId,
+  }) async {
+    final user = _usuario;
+    final db = await _databaseProvider();
+    await db.transaction((tx) async {
+      final events = await tx.query(
+        'consignacao_eventos',
+        where: "peca_id=? AND comercio_id=? AND tipo='venda'",
+        whereArgs: [pecaId, user.comercioId],
+        orderBy: 'criado_em DESC',
+        limit: 1,
+      );
+      if (events.isEmpty) throw StateError('Venda não encontrada.');
+      final event = events.single;
+      final saleId = event['venda_id'] as String;
+      await tx.update(
+        'pdv_vendas',
+        {'cliente_id': clienteId, 'profissional_id': profissionalId ?? user.id},
+        where: "id=? AND comercio_id=? AND status='concluida'",
+        whereArgs: [saleId, user.comercioId],
+      );
+      await tx.update(
+        'pecas_unicas',
+        {
+          'cliente_id': clienteId,
+          'profissional_vendedor_id': profissionalId ?? user.id,
+        },
+        where: 'id=? AND comercio_id=?',
+        whereArgs: [pecaId, user.comercioId],
+      );
+      await tx.update(
+        'consignacao_eventos',
+        {
+          'cliente_id': clienteId,
+          'profissional_id': profissionalId ?? user.id,
+          'forma_pagamento': formaPagamento.trim().toLowerCase(),
+          'observacoes': observacoes,
+        },
+        where: 'id=?',
+        whereArgs: [event['id']],
+      );
+      await tx.update(
+        'movimentacoes_financeiras',
+        {
+          'cliente_id': clienteId,
+          'profissional_id': profissionalId ?? user.id,
+          'forma_pagamento': formaPagamento.trim().toLowerCase(),
+          if (dataPagamento != null)
+            'data': dataPagamento.toUtc().toIso8601String(),
+          'observacoes': observacoes,
+        },
+        where: 'id=?',
+        whereArgs: ['${saleId}_p0'],
+      );
+    });
+  }
+
+  Future<void> estornarVendaDaPeca(String pecaId, String motivo) async {
+    final user = _usuario;
+    if (motivo.trim().isEmpty) throw StateError('Informe o motivo do estorno.');
+    final db = await _databaseProvider();
+    await db.transaction((tx) async {
+      final pieces = await tx.query(
+        'pecas_unicas',
+        where: "id=? AND comercio_id=? AND status='vendida'",
+        whereArgs: [pecaId, user.comercioId],
+        limit: 1,
+      );
+      if (pieces.isEmpty) throw StateError('Peça não está vendida.');
+      final piece = pieces.single;
+      final events = await tx.query(
+        'consignacao_eventos',
+        where: "peca_id=? AND comercio_id=? AND tipo='venda'",
+        whereArgs: [pecaId, user.comercioId],
+        orderBy: 'criado_em DESC',
+        limit: 1,
+      );
+      if (events.isEmpty) {
+        throw StateError('Histórico da venda não encontrado.');
+      }
+      final event = events.single;
+      final saleId = event['venda_id'] as String;
+      final saleItems = await tx.query(
+        'pdv_venda_itens',
+        where: 'pdv_venda_id=?',
+        whereArgs: [saleId],
+      );
+      if (saleItems.length != 1) {
+        throw StateError(
+          'Esta peça pertence a uma comanda com vários itens. Estorne a comanda completa.',
+        );
+      }
+      final now = DateTime.now().toUtc().toIso8601String();
+      final value = _money(event['valor']);
+      await tx.update(
+        'pecas_unicas',
+        {
+          'status': 'disponivel',
+          'cliente_id': null,
+          'profissional_vendedor_id': null,
+          'data_venda': null,
+        },
+        where: 'id=? AND comercio_id=?',
+        whereArgs: [pecaId, user.comercioId],
+      );
+      await tx.update(
+        'pdv_vendas',
+        {'status': 'estornada'},
+        where: 'id=? AND comercio_id=?',
+        whereArgs: [saleId, user.comercioId],
+      );
+      await tx.update(
+        'movimentacoes_financeiras',
+        {'status': 'estornado'},
+        where: 'id=?',
+        whereArgs: ['${saleId}_p0'],
+      );
+      await tx.insert('movimentacoes_financeiras', {
+        'id': '${saleId}_estorno',
+        'tipo': 'estorno',
+        'descricao': 'Estorno de venda PDV',
+        'valor': -value,
+        'forma_pagamento': event['forma_pagamento'],
+        'status': 'pago',
+        'data': now,
+        'data_criacao': now,
+        'categoria': 'estorno de venda',
+        'centro_resultado': 'loja',
+        'entidade_origem': 'pdv_venda',
+        'entidade_origem_id': saleId,
+        'cliente_id': event['cliente_id'],
+        'profissional_id': event['profissional_id'] ?? user.id,
+        'usuario_responsavel_id': user.id,
+        'observacoes': motivo.trim(),
+      });
+      await tx.insert('consignacao_eventos', {
+        'id': IdGenerator.temporal(),
+        'comercio_id': user.comercioId,
+        'consignacao_id': piece['lote_id'],
+        'peca_id': pecaId,
+        'tipo': 'estorno_venda',
+        'quantidade': 1,
+        'valor': value,
+        'venda_id': saleId,
+        'observacoes': motivo.trim(),
+        'criado_em': now,
+      });
+      await tx.rawUpdate(
+        '''UPDATE consignacoes SET quantidade_vendida=quantidade_vendida-1,
+        quantidade_disponivel=quantidade_disponivel+1,
+        valor_vendido=valor_vendido-? WHERE id=? AND comercio_id=?''',
+        [value, piece['lote_id'], user.comercioId],
       );
     });
   }

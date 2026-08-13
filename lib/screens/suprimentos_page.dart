@@ -20,6 +20,7 @@ class FornecedoresPage extends StatefulWidget {
 
 class _FornecedoresPageState extends State<FornecedoresPage> {
   final repo = LojaRepository();
+  final pesquisa = TextEditingController();
   late Future<List<FornecedorLoja>> future;
   @override
   void initState() {
@@ -28,6 +29,13 @@ class _FornecedoresPageState extends State<FornecedoresPage> {
   }
 
   void carregar() => setState(() => future = repo.listarFornecedores());
+
+  @override
+  void dispose() {
+    pesquisa.dispose();
+    super.dispose();
+  }
+
   Future<void> abrir([FornecedorLoja? f]) async {
     await Navigator.push(
       context,
@@ -51,25 +59,99 @@ class _FornecedoresPageState extends State<FornecedoresPage> {
         if (!snap.hasData) {
           return const Center(child: CircularProgressIndicator());
         }
-        if (snap.data!.isEmpty) {
+        final query = pesquisa.text.trim().toLowerCase();
+        final suppliers = snap.data!
+            .where(
+              (supplier) =>
+                  '${supplier.nome} ${supplier.documento} ${supplier.telefone} ${supplier.whatsapp}'
+                      .toLowerCase()
+                      .contains(query),
+            )
+            .toList();
+        if (suppliers.isEmpty && query.isEmpty) {
           return const Center(child: Text('Cadastre o primeiro fornecedor.'));
         }
-        return ListView(
-          children: snap.data!
-              .map(
-                (f) => ListTile(
-                  leading: CircleAvatar(
-                    child: Icon(f.entrega ? Icons.local_shipping : Icons.store),
-                  ),
-                  title: Text(f.nome),
-                  subtitle: Text(
-                    '${f.whatsapp ?? f.telefone ?? 'Sem telefone'} • prazo médio ${f.prazoDias} dias${f.ativo ? '' : ' • inativo'}',
-                  ),
-                  trailing: const Icon(Icons.edit_outlined),
-                  onTap: () => abrir(f),
+        return Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: TextField(
+                controller: pesquisa,
+                onChanged: (_) => setState(() {}),
+                decoration: const InputDecoration(
+                  prefixIcon: Icon(Icons.search),
+                  labelText: 'Pesquisar nome, documento ou telefone',
                 ),
-              )
-              .toList(),
+              ),
+            ),
+            Expanded(
+              child: ListView(
+                children: suppliers
+                    .map(
+                      (f) => ListTile(
+                        leading: CircleAvatar(
+                          child: Icon(
+                            f.entrega ? Icons.local_shipping : Icons.store,
+                          ),
+                        ),
+                        title: Text(f.nome),
+                        subtitle: Text(
+                          '${f.whatsapp ?? f.telefone ?? 'Sem telefone'} • prazo médio ${f.prazoDias} dias${f.ativo ? '' : ' • inativo'}',
+                        ),
+                        trailing: PopupMenuButton<String>(
+                          onSelected: (action) async {
+                            if (action == 'edit') return abrir(f);
+                            final confirmed = await showDialog<bool>(
+                              context: context,
+                              builder: (context) => AlertDialog(
+                                title: Text(
+                                  f.ativo
+                                      ? 'Inativar fornecedor?'
+                                      : 'Ativar fornecedor?',
+                                ),
+                                content: const Text(
+                                  'O cadastro e todos os vínculos históricos serão preservados.',
+                                ),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () =>
+                                        Navigator.pop(context, false),
+                                    child: const Text('Cancelar'),
+                                  ),
+                                  FilledButton(
+                                    onPressed: () =>
+                                        Navigator.pop(context, true),
+                                    child: const Text('Confirmar'),
+                                  ),
+                                ],
+                              ),
+                            );
+                            if (confirmed == true) {
+                              await repo.alterarStatusFornecedor(
+                                f.id,
+                                !f.ativo,
+                              );
+                              carregar();
+                            }
+                          },
+                          itemBuilder: (_) => [
+                            const PopupMenuItem(
+                              value: 'edit',
+                              child: Text('Editar'),
+                            ),
+                            PopupMenuItem(
+                              value: 'status',
+                              child: Text(f.ativo ? 'Inativar' : 'Ativar'),
+                            ),
+                          ],
+                        ),
+                        onTap: () => abrir(f),
+                      ),
+                    )
+                    .toList(),
+              ),
+            ),
+          ],
         );
       },
     ),

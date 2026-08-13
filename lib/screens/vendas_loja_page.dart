@@ -28,7 +28,7 @@ class _VendasLojaPageState extends State<VendasLojaPage> {
   double get total => subtotal - descontoValor;
 
   void adicionar(ProdutoLoja p) {
-    if (p.id.startsWith('peca_')) {
+    if (p.tipo == 'peca_unica') {
       if (itens.any((x) => x.produto.id == p.id)) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -41,7 +41,7 @@ class _VendasLojaPageState extends State<VendasLojaPage> {
     final i = itens.indexWhere((x) => x.produto.id == p.id);
     setState(() {
       if (i < 0) {
-        if (!p.id.startsWith('peca_') && p.quantidadeAtual < 1) {
+        if (p.tipo != 'peca_unica' && p.quantidadeAtual < 1) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Estoque insuficiente para este produto.'),
@@ -51,7 +51,7 @@ class _VendasLojaPageState extends State<VendasLojaPage> {
         }
         itens.add(ItemCarrinho(p, 1));
       } else {
-        if (!p.id.startsWith('peca_') &&
+        if (p.tipo != 'peca_unica' &&
             p.quantidadeAtual < itens[i].quantidade + 1) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -68,7 +68,7 @@ class _VendasLojaPageState extends State<VendasLojaPage> {
   }
 
   Future<void> selecionarProduto() async {
-    final produtos = await repo.listarProdutos();
+    final produtos = await repo.listarItensParaVenda();
     if (!mounted) return;
     final p = await showModalBottomSheet<ProdutoLoja>(
       context: context,
@@ -86,7 +86,7 @@ class _VendasLojaPageState extends State<VendasLojaPage> {
               (p) => ListTile(
                 title: Text(p.nome),
                 subtitle: Text(
-                  '${p.quantidadeAtual} ${p.unidade} • R\$ ${p.precoVenda.toStringAsFixed(2)}',
+                  '${p.modalidade == ModalidadeProduto.consignado ? 'Consignado' : 'Próprio'} • ${p.quantidadeAtual} ${p.unidade} • R\$ ${p.precoVenda.toStringAsFixed(2)}',
                 ),
                 enabled: p.quantidadeAtual > 0,
                 onTap: () => Navigator.pop(context, p),
@@ -301,7 +301,7 @@ class _VendasLojaPageState extends State<VendasLojaPage> {
                         children: [
                           IconButton(
                             onPressed: () {
-                              if (item.produto.id.startsWith('peca_')) {
+                              if (item.produto.tipo == 'peca_unica') {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
                                     content: Text(
@@ -442,13 +442,15 @@ class _VendasLojaPageState extends State<VendasLojaPage> {
 }
 
 class HistoricoVendasPage extends StatefulWidget {
-  const HistoricoVendasPage({super.key});
+  final bool somenteEstornos;
+  const HistoricoVendasPage({super.key, this.somenteEstornos = false});
   @override
   State<HistoricoVendasPage> createState() => _HistoricoVendasPageState();
 }
 
 class _HistoricoVendasPageState extends State<HistoricoVendasPage> {
   final repo = LojaRepository();
+  final pesquisa = TextEditingController();
   late Future<List<Map<String, Object?>>> future;
   @override
   void initState() {
@@ -457,7 +459,16 @@ class _HistoricoVendasPageState extends State<HistoricoVendasPage> {
   }
 
   void carregar() => setState(() => future = repo.listarVendas());
+
+  @override
+  void dispose() {
+    pesquisa.dispose();
+    super.dispose();
+  }
+
   Future<void> cancelar(Map<String, Object?> venda) async {
+    await detalhe(venda);
+    if (!mounted) return;
     final motivo = TextEditingController();
     final ok = await showDialog<bool>(
       context: context,
@@ -492,39 +503,98 @@ class _HistoricoVendasPageState extends State<HistoricoVendasPage> {
     }
   }
 
+  Future<void> detalhe(Map<String, Object?> venda) async {
+    final detail = await repo.detalheVenda(venda['id'] as String);
+    if (!mounted) return;
+    final items = detail['itens'] as List<Map<String, Object?>>;
+    final payments = detail['pagamentos'] as List<Map<String, Object?>>;
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Venda ${venda['numero']}'),
+        content: SingleChildScrollView(
+          child: Text(
+            'Cliente: ${detail['cliente_nome'] ?? 'Não informado'}\n'
+            'Data: ${detail['data_venda']}\n'
+            'Responsável: ${detail['profissional_nome'] ?? detail['profissional_id']}\n\n'
+            'Itens:\n${items.map((item) => '${item['quantidade']}x ${item['nome']} (${item['codigo'] ?? 'sem código'}) • R\$ ${item['valor_unitario']}').join('\n')}\n\n'
+            'Pagamentos:\n${payments.map((payment) => '${payment['forma_pagamento']} • R\$ ${payment['valor']} • ${payment['status']}').join('\n')}',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Fechar'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Histórico de vendas')),
+    appBar: AppBar(
+      title: Text(widget.somenteEstornos ? 'Estornos' : 'Histórico de vendas'),
+    ),
     body: FutureBuilder<List<Map<String, Object?>>>(
       future: future,
       builder: (context, snap) {
         if (!snap.hasData) {
           return const Center(child: CircularProgressIndicator());
         }
-        if (snap.data!.isEmpty) {
+        final query = pesquisa.text.trim().toLowerCase();
+        final sales = snap.data!.where((sale) {
+          if (widget.somenteEstornos &&
+              !['cancelada', 'estornada'].contains(sale['status'])) {
+            return false;
+          }
+          return query.isEmpty ||
+              sale.values.any(
+                (value) => '$value'.toLowerCase().contains(query),
+              );
+        }).toList();
+        if (sales.isEmpty && query.isEmpty) {
           return const Center(child: Text('Nenhuma venda registrada.'));
         }
-        return ListView(
-          children: snap.data!
-              .map(
-                (v) => ListTile(
-                  title: Text(
-                    '${v['numero']} • R\$ ${(v['total'] as num).toStringAsFixed(2)}',
-                  ),
-                  subtitle: Text('${v['status']} • ${v['criada_em']}'),
-                  trailing:
-                      v['status'] == 'concluida' &&
-                          SessionController.instance.usuario!.podeAcao(
-                            AcaoPermissao.cancelarVenda,
-                          )
-                      ? IconButton(
-                          onPressed: () => cancelar(v),
-                          icon: const Icon(Icons.cancel_outlined),
-                        )
-                      : null,
+        return Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: TextField(
+                controller: pesquisa,
+                onChanged: (_) => setState(() {}),
+                decoration: const InputDecoration(
+                  prefixIcon: Icon(Icons.search),
+                  labelText: 'Pesquisar cliente, data, produto ou código',
                 ),
-              )
-              .toList(),
+              ),
+            ),
+            Expanded(
+              child: ListView(
+                children: sales
+                    .map(
+                      (v) => ListTile(
+                        title: Text(
+                          '${v['numero']} • R\$ ${(v['total'] as num).toStringAsFixed(2)}',
+                        ),
+                        subtitle: Text('${v['status']} • ${v['criada_em']}'),
+                        onTap: () => detalhe(v),
+                        trailing:
+                            v['status'] == 'concluida' &&
+                                SessionController.instance.usuario!.podeAcao(
+                                  AcaoPermissao.cancelarVenda,
+                                )
+                            ? IconButton(
+                                onPressed: () => cancelar(v),
+                                icon: const Icon(Icons.cancel_outlined),
+                              )
+                            : null,
+                      ),
+                    )
+                    .toList(),
+              ),
+            ),
+          ],
         );
       },
     ),

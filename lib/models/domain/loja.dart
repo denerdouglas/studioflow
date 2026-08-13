@@ -250,6 +250,27 @@ class FornecedorLoja {
     origemCatalogo: map['origem_catalogo'] as String? ?? 'manual',
     ativo: map['ativo'] == 1,
   );
+
+  FornecedorLoja copyWith({bool? ativo}) => FornecedorLoja(
+    id: id,
+    comercioId: comercioId,
+    nome: nome,
+    nomeFantasia: nomeFantasia,
+    documento: documento,
+    telefone: telefone,
+    whatsapp: whatsapp,
+    email: email,
+    endereco: endereco,
+    contato: contato,
+    prazoDias: prazoDias,
+    formasPagamento: formasPagamento,
+    minimoPedido: minimoPedido,
+    entrega: entrega,
+    regioes: regioes,
+    observacoes: observacoes,
+    origemCatalogo: origemCatalogo,
+    ativo: ativo ?? this.ativo,
+  );
 }
 
 class ItemCarrinho {

@@ -15,6 +15,7 @@ class ProdutosLojaPage extends StatefulWidget {
   final ModalidadeProduto? modalidade;
   final bool somenteUsoInterno;
   final bool somenteAtivos;
+  final bool abrirScanner;
 
   const ProdutosLojaPage({
     super.key,
@@ -22,6 +23,7 @@ class ProdutosLojaPage extends StatefulWidget {
     this.modalidade,
     this.somenteUsoInterno = false,
     this.somenteAtivos = false,
+    this.abrirScanner = false,
   });
 
   @override
@@ -38,6 +40,9 @@ class _ProdutosLojaPageState extends State<ProdutosLojaPage> {
   void initState() {
     super.initState();
     _carregar();
+    if (widget.abrirScanner) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _lerCodigo());
+    }
   }
 
   void _carregar() => _future = _repo.listarProdutos(

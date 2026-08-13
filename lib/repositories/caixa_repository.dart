@@ -19,6 +19,9 @@ class MovimentoFinanceiroRegistro {
   final String? servicoId;
   final String? usuarioResponsavelId;
   final String observacoes;
+  final String? centroResultado;
+  final String? entidadeOrigem;
+  final String? entidadeOrigemId;
 
   const MovimentoFinanceiroRegistro({
     required this.id,
@@ -36,6 +39,9 @@ class MovimentoFinanceiroRegistro {
     required this.servicoId,
     required this.usuarioResponsavelId,
     required this.observacoes,
+    this.centroResultado,
+    this.entidadeOrigem,
+    this.entidadeOrigemId,
   });
 
   bool get entrada {
@@ -67,6 +73,9 @@ class MovimentoFinanceiroRegistro {
       'servico_id': servicoId,
       'usuario_responsavel_id': usuarioResponsavelId,
       'observacoes': observacoes,
+      'centro_resultado': centroResultado,
+      'entidade_origem': entidadeOrigem,
+      'entidade_origem_id': entidadeOrigemId,
     };
   }
 
@@ -89,6 +98,9 @@ class MovimentoFinanceiroRegistro {
       servicoId: mapa['servico_id'] as String?,
       usuarioResponsavelId: mapa['usuario_responsavel_id'] as String?,
       observacoes: mapa['observacoes'] as String? ?? '',
+      centroResultado: mapa['centro_resultado'] as String?,
+      entidadeOrigem: mapa['entidade_origem'] as String?,
+      entidadeOrigemId: mapa['entidade_origem_id'] as String?,
     );
   }
 
@@ -123,6 +135,9 @@ class MovimentoFinanceiroRegistro {
       servicoId: servicoId ?? this.servicoId,
       usuarioResponsavelId: usuarioResponsavelId ?? this.usuarioResponsavelId,
       observacoes: observacoes ?? this.observacoes,
+      centroResultado: centroResultado,
+      entidadeOrigem: entidadeOrigem,
+      entidadeOrigemId: entidadeOrigemId,
     );
   }
 }
@@ -301,6 +316,9 @@ class CaixaRepository {
         servicoId: servicoId,
         usuarioResponsavelId: null,
         observacoes: '',
+        centroResultado: 'salao',
+        entidadeOrigem: 'agendamento',
+        entidadeOrigemId: agendamentoId,
       ),
     );
   }

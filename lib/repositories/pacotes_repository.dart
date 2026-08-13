@@ -914,6 +914,9 @@ class PacotesRepository {
       'data': agora,
       'data_criacao': agora,
       'categoria': 'Pacotes de serviços',
+      'centro_resultado': 'salao',
+      'entidade_origem': 'pacote_venda',
+      'entidade_origem_id': vendaId,
       'usuario_responsavel_id': _usuarioId,
       'observacoes': 'pacote_venda_id=$vendaId',
     });

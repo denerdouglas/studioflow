@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import '../services/scanner/scanner_coordinator.dart';
 import '../services/scanner/mlkit_vision_provider.dart';
@@ -7,9 +8,15 @@ import 'scanner_draft_page.dart';
 import 'vision_ocr_capture_page.dart';
 import '../services/session_controller.dart';
 import '../core/validation/gtin_validator.dart';
+import '../models/domain/universal_reader.dart';
+import '../services/bip_context_service.dart';
+import 'bip_context_card_page.dart';
+import 'vendas_loja_page.dart';
 
 class VisionScannerPage extends StatefulWidget {
-  const VisionScannerPage({super.key});
+  final ReaderContextPolicy? policy;
+
+  const VisionScannerPage({super.key, this.policy});
 
   @override
   State<VisionScannerPage> createState() => _VisionScannerPageState();
@@ -22,6 +29,9 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
 
   bool _processando = false;
   String? _erro;
+  final BipSessionController bipSession = BipSessionController();
+
+  bool get continuous => widget.policy?.continuous ?? false;
 
   @override
   void dispose() {
@@ -29,7 +39,56 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
     super.dispose();
   }
 
-  Future<void> _processarCodigo(String codigo) async {
+  Future<void> _acceptResult(dynamic result) async {
+    if (!continuous) {
+      if (mounted) Navigator.pop(context, result);
+      return;
+    }
+    final draft = result['draft'] as ScannerProductDraft;
+    final resolved = await BipContextService().resolve(draft);
+    if (resolved.kind != BipItemKind.desconhecido && mounted) {
+      final action = await Navigator.push<Object?>(
+        context,
+        MaterialPageRoute(builder: (_) => BipContextCardPage(item: resolved)),
+      );
+      if (!mounted) return;
+      if (action == ReaderAction.vender) {
+        await Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const VendasLojaPage()),
+        );
+        if (!mounted) return;
+      }
+      if (action == null) {
+        setState(() => _processando = false);
+        await _controller.start();
+        return;
+      }
+    }
+    final key =
+        draft.gtin?.value ??
+        draft.qr?.value ??
+        draft.referenciaComercial?.value ??
+        '${draft.nome?.value}_${bipSession.items.length}';
+    final added = bipSession.add(
+      BipSessionItem(
+        id: DateTime.now().microsecondsSinceEpoch.toString(),
+        deduplicationKey: key,
+        draft: draft,
+        confirmed: true,
+      ),
+    );
+    await SystemSound.play(SystemSoundType.click);
+    await HapticFeedback.selectionClick();
+    if (!mounted) return;
+    setState(() {
+      _processando = false;
+      _erro = added ? 'Leitura adicionada.' : 'Leitura duplicada ignorada.';
+    });
+    await _controller.start();
+  }
+
+  Future<void> _processarCodigo(String codigo, {bool isQr = false}) async {
     if (_processando) return;
 
     setState(() {
@@ -41,7 +100,7 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
     if (!mounted) return;
 
     final normalized = GtinValidator.normalize(codigo);
-    if (!GtinValidator.isValid(normalized)) {
+    if (codigo.trim().isEmpty) {
       setState(() {
         _processando = false;
         _erro = 'GTIN inválido. Confira o código ou preencha manualmente.';
@@ -57,7 +116,27 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
       ],
     );
     final draft =
-        await coordinator.searchExternalBarcode(normalized) ??
+        (isQr
+            ? ScannerProductDraft(
+                qr: ScannerField(
+                  codigo,
+                  source: 'qr',
+                  confidence: ScannerConfidence.alta,
+                ),
+                rawSignals: [codigo],
+              )
+            : GtinValidator.isValid(normalized)
+            ? await coordinator.searchExternalBarcode(normalized)
+            : ScannerProductDraft(
+                referenciaComercial: ScannerField(
+                  codigo.trim(),
+                  source: 'barcode',
+                  confidence: ScannerConfidence.baixa,
+                  reviewReason: 'Código comercial; não é um GTIN válido.',
+                ),
+                reviewReasons: const ['Confirme o código comercial.'],
+                rawSignals: [codigo],
+              )) ??
         ScannerProductDraft(
           gtin: ScannerField(
             normalized,
@@ -81,7 +160,7 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
     if (!mounted) return;
 
     if (result != null) {
-      Navigator.pop(context, result);
+      await _acceptResult(result);
     } else {
       setState(() => _processando = false);
       _controller.start();
@@ -96,7 +175,14 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
         .firstOrNull;
 
     if (raw == null) return;
-    await _processarCodigo(raw.trim());
+    final detected = captura.barcodes.firstWhere(
+      (barcode) => barcode.rawValue == raw,
+      orElse: () => captura.barcodes.first,
+    );
+    await _processarCodigo(
+      raw.trim(),
+      isQr: detected.format == BarcodeFormat.qrCode,
+    );
   }
 
   Future<void> _digitarCodigo() async {
@@ -111,6 +197,11 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
           decoration: const InputDecoration(labelText: 'Código ou referência'),
         ),
         actions: [
+          if (continuous)
+            TextButton(
+              onPressed: () => Navigator.pop(context, bipSession.items),
+              child: const Text('Conferir'),
+            ),
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
             child: const Text('Cancelar'),
@@ -170,7 +261,7 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
       if (!mounted) return;
 
       if (result != null) {
-        Navigator.pop(context, result);
+        await _acceptResult(result);
       } else {
         setState(() => _processando = false);
         _controller.start();
