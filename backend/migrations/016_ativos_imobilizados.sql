@@ -1,3 +1,5 @@
+BEGIN;
+
 -- Migration 016: Ativos Imobilizados
 -- Sem FK para estoque, dado que o sincronismo de `estoque` ocorre de forma generica via `sync_records`.
 
@@ -26,3 +28,7 @@ WHERE deleted_at IS NULL;
 
 CREATE INDEX IF NOT EXISTS idx_ativos_imob_business 
 ON ativos_imobilizados (business_id);
+
+INSERT INTO schema_migrations(version) VALUES (16) ON CONFLICT DO NOTHING;
+
+COMMIT;

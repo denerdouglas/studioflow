@@ -34,6 +34,8 @@ BEGIN
 END
 $$;
 
+INSERT INTO schema_migrations(version) VALUES (15) ON CONFLICT DO NOTHING;
+
 COMMIT;
 
 -- DOWN
