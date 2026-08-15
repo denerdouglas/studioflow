@@ -179,7 +179,7 @@ texto inválido
         isA<ConsignmentImportException>().having(
           (error) => error.message,
           'message',
-          'Documento lido, mas nenhum produto foi identificado.',
+          'Nenhum produto identificado. Nenhuma estratégia (Texto/OCR) conseguiu extrair dados utilizáveis deste documento.',
         ),
       ),
     );

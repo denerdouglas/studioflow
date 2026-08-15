@@ -12,13 +12,13 @@ class FinanceiroPage extends StatefulWidget {
 }
 
 class _FinanceiroPageState extends State<FinanceiroPage> {
-  static const Color _corPrincipal = Color(0xFF70569A);
+  Color get _corPrincipal => Theme.of(context).colorScheme.primary;
 
-  static const Color _corFundo = Color(0xFFF9F6FC);
+  Color get _corFundo => Theme.of(context).colorScheme.surface;
 
-  static const Color _textoEscuro = Color(0xFF2D2140);
+  Color get _textoEscuro => Theme.of(context).colorScheme.onSurface;
 
-  static const Color _textoClaro = Color(0xFF766A85);
+  Color get _textoClaro => Theme.of(context).colorScheme.onSurfaceVariant;
 
   static const Color _verde = Color(0xFF15996B);
 
@@ -183,21 +183,21 @@ class _FinanceiroPageState extends State<FinanceiroPage> {
       context: context,
       builder: (_) {
         return AlertDialog(
-          title: const Text('Excluir movimentação?'),
+          title: Text('Excluir movimentação?'),
           content: Text('Deseja excluir “${movimentacao.descricao}”?'),
           actions: [
             TextButton(
               onPressed: () {
                 Navigator.pop(context, false);
               },
-              child: const Text('Cancelar'),
+              child: Text('Cancelar'),
             ),
             FilledButton(
               onPressed: () {
                 Navigator.pop(context, true);
               },
               style: FilledButton.styleFrom(backgroundColor: _vermelho),
-              child: const Text('Excluir'),
+              child: Text('Excluir'),
             ),
           ],
         );
@@ -324,7 +324,7 @@ class _FinanceiroPageState extends State<FinanceiroPage> {
       appBar: AppBar(
         backgroundColor: _corFundo,
         surfaceTintColor: Colors.transparent,
-        title: const Text(
+        title: Text(
           'Financeiro',
           style: TextStyle(fontWeight: FontWeight.bold, color: _textoEscuro),
         ),
@@ -335,7 +335,7 @@ class _FinanceiroPageState extends State<FinanceiroPage> {
               context,
               MaterialPageRoute(builder: (_) => const GestaoFinanceiraPage()),
             ),
-            icon: const Icon(Icons.insights_outlined, color: _corPrincipal),
+            icon: Icon(Icons.insights_outlined, color: _corPrincipal),
           ),
           IconButton(
             tooltip: 'Assistente de Gestão',
@@ -343,12 +343,12 @@ class _FinanceiroPageState extends State<FinanceiroPage> {
               context,
               MaterialPageRoute(builder: (_) => const AssistenteGestaoPage()),
             ),
-            icon: const Icon(Icons.auto_awesome_outlined, color: _corPrincipal),
+            icon: Icon(Icons.auto_awesome_outlined, color: _corPrincipal),
           ),
           IconButton(
             tooltip: 'Selecionar período',
             onPressed: _selecionarPeriodo,
-            icon: const Icon(Icons.date_range_outlined, color: _corPrincipal),
+            icon: Icon(Icons.date_range_outlined, color: _corPrincipal),
           ),
           IconButton(
             tooltip: 'Atualizar',
@@ -359,16 +359,16 @@ class _FinanceiroPageState extends State<FinanceiroPage> {
 
               _carregarDados();
             },
-            icon: const Icon(Icons.refresh, color: _corPrincipal),
+            icon: Icon(Icons.refresh, color: _corPrincipal),
           ),
         ],
       ),
       body: Column(
         children: [
           _resumoFinanceiro(),
-          const SizedBox(height: 12),
+          SizedBox(height: 12),
           _filtros(),
-          const SizedBox(height: 10),
+          SizedBox(height: 10),
           Expanded(child: _conteudo()),
         ],
       ),
@@ -377,8 +377,8 @@ class _FinanceiroPageState extends State<FinanceiroPage> {
         onPressed: _novaMovimentacao,
         backgroundColor: _corPrincipal,
         foregroundColor: Colors.white,
-        icon: const Icon(Icons.add),
-        label: const Text(
+        icon: Icon(Icons.add),
+        label: Text(
           'Nova movimentação',
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
@@ -395,43 +395,46 @@ class _FinanceiroPageState extends State<FinanceiroPage> {
             width: double.infinity,
             padding: const EdgeInsets.all(22),
             decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF70569A), Color(0xFF9A78C5)],
+              gradient: LinearGradient(
+                colors: [
+                  Theme.of(context).colorScheme.primary,
+                  Color(0xFF9A78C5),
+                ],
               ),
               borderRadius: BorderRadius.circular(24),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   'Saldo atual',
                   style: TextStyle(color: Colors.white70, fontSize: 15),
                 ),
-                const SizedBox(height: 8),
+                SizedBox(height: 8),
                 FittedBox(
                   fit: BoxFit.scaleDown,
                   alignment: Alignment.centerLeft,
                   child: Text(
                     _formatarDinheiro(_resumo.saldo),
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: Colors.white,
                       fontSize: 34,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                 ),
-                const SizedBox(height: 10),
+                SizedBox(height: 10),
                 Text(
                   'Entradas: '
                   '${_formatarDinheiro(_resumo.totalEntradas)}'
                   ' • Saídas: '
                   '${_formatarDinheiro(_resumo.totalSaidas)}',
-                  style: const TextStyle(color: Colors.white70, fontSize: 14),
+                  style: TextStyle(color: Colors.white70, fontSize: 14),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 10),
+          SizedBox(height: 10),
           Row(
             children: [
               Expanded(
@@ -442,7 +445,7 @@ class _FinanceiroPageState extends State<FinanceiroPage> {
                   cor: _verde,
                 ),
               ),
-              const SizedBox(width: 10),
+              SizedBox(width: 10),
               Expanded(
                 child: _ResumoFinanceiroCard(
                   titulo: 'Saídas',
@@ -453,7 +456,7 @@ class _FinanceiroPageState extends State<FinanceiroPage> {
               ),
             ],
           ),
-          const SizedBox(height: 10),
+          SizedBox(height: 10),
           Row(
             children: [
               Expanded(
@@ -464,7 +467,7 @@ class _FinanceiroPageState extends State<FinanceiroPage> {
                   cor: const Color(0xFF3078C5),
                 ),
               ),
-              const SizedBox(width: 10),
+              SizedBox(width: 10),
               Expanded(
                 child: _ResumoFinanceiroCard(
                   titulo: 'A pagar',
@@ -494,7 +497,7 @@ class _FinanceiroPageState extends State<FinanceiroPage> {
             },
             decoration: InputDecoration(
               hintText: 'Buscar descrição, categoria ou pagamento...',
-              prefixIcon: const Icon(Icons.search),
+              prefixIcon: Icon(Icons.search),
               suffixIcon: _pesquisa.isEmpty
                   ? null
                   : IconButton(
@@ -505,11 +508,11 @@ class _FinanceiroPageState extends State<FinanceiroPage> {
                           _pesquisa = '';
                         });
                       },
-                      icon: const Icon(Icons.close),
+                      icon: Icon(Icons.close),
                     ),
             ),
           ),
-          const SizedBox(height: 10),
+          SizedBox(height: 10),
           Row(
             children: [
               Expanded(
@@ -535,7 +538,7 @@ class _FinanceiroPageState extends State<FinanceiroPage> {
                   },
                 ),
               ),
-              const SizedBox(width: 10),
+              SizedBox(width: 10),
               Expanded(
                 child: DropdownButtonFormField<String>(
                   initialValue: _filtroStatus,
@@ -565,28 +568,30 @@ class _FinanceiroPageState extends State<FinanceiroPage> {
             ],
           ),
           if (_dataInicial != null && _dataFinal != null) ...[
-            const SizedBox(height: 10),
+            SizedBox(height: 10),
             Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(15),
-                border: Border.all(color: const Color(0xFFE6DFF0)),
+                border: Border.all(
+                  color: Theme.of(context).colorScheme.outlineVariant,
+                ),
               ),
               child: Row(
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.date_range_outlined,
                     size: 20,
                     color: _corPrincipal,
                   ),
-                  const SizedBox(width: 10),
+                  SizedBox(width: 10),
                   Expanded(
                     child: Text(
                       '${_formatarData(_dataInicial!)} até '
                       '${_formatarData(_dataFinal!)}',
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: _textoEscuro,
                         fontWeight: FontWeight.w600,
                       ),
@@ -595,7 +600,7 @@ class _FinanceiroPageState extends State<FinanceiroPage> {
                   IconButton(
                     tooltip: 'Limpar período',
                     onPressed: _limparPeriodo,
-                    icon: const Icon(Icons.close),
+                    icon: Icon(Icons.close),
                   ),
                 ],
               ),
@@ -608,9 +613,7 @@ class _FinanceiroPageState extends State<FinanceiroPage> {
 
   Widget _conteudo() {
     if (_carregando) {
-      return const Center(
-        child: CircularProgressIndicator(color: _corPrincipal),
-      );
+      return Center(child: CircularProgressIndicator(color: _corPrincipal));
     }
 
     if (_erro != null) {
@@ -620,14 +623,14 @@ class _FinanceiroPageState extends State<FinanceiroPage> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.error_outline, size: 64, color: _vermelho),
-              const SizedBox(height: 14),
+              Icon(Icons.error_outline, size: 64, color: _vermelho),
+              SizedBox(height: 14),
               Text(
                 _erro!,
                 textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 16, color: _textoEscuro),
+                style: TextStyle(fontSize: 16, color: _textoEscuro),
               ),
-              const SizedBox(height: 16),
+              SizedBox(height: 16),
               FilledButton.icon(
                 onPressed: () {
                   setState(() {
@@ -637,8 +640,8 @@ class _FinanceiroPageState extends State<FinanceiroPage> {
 
                   _carregarDados();
                 },
-                icon: const Icon(Icons.refresh),
-                label: const Text('Tentar novamente'),
+                icon: Icon(Icons.refresh),
+                label: Text('Tentar novamente'),
               ),
             ],
           ),
@@ -649,7 +652,7 @@ class _FinanceiroPageState extends State<FinanceiroPage> {
     final movimentacoes = _movimentacoesFiltradas;
 
     if (movimentacoes.isEmpty) {
-      return const Center(
+      return Center(
         child: Padding(
           padding: EdgeInsets.all(30),
           child: Column(
@@ -689,7 +692,7 @@ class _FinanceiroPageState extends State<FinanceiroPage> {
         padding: const EdgeInsets.fromLTRB(18, 0, 18, 110),
         itemCount: movimentacoes.length,
         separatorBuilder: (_, _) {
-          return const SizedBox(height: 10);
+          return SizedBox(height: 10);
         },
         itemBuilder: (context, index) {
           final movimentacao = movimentacoes[index];
@@ -726,7 +729,7 @@ class _ResumoFinanceiroCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFE6DFF0)),
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -740,21 +743,24 @@ class _ResumoFinanceiroCard extends StatelessWidget {
             ),
             child: Icon(icone, color: cor),
           ),
-          const SizedBox(height: 10),
+          SizedBox(height: 10),
           Text(
             titulo,
-            style: const TextStyle(fontSize: 12, color: Color(0xFF766A85)),
+            style: TextStyle(
+              fontSize: 12,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
           ),
-          const SizedBox(height: 4),
+          SizedBox(height: 4),
           FittedBox(
             fit: BoxFit.scaleDown,
             alignment: Alignment.centerLeft,
             child: Text(
               valor,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
-                color: Color(0xFF2D2140),
+                color: Theme.of(context).colorScheme.onSurface,
               ),
             ),
           ),
@@ -790,7 +796,9 @@ class _MovimentacaoFinanceiraCard extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: const Color(0xFFE6DFF0)),
+            border: Border.all(
+              color: Theme.of(context).colorScheme.outlineVariant,
+            ),
           ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -809,7 +817,7 @@ class _MovimentacaoFinanceiraCard extends StatelessWidget {
                   color: cor,
                 ),
               ),
-              const SizedBox(width: 13),
+              SizedBox(width: 13),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -819,25 +827,25 @@ class _MovimentacaoFinanceiraCard extends StatelessWidget {
                         Expanded(
                           child: Text(
                             movimentacao.descricao,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
-                              color: Color(0xFF2D2140),
+                              color: Theme.of(context).colorScheme.onSurface,
                             ),
                           ),
                         ),
                         _StatusFinanceiro(status: movimentacao.status),
                       ],
                     ),
-                    const SizedBox(height: 5),
+                    SizedBox(height: 5),
                     Text(
                       movimentacao.categoria,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12,
-                        color: Color(0xFF766A85),
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                     ),
-                    const SizedBox(height: 7),
+                    SizedBox(height: 7),
                     Wrap(
                       spacing: 8,
                       runSpacing: 6,
@@ -855,12 +863,12 @@ class _MovimentacaoFinanceiraCard extends StatelessWidget {
                       ],
                     ),
                     if (movimentacao.observacoes.isNotEmpty) ...[
-                      const SizedBox(height: 8),
+                      SizedBox(height: 8),
                       Text(
                         movimentacao.observacoes,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 12,
                           color: Color(0xFF968AA5),
                         ),
@@ -869,7 +877,7 @@ class _MovimentacaoFinanceiraCard extends StatelessWidget {
                   ],
                 ),
               ),
-              const SizedBox(width: 10),
+              SizedBox(width: 10),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
@@ -882,8 +890,8 @@ class _MovimentacaoFinanceiraCard extends StatelessWidget {
                       color: cor,
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  const Icon(Icons.more_vert, color: Color(0xFF968AA5)),
+                  SizedBox(height: 8),
+                  Icon(Icons.more_vert, color: Color(0xFF968AA5)),
                 ],
               ),
             ],
@@ -944,14 +952,14 @@ class _InformacaoFinanceira extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icone, size: 14, color: const Color(0xFF70569A)),
-          const SizedBox(width: 4),
+          Icon(icone, size: 14, color: Theme.of(context).colorScheme.primary),
+          SizedBox(width: 4),
           Text(
             texto,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w600,
-              color: Color(0xFF70569A),
+              color: Theme.of(context).colorScheme.primary,
             ),
           ),
         ],
@@ -969,8 +977,8 @@ class OpcoesFinanceiroSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.fromLTRB(22, 18, 22, 28),
-      decoration: const BoxDecoration(
-        color: Color(0xFFF9F6FC),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
       child: Column(
@@ -987,25 +995,27 @@ class OpcoesFinanceiroSheet extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(height: 20),
+          SizedBox(height: 20),
           Text(
             movimentacao.descricao,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 23,
               fontWeight: FontWeight.bold,
-              color: Color(0xFF2D2140),
+              color: Theme.of(context).colorScheme.onSurface,
             ),
           ),
-          const SizedBox(height: 5),
+          SizedBox(height: 5),
           Text(
             'R\$ ${movimentacao.valor.toStringAsFixed(2)}',
-            style: const TextStyle(color: Color(0xFF766A85)),
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
           ),
-          const SizedBox(height: 22),
+          SizedBox(height: 22),
           _OpcaoFinanceiro(
             titulo: 'Editar movimentação',
             icone: Icons.edit_outlined,
-            cor: const Color(0xFF70569A),
+            cor: Theme.of(context).colorScheme.primary,
             onTap: () {
               Navigator.pop(context, 'editar');
             },
@@ -1066,12 +1076,12 @@ class _OpcaoFinanceiro extends StatelessWidget {
       ),
       title: Text(
         titulo,
-        style: const TextStyle(
+        style: TextStyle(
           fontWeight: FontWeight.w600,
-          color: Color(0xFF2D2140),
+          color: Theme.of(context).colorScheme.onSurface,
         ),
       ),
-      trailing: const Icon(Icons.chevron_right),
+      trailing: Icon(Icons.chevron_right),
       onTap: onTap,
     );
   }
@@ -1089,9 +1099,9 @@ class MovimentacaoFinanceiraFormSheet extends StatefulWidget {
 
 class _MovimentacaoFinanceiraFormSheetState
     extends State<MovimentacaoFinanceiraFormSheet> {
-  static const Color _corPrincipal = Color(0xFF70569A);
+  Color get _corPrincipal => Theme.of(context).colorScheme.primary;
 
-  static const Color _corFundo = Color(0xFFF9F6FC);
+  Color get _corFundo => Theme.of(context).colorScheme.surface;
 
   final TextEditingController _descricaoController = TextEditingController();
 
@@ -1287,7 +1297,7 @@ class _MovimentacaoFinanceiraFormSheetState
 
     return Container(
       padding: EdgeInsets.fromLTRB(22, 22, 22, teclado + 25),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: _corFundo,
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
@@ -1306,21 +1316,24 @@ class _MovimentacaoFinanceiraFormSheetState
                 ),
               ),
             ),
-            const SizedBox(height: 20),
+            SizedBox(height: 20),
             Text(
               editando ? 'Editar movimentação' : 'Nova movimentação',
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 25,
                 fontWeight: FontWeight.bold,
-                color: Color(0xFF2D2140),
+                color: Theme.of(context).colorScheme.onSurface,
               ),
             ),
-            const SizedBox(height: 6),
-            const Text(
+            SizedBox(height: 6),
+            Text(
               'Registre uma entrada ou saída financeira.',
-              style: TextStyle(fontSize: 13, color: Color(0xFF766A85)),
+              style: TextStyle(
+                fontSize: 13,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
-            const SizedBox(height: 22),
+            SizedBox(height: 22),
             SegmentedButton<String>(
               segments: const [
                 ButtonSegment<String>(
@@ -1341,7 +1354,7 @@ class _MovimentacaoFinanceiraFormSheetState
                 });
               },
             ),
-            const SizedBox(height: 16),
+            SizedBox(height: 16),
             TextField(
               controller: _descricaoController,
               textCapitalization: TextCapitalization.sentences,
@@ -1350,7 +1363,7 @@ class _MovimentacaoFinanceiraFormSheetState
                 prefixIcon: Icon(Icons.description_outlined),
               ),
             ),
-            const SizedBox(height: 14),
+            SizedBox(height: 14),
             TextField(
               controller: _valorController,
               keyboardType: const TextInputType.numberWithOptions(
@@ -1362,7 +1375,7 @@ class _MovimentacaoFinanceiraFormSheetState
                 prefixIcon: Icon(Icons.attach_money),
               ),
             ),
-            const SizedBox(height: 14),
+            SizedBox(height: 14),
             DropdownButtonFormField<String>(
               initialValue: _centroResultado,
               decoration: const InputDecoration(
@@ -1381,7 +1394,7 @@ class _MovimentacaoFinanceiraFormSheetState
                 if (value != null) setState(() => _centroResultado = value);
               },
             ),
-            const SizedBox(height: 14),
+            SizedBox(height: 14),
             DropdownButtonFormField<String>(
               initialValue: _categoria,
               isExpanded: true,
@@ -1405,7 +1418,7 @@ class _MovimentacaoFinanceiraFormSheetState
                 });
               },
             ),
-            const SizedBox(height: 14),
+            SizedBox(height: 14),
             DropdownButtonFormField<String>(
               initialValue: _formaPagamento,
               isExpanded: true,
@@ -1426,7 +1439,7 @@ class _MovimentacaoFinanceiraFormSheetState
                 });
               },
             ),
-            const SizedBox(height: 14),
+            SizedBox(height: 14),
             DropdownButtonFormField<String>(
               initialValue: _status,
               decoration: const InputDecoration(
@@ -1447,7 +1460,7 @@ class _MovimentacaoFinanceiraFormSheetState
                 });
               },
             ),
-            const SizedBox(height: 14),
+            SizedBox(height: 14),
             InkWell(
               onTap: _selecionarData,
               borderRadius: BorderRadius.circular(14),
@@ -1459,7 +1472,7 @@ class _MovimentacaoFinanceiraFormSheetState
                 child: Text(_formatarData(_dataSelecionada)),
               ),
             ),
-            const SizedBox(height: 14),
+            SizedBox(height: 14),
             TextField(
               controller: _observacoesController,
               maxLines: 3,
@@ -1470,16 +1483,13 @@ class _MovimentacaoFinanceiraFormSheetState
                 prefixIcon: Icon(Icons.notes_outlined),
               ),
             ),
-            const SizedBox(height: 22),
+            SizedBox(height: 22),
             FilledButton.icon(
               onPressed: _salvar,
-              icon: const Icon(Icons.save_outlined),
+              icon: Icon(Icons.save_outlined),
               label: Text(
                 editando ? 'Salvar alterações' : 'Salvar movimentação',
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
               style: FilledButton.styleFrom(
                 backgroundColor: _corPrincipal,

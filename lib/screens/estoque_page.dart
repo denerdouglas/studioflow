@@ -14,9 +14,9 @@ class EstoquePage extends StatefulWidget {
 }
 
 class _EstoquePageState extends State<EstoquePage> {
-  static const Color _roxo = Color(0xFF70569A);
-  static const Color _fundo = Color(0xFFF9F6FC);
-  static const Color _texto = Color(0xFF2D2140);
+  Color get _roxo => Theme.of(context).colorScheme.primary;
+  Color get _fundo => Theme.of(context).colorScheme.surface;
+  Color get _texto => Theme.of(context).colorScheme.onSurface;
 
   final EstoqueRepository _repository = EstoqueRepository();
   ResumoEstoque _resumo = ResumoEstoque.vazio();
@@ -79,7 +79,7 @@ class _EstoquePageState extends State<EstoquePage> {
     VoidCallback acao,
   ) {
     if (!SessionController.instance.usuario!.podeAcao(permissao)) {
-      return const SizedBox.shrink();
+      return SizedBox.shrink();
     }
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
@@ -87,7 +87,7 @@ class _EstoquePageState extends State<EstoquePage> {
         leading: Icon(icone, color: Theme.of(context).colorScheme.primary),
         title: Text(titulo),
         subtitle: Text(subtitulo),
-        trailing: const Icon(Icons.chevron_right),
+        trailing: Icon(Icons.chevron_right),
         onTap: acao,
       ),
     );
@@ -102,22 +102,25 @@ class _EstoquePageState extends State<EstoquePage> {
             width: double.infinity,
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF70569A), Color(0xFF9A78C5)],
+              gradient: LinearGradient(
+                colors: [
+                  Theme.of(context).colorScheme.primary,
+                  const Color(0xFF9A78C5),
+                ],
               ),
               borderRadius: BorderRadius.circular(24),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   'Valor imobilizado/interno',
                   style: TextStyle(color: Colors.white70, fontSize: 14),
                 ),
-                const SizedBox(height: 7),
+                SizedBox(height: 7),
                 Text(
                   _formatarDinheiro(_resumo.valorTotal),
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: Colors.white,
                     fontSize: 31,
                     fontWeight: FontWeight.bold,
@@ -137,7 +140,7 @@ class _EstoquePageState extends State<EstoquePage> {
       backgroundColor: _fundo,
       appBar: AppBar(
         backgroundColor: _fundo,
-        title: const Text(
+        title: Text(
           'Estoque do Salão',
           style: TextStyle(fontWeight: FontWeight.bold, color: _texto),
         ),
@@ -148,12 +151,12 @@ class _EstoquePageState extends State<EstoquePage> {
               setState(() => _carregando = true);
               _carregarDados();
             },
-            icon: const Icon(Icons.refresh, color: _roxo),
+            icon: Icon(Icons.refresh, color: _roxo),
           ),
         ],
       ),
       body: _carregando
-          ? const Center(child: CircularProgressIndicator())
+          ? Center(child: CircularProgressIndicator())
           : ListView(
               padding: const EdgeInsets.only(bottom: 24),
               children: [
@@ -210,7 +213,7 @@ class _EstoquePageState extends State<EstoquePage> {
                   () => abrir(const ProdutosLojaPage(somenteAtivos: true)),
                 ),
 
-                const Padding(
+                Padding(
                   padding: EdgeInsets.all(12),
                   child: Card(
                     child: ListTile(
@@ -239,7 +242,7 @@ class EstoqueMovimentacoesPage extends StatelessWidget {
       future: EstoqueRepository().listarMovimentacoes(limite: 500),
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
-          return const Center(child: CircularProgressIndicator());
+          return Center(child: CircularProgressIndicator());
         }
         final rows = snapshot.data!.where((movement) {
           if (!perdas) return true;

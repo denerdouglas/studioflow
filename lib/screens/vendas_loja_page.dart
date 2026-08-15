@@ -108,13 +108,13 @@ class _VendasLojaPageState extends State<VendasLojaPage> {
         child: ListView(
           children: [
             ListTile(
-              leading: const Icon(Icons.person_off_outlined),
-              title: const Text('Venda sem cliente'),
+              leading: Icon(Icons.person_off_outlined),
+              title: Text('Venda sem cliente'),
               onTap: () => Navigator.pop(context),
             ),
             ...clientes.map(
               (c) => ListTile(
-                leading: const Icon(Icons.person_outline),
+                leading: Icon(Icons.person_outline),
                 title: Text(c.nome),
                 subtitle: Text(c.whatsapp),
                 onTap: () => Navigator.pop(context, c),
@@ -135,7 +135,7 @@ class _VendasLojaPageState extends State<VendasLojaPage> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Pagamento misto'),
+        title: Text('Pagamento misto'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -160,11 +160,11 @@ class _VendasLojaPageState extends State<VendasLojaPage> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancelar'),
+            child: Text('Cancelar'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Confirmar'),
+            child: Text('Confirmar'),
           ),
         ],
       ),
@@ -218,7 +218,7 @@ class _VendasLojaPageState extends State<VendasLojaPage> {
       await showDialog<void>(
         context: context,
         builder: (context) => AlertDialog(
-          title: const Text('Venda concluída'),
+          title: Text('Venda concluída'),
           content: SelectableText(resumo),
           actions: [
             TextButton(
@@ -226,11 +226,11 @@ class _VendasLojaPageState extends State<VendasLojaPage> {
                 Uri.https('wa.me', '/', {'text': resumo}),
                 mode: LaunchMode.externalApplication,
               ),
-              child: const Text('Enviar pelo WhatsApp'),
+              child: Text('Enviar pelo WhatsApp'),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Concluir'),
+              child: Text('Concluir'),
             ),
           ],
         ),
@@ -260,16 +260,14 @@ class _VendasLojaPageState extends State<VendasLojaPage> {
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
-      title: const Text('Nova venda'),
-      actions: [
-        IconButton(onPressed: ler, icon: const Icon(Icons.barcode_reader)),
-      ],
+      title: Text('Nova venda'),
+      actions: [IconButton(onPressed: ler, icon: Icon(Icons.barcode_reader))],
     ),
     body: Column(
       children: [
         Expanded(
           child: itens.isEmpty
-              ? const Center(
+              ? Center(
                   child: Text(
                     'Carrinho vazio. Adicione por nome ou código de barras.',
                   ),
@@ -294,7 +292,7 @@ class _VendasLojaPageState extends State<VendasLojaPage> {
                             );
                           }
                         }),
-                        icon: const Icon(Icons.remove_circle_outline),
+                        icon: Icon(Icons.remove_circle_outline),
                       ),
                       trailing: Row(
                         mainAxisSize: MainAxisSize.min,
@@ -327,12 +325,12 @@ class _VendasLojaPageState extends State<VendasLojaPage> {
                                 ),
                               );
                             },
-                            icon: const Icon(Icons.add_circle_outline),
+                            icon: Icon(Icons.add_circle_outline),
                           ),
                           IconButton(
                             onPressed: () =>
                                 setState(() => itens.removeAt(index)),
-                            icon: const Icon(Icons.delete_outline),
+                            icon: Icon(Icons.delete_outline),
                           ),
                         ],
                       ),
@@ -350,14 +348,14 @@ class _VendasLojaPageState extends State<VendasLojaPage> {
                 children: [
                   ListTile(
                     contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.person_outline),
+                    leading: Icon(Icons.person_outline),
                     title: Text(
                       cliente?.nome ?? 'Selecionar cliente (opcional)',
                     ),
                     subtitle: Text(
                       cliente?.whatsapp ?? 'Toque para vincular a venda',
                     ),
-                    trailing: const Icon(Icons.chevron_right),
+                    trailing: Icon(Icons.chevron_right),
                     onTap: selecionarCliente,
                   ),
                   Row(
@@ -377,7 +375,7 @@ class _VendasLojaPageState extends State<VendasLojaPage> {
                           ),
                         ),
                       ),
-                      const SizedBox(width: 12),
+                      SizedBox(width: 12),
                       Expanded(
                         child: DropdownButtonFormField<String>(
                           initialValue: pagamento,
@@ -395,11 +393,11 @@ class _VendasLojaPageState extends State<VendasLojaPage> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 10),
+                  SizedBox(height: 10),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text(
+                      Text(
                         'Total',
                         style: TextStyle(fontWeight: FontWeight.bold),
                       ),
@@ -409,24 +407,24 @@ class _VendasLojaPageState extends State<VendasLojaPage> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 10),
+                  SizedBox(height: 10),
                   Row(
                     children: [
                       Expanded(
                         child: OutlinedButton.icon(
                           onPressed: selecionarProduto,
-                          icon: const Icon(Icons.search),
-                          label: const Text('Adicionar'),
+                          icon: Icon(Icons.search),
+                          label: Text('Adicionar'),
                         ),
                       ),
-                      const SizedBox(width: 8),
+                      SizedBox(width: 8),
                       Expanded(
                         child: FilledButton.icon(
                           onPressed: itens.isEmpty || finalizando
                               ? null
                               : finalizar,
-                          icon: const Icon(Icons.check),
-                          label: const Text('Finalizar'),
+                          icon: Icon(Icons.check),
+                          label: Text('Finalizar'),
                         ),
                       ),
                     ],
@@ -473,7 +471,7 @@ class _HistoricoVendasPageState extends State<HistoricoVendasPage> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Cancelar venda?'),
+        title: Text('Cancelar venda?'),
         content: TextField(
           controller: motivo,
           decoration: const InputDecoration(labelText: 'Motivo obrigatório'),
@@ -481,11 +479,11 @@ class _HistoricoVendasPageState extends State<HistoricoVendasPage> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Voltar'),
+            child: Text('Voltar'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Cancelar venda'),
+            child: Text('Cancelar venda'),
           ),
         ],
       ),
@@ -524,7 +522,7 @@ class _HistoricoVendasPageState extends State<HistoricoVendasPage> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Fechar'),
+            child: Text('Fechar'),
           ),
         ],
       ),
@@ -540,7 +538,7 @@ class _HistoricoVendasPageState extends State<HistoricoVendasPage> {
       future: future,
       builder: (context, snap) {
         if (!snap.hasData) {
-          return const Center(child: CircularProgressIndicator());
+          return Center(child: CircularProgressIndicator());
         }
         final query = pesquisa.text.trim().toLowerCase();
         final sales = snap.data!.where((sale) {
@@ -554,7 +552,7 @@ class _HistoricoVendasPageState extends State<HistoricoVendasPage> {
               );
         }).toList();
         if (sales.isEmpty && query.isEmpty) {
-          return const Center(child: Text('Nenhuma venda registrada.'));
+          return Center(child: Text('Nenhuma venda registrada.'));
         }
         return Column(
           children: [
@@ -586,7 +584,7 @@ class _HistoricoVendasPageState extends State<HistoricoVendasPage> {
                                 )
                             ? IconButton(
                                 onPressed: () => cancelar(v),
-                                icon: const Icon(Icons.cancel_outlined),
+                                icon: Icon(Icons.cancel_outlined),
                               )
                             : null,
                       ),

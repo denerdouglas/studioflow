@@ -31,10 +31,10 @@ class ClientesPage extends StatefulWidget {
 }
 
 class _ClientesPageState extends State<ClientesPage> {
-  static const Color _corPrincipal = Color(0xFF70569A);
-  static const Color _corFundo = Color(0xFFF9F6FC);
-  static const Color _textoEscuro = Color(0xFF2D2140);
-  static const Color _textoClaro = Color(0xFF766A85);
+  Color get _corPrincipal => Theme.of(context).colorScheme.primary;
+  Color get _corFundo => Theme.of(context).colorScheme.surface;
+  Color get _textoEscuro => Theme.of(context).colorScheme.onSurface;
+  Color get _textoClaro => Theme.of(context).colorScheme.onSurfaceVariant;
 
   final ClienteRepository _repository = ClienteRepository();
 
@@ -183,7 +183,7 @@ class _ClientesPageState extends State<ClientesPage> {
           children: [
             _construirCabecalho(),
             _construirPesquisa(),
-            const SizedBox(height: 14),
+            SizedBox(height: 14),
             Expanded(child: _construirConteudo()),
           ],
         ),
@@ -193,8 +193,8 @@ class _ClientesPageState extends State<ClientesPage> {
         onPressed: _abrirCadastroCliente,
         backgroundColor: _corPrincipal,
         foregroundColor: Colors.white,
-        icon: const Icon(Icons.person_add_alt_1),
-        label: const Text(
+        icon: Icon(Icons.person_add_alt_1),
+        label: Text(
           'Novo cliente',
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
@@ -207,7 +207,7 @@ class _ClientesPageState extends State<ClientesPage> {
       padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
       child: Row(
         children: [
-          const Expanded(
+          Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -235,7 +235,7 @@ class _ClientesPageState extends State<ClientesPage> {
             ),
             child: Text(
               '${_clientes.length}',
-              style: const TextStyle(
+              style: TextStyle(
                 color: _corPrincipal,
                 fontWeight: FontWeight.bold,
               ),
@@ -258,7 +258,7 @@ class _ClientesPageState extends State<ClientesPage> {
         },
         decoration: InputDecoration(
           hintText: 'Buscar cliente...',
-          prefixIcon: const Icon(Icons.search),
+          prefixIcon: Icon(Icons.search),
           suffixIcon: _pesquisa.isEmpty
               ? null
               : IconButton(
@@ -269,7 +269,7 @@ class _ClientesPageState extends State<ClientesPage> {
                       _pesquisa = '';
                     });
                   },
-                  icon: const Icon(Icons.close),
+                  icon: Icon(Icons.close),
                 ),
         ),
       ),
@@ -278,9 +278,7 @@ class _ClientesPageState extends State<ClientesPage> {
 
   Widget _construirConteudo() {
     if (_carregando) {
-      return const Center(
-        child: CircularProgressIndicator(color: _corPrincipal),
-      );
+      return Center(child: CircularProgressIndicator(color: _corPrincipal));
     }
 
     if (_erro != null) {
@@ -308,7 +306,7 @@ class _ClientesPageState extends State<ClientesPage> {
         padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
         itemCount: _clientesFiltrados.length,
         separatorBuilder: (_, _) {
-          return const SizedBox(height: 10);
+          return SizedBox(height: 10);
         },
         itemBuilder: (context, index) {
           final cliente = _clientesFiltrados[index];
@@ -333,7 +331,7 @@ class _ClienteCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const corPrincipal = Color(0xFF70569A);
+    final corPrincipal = Theme.of(context).colorScheme.primary;
 
     return Material(
       color: Colors.white,
@@ -354,46 +352,43 @@ class _ClienteCard extends StatelessWidget {
                 backgroundColor: corPrincipal.withValues(alpha: 0.12),
                 child: Text(
                   _iniciais(cliente.nome),
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: corPrincipal,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
               ),
-              const SizedBox(width: 13),
+              SizedBox(width: 13),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       cliente.nome,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
-                        color: Color(0xFF2D2140),
+                        color: Theme.of(context).colorScheme.onSurface,
                       ),
                     ),
-                    const SizedBox(height: 4),
+                    SizedBox(height: 4),
                     Text(
                       'Profissional: ${cliente.profissional}',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12,
-                        color: Color(0xFF766A85),
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                     ),
-                    const SizedBox(height: 2),
+                    SizedBox(height: 2),
                     Text(
                       '${cliente.totalAtendimentos} atendimentos • '
                       'R\$ ${cliente.totalGasto.toStringAsFixed(2)}',
-                      style: const TextStyle(
-                        fontSize: 11,
-                        color: Color(0xFF968AA5),
-                      ),
+                      style: TextStyle(fontSize: 11, color: Color(0xFF968AA5)),
                     ),
                   ],
                 ),
               ),
-              const Icon(Icons.chevron_right, color: Color(0xFF968AA5)),
+              Icon(Icons.chevron_right, color: Color(0xFF968AA5)),
             ],
           ),
         ),
@@ -436,10 +431,10 @@ class CadastroClienteSheet extends StatefulWidget {
 }
 
 class _CadastroClienteSheetState extends State<CadastroClienteSheet> {
-  static const Color _corPrincipal = Color(0xFF70569A);
-  static const Color _corFundo = Color(0xFFF9F6FC);
-  static const Color _textoEscuro = Color(0xFF2D2140);
-  static const Color _textoClaro = Color(0xFF766A85);
+  Color get _corPrincipal => Theme.of(context).colorScheme.primary;
+  Color get _corFundo => Theme.of(context).colorScheme.surface;
+  Color get _textoEscuro => Theme.of(context).colorScheme.onSurface;
+  Color get _textoClaro => Theme.of(context).colorScheme.onSurfaceVariant;
 
   final TextEditingController _nomeController = TextEditingController();
 
@@ -511,7 +506,7 @@ class _CadastroClienteSheetState extends State<CadastroClienteSheet> {
         final escolhido = await showDialog<String>(
           context: context,
           builder: (context) => SimpleDialog(
-            title: const Text('Escolha o telefone'),
+            title: Text('Escolha o telefone'),
             children: contato.phones
                 .map(
                   (item) => SimpleDialogOption(
@@ -616,7 +611,7 @@ class _CadastroClienteSheetState extends State<CadastroClienteSheet> {
 
     return Container(
       padding: EdgeInsets.fromLTRB(22, 22, 22, teclado + 25),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: _corFundo,
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
@@ -626,8 +621,8 @@ class _CadastroClienteSheetState extends State<CadastroClienteSheet> {
           mainAxisSize: MainAxisSize.min,
           children: [
             const SheetHandle(),
-            const SizedBox(height: 20),
-            const Text(
+            SizedBox(height: 20),
+            Text(
               'Cadastrar cliente',
               style: TextStyle(
                 fontSize: 25,
@@ -635,26 +630,26 @@ class _CadastroClienteSheetState extends State<CadastroClienteSheet> {
                 color: _textoEscuro,
               ),
             ),
-            const SizedBox(height: 6),
-            const Text(
+            SizedBox(height: 6),
+            Text(
               'Preencha os dados principais da cliente.',
               style: TextStyle(fontSize: 13, height: 1.4, color: _textoClaro),
             ),
-            const SizedBox(height: 22),
+            SizedBox(height: 22),
             OutlinedButton.icon(
               onPressed: _importarContato,
-              icon: const Icon(Icons.contacts_outlined),
-              label: const Text('IMPORTAR DOS CONTATOS'),
+              icon: Icon(Icons.contacts_outlined),
+              label: Text('IMPORTAR DOS CONTATOS'),
               style: OutlinedButton.styleFrom(
                 minimumSize: const Size.fromHeight(50),
               ),
             ),
-            const SizedBox(height: 14),
-            const Text(
+            SizedBox(height: 14),
+            Text(
               'Opcional: somente o contato escolhido será usado para preencher este formulário.',
               style: TextStyle(fontSize: 12, color: _textoClaro),
             ),
-            const SizedBox(height: 14),
+            SizedBox(height: 14),
             TextField(
               controller: _nomeController,
               textCapitalization: TextCapitalization.words,
@@ -663,7 +658,7 @@ class _CadastroClienteSheetState extends State<CadastroClienteSheet> {
                 prefixIcon: Icon(Icons.person_outline),
               ),
             ),
-            const SizedBox(height: 14),
+            SizedBox(height: 14),
             TextField(
               controller: _whatsappController,
               keyboardType: TextInputType.phone,
@@ -673,7 +668,7 @@ class _CadastroClienteSheetState extends State<CadastroClienteSheet> {
                 prefixIcon: Icon(Icons.chat_outlined),
               ),
             ),
-            const SizedBox(height: 14),
+            SizedBox(height: 14),
             TextField(
               controller: _telefoneController,
               keyboardType: TextInputType.phone,
@@ -682,7 +677,7 @@ class _CadastroClienteSheetState extends State<CadastroClienteSheet> {
                 prefixIcon: Icon(Icons.phone_outlined),
               ),
             ),
-            const SizedBox(height: 14),
+            SizedBox(height: 14),
             TextField(
               controller: _instagramController,
               keyboardType: TextInputType.url,
@@ -692,7 +687,7 @@ class _CadastroClienteSheetState extends State<CadastroClienteSheet> {
                 prefixIcon: Icon(Icons.camera_alt_outlined),
               ),
             ),
-            const SizedBox(height: 14),
+            SizedBox(height: 14),
             TextField(
               controller: _emailController,
               keyboardType: TextInputType.emailAddress,
@@ -701,7 +696,7 @@ class _CadastroClienteSheetState extends State<CadastroClienteSheet> {
                 prefixIcon: Icon(Icons.email_outlined),
               ),
             ),
-            const SizedBox(height: 14),
+            SizedBox(height: 14),
             TextField(
               controller: _aniversarioController,
               keyboardType: TextInputType.datetime,
@@ -713,16 +708,16 @@ class _CadastroClienteSheetState extends State<CadastroClienteSheet> {
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
               value: _consentimentoWhatsapp,
-              title: const Text('Aceita contato operacional por WhatsApp'),
+              title: Text('Aceita contato operacional por WhatsApp'),
               onChanged: (v) => setState(() => _consentimentoWhatsapp = v),
             ),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
               value: _consentimentoMarketing,
-              title: const Text('Aceita mensagens promocionais'),
+              title: Text('Aceita mensagens promocionais'),
               onChanged: (v) => setState(() => _consentimentoMarketing = v),
             ),
-            const SizedBox(height: 14),
+            SizedBox(height: 14),
             DropdownButtonFormField<String>(
               initialValue: _profissionalSelecionada,
               decoration: const InputDecoration(
@@ -745,7 +740,7 @@ class _CadastroClienteSheetState extends State<CadastroClienteSheet> {
                 });
               },
             ),
-            const SizedBox(height: 14),
+            SizedBox(height: 14),
             TextField(
               controller: _observacoesController,
               maxLines: 3,
@@ -756,11 +751,11 @@ class _CadastroClienteSheetState extends State<CadastroClienteSheet> {
                 prefixIcon: Icon(Icons.notes_outlined),
               ),
             ),
-            const SizedBox(height: 22),
+            SizedBox(height: 22),
             FilledButton.icon(
               onPressed: _salvar,
-              icon: const Icon(Icons.save_outlined),
-              label: const Text(
+              icon: Icon(Icons.save_outlined),
+              label: Text(
                 'Salvar cliente',
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
@@ -790,8 +785,8 @@ class EditarClienteSheet extends StatefulWidget {
 }
 
 class _EditarClienteSheetState extends State<EditarClienteSheet> {
-  static const Color _corPrincipal = Color(0xFF70569A);
-  static const Color _corFundo = Color(0xFFF9F6FC);
+  Color get _corPrincipal => Theme.of(context).colorScheme.primary;
+  Color get _corFundo => Theme.of(context).colorScheme.surface;
 
   late final TextEditingController _nomeController;
   late final TextEditingController _whatsappController;
@@ -906,7 +901,7 @@ class _EditarClienteSheetState extends State<EditarClienteSheet> {
 
     return Container(
       padding: EdgeInsets.fromLTRB(22, 22, 22, teclado + 25),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: _corFundo,
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
@@ -916,16 +911,16 @@ class _EditarClienteSheetState extends State<EditarClienteSheet> {
           mainAxisSize: MainAxisSize.min,
           children: [
             const SheetHandle(),
-            const SizedBox(height: 20),
-            const Text(
+            SizedBox(height: 20),
+            Text(
               'Editar cliente',
               style: TextStyle(
                 fontSize: 25,
                 fontWeight: FontWeight.bold,
-                color: Color(0xFF2D2140),
+                color: Theme.of(context).colorScheme.onSurface,
               ),
             ),
-            const SizedBox(height: 22),
+            SizedBox(height: 22),
             TextField(
               controller: _nomeController,
               textCapitalization: TextCapitalization.words,
@@ -934,7 +929,7 @@ class _EditarClienteSheetState extends State<EditarClienteSheet> {
                 prefixIcon: Icon(Icons.person_outline),
               ),
             ),
-            const SizedBox(height: 14),
+            SizedBox(height: 14),
             TextField(
               controller: _whatsappController,
               keyboardType: TextInputType.phone,
@@ -943,7 +938,7 @@ class _EditarClienteSheetState extends State<EditarClienteSheet> {
                 prefixIcon: Icon(Icons.chat_outlined),
               ),
             ),
-            const SizedBox(height: 14),
+            SizedBox(height: 14),
             TextField(
               controller: _telefoneController,
               keyboardType: TextInputType.phone,
@@ -952,7 +947,7 @@ class _EditarClienteSheetState extends State<EditarClienteSheet> {
                 prefixIcon: Icon(Icons.phone_outlined),
               ),
             ),
-            const SizedBox(height: 14),
+            SizedBox(height: 14),
             TextField(
               controller: _instagramController,
               keyboardType: TextInputType.url,
@@ -962,7 +957,7 @@ class _EditarClienteSheetState extends State<EditarClienteSheet> {
                 prefixIcon: Icon(Icons.camera_alt_outlined),
               ),
             ),
-            const SizedBox(height: 14),
+            SizedBox(height: 14),
             TextField(
               controller: _emailController,
               keyboardType: TextInputType.emailAddress,
@@ -971,7 +966,7 @@ class _EditarClienteSheetState extends State<EditarClienteSheet> {
                 prefixIcon: Icon(Icons.email_outlined),
               ),
             ),
-            const SizedBox(height: 14),
+            SizedBox(height: 14),
             TextField(
               controller: _aniversarioController,
               keyboardType: TextInputType.datetime,
@@ -983,16 +978,16 @@ class _EditarClienteSheetState extends State<EditarClienteSheet> {
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
               value: _consentimentoWhatsapp,
-              title: const Text('Aceita contato operacional por WhatsApp'),
+              title: Text('Aceita contato operacional por WhatsApp'),
               onChanged: (v) => setState(() => _consentimentoWhatsapp = v),
             ),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
               value: _consentimentoMarketing,
-              title: const Text('Aceita mensagens promocionais'),
+              title: Text('Aceita mensagens promocionais'),
               onChanged: (v) => setState(() => _consentimentoMarketing = v),
             ),
-            const SizedBox(height: 14),
+            SizedBox(height: 14),
             DropdownButtonFormField<String>(
               initialValue: _profissionalSelecionada,
               decoration: const InputDecoration(
@@ -1015,7 +1010,7 @@ class _EditarClienteSheetState extends State<EditarClienteSheet> {
                 });
               },
             ),
-            const SizedBox(height: 14),
+            SizedBox(height: 14),
             TextField(
               controller: _observacoesController,
               maxLines: 3,
@@ -1025,11 +1020,11 @@ class _EditarClienteSheetState extends State<EditarClienteSheet> {
                 prefixIcon: Icon(Icons.notes_outlined),
               ),
             ),
-            const SizedBox(height: 22),
+            SizedBox(height: 22),
             FilledButton.icon(
               onPressed: _salvar,
-              icon: const Icon(Icons.save_outlined),
-              label: const Text(
+              icon: Icon(Icons.save_outlined),
+              label: Text(
                 'Salvar alterações',
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
@@ -1064,13 +1059,13 @@ class DetalhesClientePage extends StatefulWidget {
 }
 
 class _DetalhesClientePageState extends State<DetalhesClientePage> {
-  static const Color _corPrincipal = Color(0xFF70569A);
+  Color get _corPrincipal => Theme.of(context).colorScheme.primary;
 
-  static const Color _corFundo = Color(0xFFF9F6FC);
+  Color get _corFundo => Theme.of(context).colorScheme.surface;
 
-  static const Color _textoEscuro = Color(0xFF2D2140);
+  Color get _textoEscuro => Theme.of(context).colorScheme.onSurface;
 
-  static const Color _textoClaro = Color(0xFF766A85);
+  Color get _textoClaro => Theme.of(context).colorScheme.onSurfaceVariant;
 
   late ClienteRegistro _cliente;
 
@@ -1130,7 +1125,7 @@ class _DetalhesClientePageState extends State<DetalhesClientePage> {
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: const Text('Excluir cliente?'),
+          title: Text('Excluir cliente?'),
           content: Text(
             'Deseja excluir ${_cliente.nome}? '
             'Essa cliente não aparecerá mais na lista.',
@@ -1140,7 +1135,7 @@ class _DetalhesClientePageState extends State<DetalhesClientePage> {
               onPressed: () {
                 Navigator.pop(context, false);
               },
-              child: const Text('Cancelar'),
+              child: Text('Cancelar'),
             ),
             FilledButton(
               onPressed: () {
@@ -1149,7 +1144,7 @@ class _DetalhesClientePageState extends State<DetalhesClientePage> {
               style: FilledButton.styleFrom(
                 backgroundColor: const Color(0xFFD64D64),
               ),
-              child: const Text('Excluir'),
+              child: Text('Excluir'),
             ),
           ],
         );
@@ -1190,18 +1185,18 @@ class _DetalhesClientePageState extends State<DetalhesClientePage> {
       final editar = await showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
-          title: const Text('WhatsApp inválido'),
-          content: const Text(
+          title: Text('WhatsApp inválido'),
+          content: Text(
             'Esta cliente ainda não possui um número de WhatsApp válido.',
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancelar'),
+              child: Text('Cancelar'),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(context, true),
-              child: const Text('Editar número'),
+              child: Text('Editar número'),
             ),
           ],
         ),
@@ -1292,16 +1287,13 @@ class _DetalhesClientePageState extends State<DetalhesClientePage> {
         surfaceTintColor: Colors.transparent,
         title: Text(
           _cliente.nome,
-          style: const TextStyle(
-            fontWeight: FontWeight.bold,
-            color: _textoEscuro,
-          ),
+          style: TextStyle(fontWeight: FontWeight.bold, color: _textoEscuro),
         ),
         actions: [
           IconButton(
             tooltip: 'Editar cliente',
             onPressed: _editarCliente,
-            icon: const Icon(Icons.edit_outlined),
+            icon: Icon(Icons.edit_outlined),
           ),
           PopupMenuButton<String>(
             onSelected: (valor) {
@@ -1335,26 +1327,26 @@ class _DetalhesClientePageState extends State<DetalhesClientePage> {
               backgroundColor: _corPrincipal.withValues(alpha: 0.12),
               child: Text(
                 _iniciais(_cliente.nome),
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 25,
                   color: _corPrincipal,
                   fontWeight: FontWeight.bold,
                 ),
               ),
             ),
-            const SizedBox(height: 13),
+            SizedBox(height: 13),
             Text(
               _cliente.nome,
               textAlign: TextAlign.center,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 23,
                 fontWeight: FontWeight.bold,
                 color: _textoEscuro,
               ),
             ),
-            const SizedBox(height: 5),
-            Text(_cliente.whatsapp, style: const TextStyle(color: _textoClaro)),
-            const SizedBox(height: 20),
+            SizedBox(height: 5),
+            Text(_cliente.whatsapp, style: TextStyle(color: _textoClaro)),
+            SizedBox(height: 20),
             const Align(
               alignment: Alignment.centerLeft,
               child: Text(
@@ -1362,7 +1354,7 @@ class _DetalhesClientePageState extends State<DetalhesClientePage> {
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
             ),
-            const SizedBox(height: 10),
+            SizedBox(height: 10),
             Row(
               children: [
                 Expanded(
@@ -1372,7 +1364,7 @@ class _DetalhesClientePageState extends State<DetalhesClientePage> {
                     onTap: _abrirWhatsApp,
                   ),
                 ),
-                const SizedBox(width: 10),
+                SizedBox(width: 10),
                 Expanded(
                   child: _AcaoCliente(
                     titulo: 'Agendar',
@@ -1382,7 +1374,7 @@ class _DetalhesClientePageState extends State<DetalhesClientePage> {
                 ),
               ],
             ),
-            const SizedBox(height: 10),
+            SizedBox(height: 10),
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(12),
@@ -1391,49 +1383,46 @@ class _DetalhesClientePageState extends State<DetalhesClientePage> {
                   runSpacing: 8,
                   children: [
                     ActionChip(
-                      avatar: const Icon(
-                        Icons.event_available_outlined,
-                        size: 18,
-                      ),
-                      label: const Text('Confirmar horário'),
+                      avatar: Icon(Icons.event_available_outlined, size: 18),
+                      label: Text('Confirmar horário'),
                       onPressed: () => _abrirModelo('confirmacao_agendamento'),
                     ),
                     ActionChip(
-                      avatar: const Icon(Icons.alarm_outlined, size: 18),
-                      label: const Text('Lembrete'),
+                      avatar: Icon(Icons.alarm_outlined, size: 18),
+                      label: Text('Lembrete'),
                       onPressed: () => _abrirModelo('lembrete_horario'),
                     ),
                     ActionChip(
-                      avatar: const Icon(Icons.pix, size: 18),
-                      label: const Text('Enviar Pix'),
+                      avatar: Icon(Icons.pix, size: 18),
+                      label: Text('Enviar Pix'),
                       onPressed: () => _abrirModelo('envio_pix'),
                     ),
                     ActionChip(
-                      avatar: const Icon(Icons.location_on_outlined, size: 18),
-                      label: const Text('Enviar endereço'),
+                      avatar: Icon(Icons.location_on_outlined, size: 18),
+                      label: Text('Enviar endereço'),
                       onPressed: () => _abrirModelo('envio_endereco'),
                     ),
                     ActionChip(
-                      avatar: const Icon(Icons.favorite_outline, size: 18),
-                      label: const Text('Agradecimento'),
+                      avatar: Icon(Icons.favorite_outline, size: 18),
+                      label: Text('Agradecimento'),
                       onPressed: () => _abrirModelo('agradecimento'),
                     ),
                     ActionChip(
-                      avatar: const Icon(Icons.event_repeat_outlined, size: 18),
-                      label: const Text('Novo agendamento'),
+                      avatar: Icon(Icons.event_repeat_outlined, size: 18),
+                      label: Text('Novo agendamento'),
                       onPressed: () => _abrirModelo('convite_novo_agendamento'),
                     ),
                   ],
                 ),
               ),
             ),
-            const SizedBox(height: 22),
+            SizedBox(height: 22),
             _AcaoCliente(
               titulo: 'Visão 360°',
               icone: Icons.contact_page_outlined,
               onTap: _abrirCliente360,
             ),
-            const SizedBox(height: 10),
+            SizedBox(height: 10),
             _InfoClienteCard(
               titulo: 'Contato e aniversário',
               valor:
@@ -1452,26 +1441,26 @@ class _DetalhesClientePageState extends State<DetalhesClientePage> {
                     ].join(' • '),
               icone: Icons.contact_phone_outlined,
             ),
-            const SizedBox(height: 10),
+            SizedBox(height: 10),
             _InfoClienteCard(
               titulo: 'Consentimentos',
               valor:
                   'WhatsApp: ${_cliente.consentimentoWhatsapp ? 'sim' : 'não'} • Marketing: ${_cliente.consentimentoMarketing ? 'sim' : 'não'}',
               icone: Icons.verified_user_outlined,
             ),
-            const SizedBox(height: 10),
+            SizedBox(height: 10),
             _InfoClienteCard(
               titulo: 'Profissional principal',
               valor: _cliente.profissional,
               icone: Icons.badge_outlined,
             ),
-            const SizedBox(height: 10),
+            SizedBox(height: 10),
             _InfoClienteCard(
               titulo: 'Último serviço',
               valor: _cliente.ultimoServico,
               icone: Icons.content_cut,
             ),
-            const SizedBox(height: 10),
+            SizedBox(height: 10),
             _InfoClienteCard(
               titulo: 'Histórico',
               valor:
@@ -1479,7 +1468,7 @@ class _DetalhesClientePageState extends State<DetalhesClientePage> {
                   'R\$ ${_cliente.totalGasto.toStringAsFixed(2)} gastos',
               icone: Icons.history,
             ),
-            const SizedBox(height: 10),
+            SizedBox(height: 10),
             InkWell(
               borderRadius: BorderRadius.circular(18),
               onTap: _abrirAnamnese,
@@ -1490,7 +1479,7 @@ class _DetalhesClientePageState extends State<DetalhesClientePage> {
                 alerta: true,
               ),
             ),
-            const SizedBox(height: 10),
+            SizedBox(height: 10),
             _InfoClienteCard(
               titulo: 'Observações',
               valor: _cliente.observacoes.isEmpty
@@ -1498,11 +1487,11 @@ class _DetalhesClientePageState extends State<DetalhesClientePage> {
                   : _cliente.observacoes,
               icone: Icons.notes_outlined,
             ),
-            const SizedBox(height: 24),
+            SizedBox(height: 24),
             OutlinedButton.icon(
               onPressed: _excluirCliente,
-              icon: const Icon(Icons.delete_outline),
-              label: const Text('Excluir cliente'),
+              icon: Icon(Icons.delete_outline),
+              label: Text('Excluir cliente'),
               style: OutlinedButton.styleFrom(
                 foregroundColor: const Color(0xFFD64D64),
                 minimumSize: const Size.fromHeight(52),
@@ -1550,7 +1539,7 @@ class _AcaoCliente extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const corPrincipal = Color(0xFF70569A);
+    final corPrincipal = Theme.of(context).colorScheme.primary;
 
     return OutlinedButton.icon(
       onPressed: onTap,
@@ -1581,7 +1570,9 @@ class _InfoClienteCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cor = alerta ? const Color(0xFFE58A25) : const Color(0xFF70569A);
+    final cor = alerta
+        ? Color(0xFFE58A25)
+        : Theme.of(context).colorScheme.primary;
 
     return Container(
       width: double.infinity,
@@ -1602,31 +1593,31 @@ class _InfoClienteCard extends StatelessWidget {
             ),
             child: Icon(icone, color: cor),
           ),
-          const SizedBox(width: 13),
+          SizedBox(width: 13),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   titulo,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 13,
-                    color: Color(0xFF766A85),
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
                 ),
-                const SizedBox(height: 3),
+                SizedBox(height: 3),
                 Text(
                   valor,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.bold,
-                    color: Color(0xFF2D2140),
+                    color: Theme.of(context).colorScheme.onSurface,
                   ),
                 ),
               ],
             ),
           ),
-          const Icon(Icons.chevron_right, color: Color(0xFF968AA5)),
+          Icon(Icons.chevron_right, color: Color(0xFF968AA5)),
         ],
       ),
     );
@@ -1646,29 +1637,27 @@ class _ClientesVazio extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(
-              Icons.people_outline,
-              size: 70,
-              color: Color(0xFFB6A9C3),
-            ),
-            const SizedBox(height: 16),
+            Icon(Icons.people_outline, size: 70, color: Color(0xFFB6A9C3)),
+            SizedBox(height: 16),
             Text(
               possuiPesquisa
                   ? 'Nenhum cliente encontrado'
                   : 'Nenhum cliente cadastrado',
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 19,
                 fontWeight: FontWeight.bold,
-                color: Color(0xFF2D2140),
+                color: Theme.of(context).colorScheme.onSurface,
               ),
             ),
-            const SizedBox(height: 7),
+            SizedBox(height: 7),
             Text(
               possuiPesquisa
                   ? 'Altere a pesquisa e tente novamente.'
                   : 'Toque em “Novo cliente” para cadastrar o primeiro.',
               textAlign: TextAlign.center,
-              style: const TextStyle(color: Color(0xFF766A85)),
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
           ],
         ),
@@ -1694,20 +1683,23 @@ class _ErroClientes extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.error_outline, size: 65, color: Color(0xFFD64D64)),
-            const SizedBox(height: 14),
+            Icon(Icons.error_outline, size: 65, color: Color(0xFFD64D64)),
+            SizedBox(height: 14),
             Text(
               mensagem,
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 16, color: Color(0xFF2D2140)),
+              style: TextStyle(
+                fontSize: 16,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
             ),
-            const SizedBox(height: 16),
+            SizedBox(height: 16),
             FilledButton.icon(
               onPressed: onTentarNovamente,
-              icon: const Icon(Icons.refresh),
-              label: const Text('Tentar novamente'),
+              icon: Icon(Icons.refresh),
+              label: Text('Tentar novamente'),
               style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFF70569A),
+                backgroundColor: Theme.of(context).colorScheme.primary,
               ),
             ),
           ],

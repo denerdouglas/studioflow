@@ -2,10 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../repositories/funcionarios_repository.dart';
 
-const Color kCorPrincipal = Color(0xFF70569A);
-const Color kCorFundo = Color(0xFFF9F6FC);
-const Color kTextoEscuro = Color(0xFF2D2140);
-const Color kTextoClaro = Color(0xFF766A85);
 const Color kVerde = Color(0xFF15996B);
 const Color kVermelho = Color(0xFFD64D64);
 const Color kLaranja = Color(0xFFE58A25);
@@ -157,27 +153,33 @@ class _FuncionariosPageState extends State<FuncionariosPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: kCorFundo,
+      backgroundColor: Theme.of(context).colorScheme.surface,
       appBar: AppBar(
-        backgroundColor: kCorFundo,
+        backgroundColor: Theme.of(context).colorScheme.surface,
         surfaceTintColor: Colors.transparent,
-        title: const Text(
+        title: Text(
           'Equipe e Comissões',
-          style: TextStyle(color: kTextoEscuro, fontWeight: FontWeight.bold),
+          style: TextStyle(
+            color: Theme.of(context).colorScheme.onSurface,
+            fontWeight: FontWeight.bold,
+          ),
         ),
         actions: [
           IconButton(
             onPressed: carregar,
-            icon: const Icon(Icons.refresh, color: kCorPrincipal),
+            icon: Icon(
+              Icons.refresh,
+              color: Theme.of(context).colorScheme.primary,
+            ),
           ),
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
         heroTag: null,
-        backgroundColor: kCorPrincipal,
+        backgroundColor: Theme.of(context).colorScheme.primary,
         foregroundColor: Colors.white,
         onPressed: novoFuncionario,
-        icon: const Icon(Icons.person_add),
+        icon: Icon(Icons.person_add),
         label: const Text('Novo'),
       ),
       body: Column(
@@ -215,7 +217,7 @@ class _FuncionariosPageState extends State<FuncionariosPage> {
             const SizedBox(height: 6),
             Text(
               '$ativos funcionário(s)',
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 28,
                 color: Colors.white,
                 fontWeight: FontWeight.bold,
@@ -236,11 +238,11 @@ class _FuncionariosPageState extends State<FuncionariosPage> {
             controller: pesquisaController,
             decoration: InputDecoration(
               hintText: 'Pesquisar...',
-              prefixIcon: const Icon(Icons.search),
+              prefixIcon: Icon(Icons.search),
               suffixIcon: pesquisa.isEmpty
                   ? null
                   : IconButton(
-                      icon: const Icon(Icons.close),
+                      icon: Icon(Icons.close),
                       onPressed: () {
                         pesquisaController.clear();
 
@@ -256,11 +258,11 @@ class _FuncionariosPageState extends State<FuncionariosPage> {
               });
             },
           ),
-          const SizedBox(height: 10),
+          SizedBox(height: 10),
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
             value: mostrarInativos,
-            activeThumbColor: kCorPrincipal,
+            activeThumbColor: Theme.of(context).colorScheme.primary,
             title: const Text('Mostrar funcionários inativos'),
             onChanged: (valor) async {
               setState(() {
@@ -294,7 +296,7 @@ class _FuncionariosPageState extends State<FuncionariosPage> {
     }
 
     return RefreshIndicator(
-      color: kCorPrincipal,
+      color: Theme.of(context).colorScheme.primary,
       onRefresh: carregar,
       child: ListView.builder(
         padding: const EdgeInsets.fromLTRB(18, 0, 18, 110),
@@ -329,7 +331,7 @@ class _FuncionariosPageState extends State<FuncionariosPage> {
                 ),
                 title: Text(
                   funcionario.nome,
-                  style: const TextStyle(fontWeight: FontWeight.bold),
+                  style: TextStyle(fontWeight: FontWeight.bold),
                 ),
                 subtitle: Text(
                   '${funcionario.cargo}\n'
@@ -373,9 +375,9 @@ class OpcoesFuncionarioSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.fromLTRB(22, 18, 22, 28),
-      decoration: const BoxDecoration(
-        color: kCorFundo,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -388,15 +390,17 @@ class OpcoesFuncionarioSheet extends StatelessWidget {
               borderRadius: BorderRadius.circular(20),
             ),
           ),
-          const SizedBox(height: 20),
+          SizedBox(height: 20),
           CircleAvatar(
             radius: 36,
-            backgroundColor: kCorPrincipal.withValues(alpha: 0.15),
+            backgroundColor: Theme.of(
+              context,
+            ).colorScheme.primary.withValues(alpha: 0.15),
             child: Text(
               funcionario.nome[0].toUpperCase(),
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 28,
-                color: kCorPrincipal,
+                color: Theme.of(context).colorScheme.primary,
                 fontWeight: FontWeight.bold,
               ),
             ),
@@ -404,13 +408,21 @@ class OpcoesFuncionarioSheet extends StatelessWidget {
           const SizedBox(height: 14),
           Text(
             funcionario.nome,
-            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+            style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
           ),
-          const SizedBox(height: 4),
-          Text(funcionario.cargo, style: const TextStyle(color: kTextoClaro)),
-          const SizedBox(height: 24),
+          SizedBox(height: 4),
+          Text(
+            funcionario.cargo,
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+          SizedBox(height: 24),
           ListTile(
-            leading: const Icon(Icons.edit_outlined, color: kCorPrincipal),
+            leading: Icon(
+              Icons.edit_outlined,
+              color: Theme.of(context).colorScheme.primary,
+            ),
             title: const Text('Editar funcionário'),
             onTap: () {
               Navigator.pop(context, 'editar');
@@ -431,7 +443,7 @@ class OpcoesFuncionarioSheet extends StatelessWidget {
             },
           ),
           ListTile(
-            leading: const Icon(Icons.delete_outline, color: kVermelho),
+            leading: Icon(Icons.delete_outline, color: kVermelho),
             title: const Text('Excluir profissional'),
             onTap: () {
               Navigator.pop(context, 'excluir');
@@ -603,9 +615,9 @@ class _FuncionarioFormSheetState extends State<FuncionarioFormSheet> {
 
     return Container(
       padding: EdgeInsets.fromLTRB(22, 22, 22, teclado + 22),
-      decoration: const BoxDecoration(
-        color: kCorFundo,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
       ),
       child: SingleChildScrollView(
         child: Column(
@@ -676,7 +688,7 @@ class _FuncionarioFormSheetState extends State<FuncionarioFormSheet> {
                 ),
                 IconButton(
                   onPressed: _adicionarFuncao,
-                  icon: const Icon(Icons.add),
+                  icon: Icon(Icons.add),
                   tooltip: 'Adicionar função',
                 ),
               ],
@@ -721,12 +733,12 @@ class _FuncionarioFormSheetState extends State<FuncionarioFormSheet> {
                 });
               },
             ),
-            const SizedBox(height: 20),
+            SizedBox(height: 20),
             FilledButton(
               onPressed: salvar,
               style: FilledButton.styleFrom(
                 minimumSize: const Size.fromHeight(55),
-                backgroundColor: kCorPrincipal,
+                backgroundColor: Theme.of(context).colorScheme.primary,
                 foregroundColor: Colors.white,
               ),
               child: const Text('Salvar profissional'),

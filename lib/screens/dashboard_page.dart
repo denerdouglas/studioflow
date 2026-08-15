@@ -147,19 +147,19 @@ class _DashboardPageState extends State<DashboardPage> {
       _construirInicio(),
       SessionController.instance.usuario!.pode(ModuloPermissao.agenda)
           ? const AgendaPage()
-          : const Center(child: Text('Acesso nao permitido.')),
+          : Center(child: Text('Acesso nao permitido.')),
       SessionController.instance.usuario!.pode(ModuloPermissao.clientes)
           ? const ClientesPage()
-          : const Center(child: Text('Acesso nao permitido.')),
+          : Center(child: Text('Acesso nao permitido.')),
       MaisSprint2Page(tema: widget.tema),
     ];
 
     return Scaffold(
-      backgroundColor: widget.tema.fundo,
+      backgroundColor: Theme.of(context).colorScheme.surface,
       appBar: _paginaSelecionada == 0
           ? AppBar(
               automaticallyImplyLeading: false,
-              backgroundColor: widget.tema.fundo,
+              backgroundColor: Theme.of(context).colorScheme.surface,
               surfaceTintColor: Colors.transparent,
               titleSpacing: 20,
               title: Column(
@@ -171,19 +171,19 @@ class _DashboardPageState extends State<DashboardPage> {
                     '${widget.tema.emoji}',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 21,
                       fontWeight: FontWeight.bold,
-                      color: Color(0xFF2D2140),
+                      color: Theme.of(context).colorScheme.onSurface,
                     ),
                   ),
                   Text(
                     widget.nomeNegocio,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 12,
-                      color: Color(0xFF766A85),
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
                   ),
                 ],
@@ -198,7 +198,10 @@ class _DashboardPageState extends State<DashboardPage> {
 
                     _carregarResumo();
                   },
-                  icon: Icon(Icons.refresh, color: widget.tema.corPrincipal),
+                  icon: Icon(
+                    Icons.refresh,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
                 ),
                 IconButton(
                   tooltip: 'StudioFlow IA',
@@ -210,7 +213,7 @@ class _DashboardPageState extends State<DashboardPage> {
                   },
                   icon: Icon(
                     Icons.auto_awesome_outlined,
-                    color: widget.tema.corPrincipal,
+                    color: Theme.of(context).colorScheme.primary,
                   ),
                 ),
                 IconButton(
@@ -232,10 +235,10 @@ class _DashboardPageState extends State<DashboardPage> {
                   },
                   icon: Icon(
                     Icons.notifications_none,
-                    color: widget.tema.corPrincipal,
+                    color: Theme.of(context).colorScheme.primary,
                   ),
                 ),
-                const SizedBox(width: 4),
+                SizedBox(width: 4),
               ],
             )
           : null,
@@ -243,7 +246,9 @@ class _DashboardPageState extends State<DashboardPage> {
       bottomNavigationBar: NavigationBar(
         selectedIndex: _paginaSelecionada,
         backgroundColor: Colors.white,
-        indicatorColor: widget.tema.corPrincipal.withValues(alpha: 0.14),
+        indicatorColor: Theme.of(
+          context,
+        ).colorScheme.primary.withValues(alpha: 0.14),
         onDestinationSelected: _mudarPagina,
         destinations: const [
           NavigationDestination(
@@ -274,7 +279,9 @@ class _DashboardPageState extends State<DashboardPage> {
   Widget _construirInicio() {
     if (_carregandoResumo) {
       return Center(
-        child: CircularProgressIndicator(color: widget.tema.corPrincipal),
+        child: CircularProgressIndicator(
+          color: Theme.of(context).colorScheme.primary,
+        ),
       );
     }
 
@@ -285,18 +292,17 @@ class _DashboardPageState extends State<DashboardPage> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(
-                Icons.error_outline,
-                size: 62,
-                color: Color(0xFFD64D64),
-              ),
-              const SizedBox(height: 14),
+              Icon(Icons.error_outline, size: 62, color: Color(0xFFD64D64)),
+              SizedBox(height: 14),
               Text(
                 _erroResumo!,
                 textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 16, color: Color(0xFF2D2140)),
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
               ),
-              const SizedBox(height: 16),
+              SizedBox(height: 16),
               FilledButton.icon(
                 onPressed: () {
                   setState(() {
@@ -306,8 +312,8 @@ class _DashboardPageState extends State<DashboardPage> {
 
                   _carregarResumo();
                 },
-                icon: const Icon(Icons.refresh),
-                label: const Text('Tentar novamente'),
+                icon: Icon(Icons.refresh),
+                label: Text('Tentar novamente'),
               ),
             ],
           ),
@@ -318,7 +324,7 @@ class _DashboardPageState extends State<DashboardPage> {
     final proximo = _proximoAgendamento;
 
     return RefreshIndicator(
-      color: widget.tema.corPrincipal,
+      color: Theme.of(context).colorScheme.primary,
       onRefresh: _carregarResumo,
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
@@ -328,10 +334,10 @@ class _DashboardPageState extends State<DashboardPage> {
           children: [
             Card(
               child: ListTile(
-                leading: const Icon(Icons.insights_outlined),
-                title: const Text('Gestão financeira'),
-                subtitle: const Text('Geral • Salão • Loja'),
-                trailing: const Icon(Icons.chevron_right),
+                leading: Icon(Icons.insights_outlined),
+                title: Text('Gestão financeira'),
+                subtitle: Text('Geral • Salão • Loja'),
+                trailing: Icon(Icons.chevron_right),
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(
@@ -342,10 +348,10 @@ class _DashboardPageState extends State<DashboardPage> {
             ),
             Card(
               child: ListTile(
-                leading: const Icon(Icons.auto_awesome_outlined),
-                title: const Text('Assistente de Gestão'),
-                subtitle: const Text('Análises e precificação com dados reais'),
-                trailing: const Icon(Icons.chevron_right),
+                leading: Icon(Icons.auto_awesome_outlined),
+                title: Text('Assistente de Gestão'),
+                subtitle: Text('Análises e precificação com dados reais'),
+                trailing: Icon(Icons.chevron_right),
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(
@@ -354,25 +360,25 @@ class _DashboardPageState extends State<DashboardPage> {
                 ),
               ),
             ),
-            const SizedBox(height: 18),
+            SizedBox(height: 18),
             _construirResumoIa(),
 
-            const SizedBox(height: 18),
+            SizedBox(height: 18),
 
             _construirCaixaReal(),
 
-            const SizedBox(height: 25),
+            SizedBox(height: 25),
 
-            const Text(
+            Text(
               'Resumo de hoje',
               style: TextStyle(
                 fontSize: 21,
                 fontWeight: FontWeight.bold,
-                color: Color(0xFF2D2140),
+                color: Theme.of(context).colorScheme.onSurface,
               ),
             ),
 
-            const SizedBox(height: 13),
+            SizedBox(height: 13),
 
             GridView.count(
               crossAxisCount: 2,
@@ -387,7 +393,7 @@ class _DashboardPageState extends State<DashboardPage> {
                   valor: '${_agendamentosValidos.length}',
                   descricao: 'clientes hoje',
                   icone: Icons.people_alt_outlined,
-                  cor: widget.tema.corPrincipal,
+                  cor: Theme.of(context).colorScheme.primary,
                 ),
                 _construirIndicador(
                   titulo: 'Previsão',
@@ -421,18 +427,18 @@ class _DashboardPageState extends State<DashboardPage> {
               ],
             ),
 
-            const SizedBox(height: 25),
+            SizedBox(height: 25),
 
-            const Text(
+            Text(
               'Alertas de hoje',
               style: TextStyle(
                 fontSize: 21,
                 fontWeight: FontWeight.bold,
-                color: Color(0xFF2D2140),
+                color: Theme.of(context).colorScheme.onSurface,
               ),
             ),
 
-            const SizedBox(height: 13),
+            SizedBox(height: 13),
 
             if (_agendamentosValidos.isEmpty)
               _construirAlerta(
@@ -448,10 +454,10 @@ class _DashboardPageState extends State<DashboardPage> {
                 descricao:
                     '${_agendamentosValidos.length} atendimento(s) ativo(s) hoje.',
                 icone: Icons.calendar_month_outlined,
-                cor: widget.tema.corPrincipal,
+                cor: Theme.of(context).colorScheme.primary,
               ),
 
-            const SizedBox(height: 10),
+            SizedBox(height: 10),
 
             _construirAlerta(
               titulo: 'Entradas registradas',
@@ -462,7 +468,7 @@ class _DashboardPageState extends State<DashboardPage> {
               cor: const Color(0xFF15996B),
             ),
 
-            const SizedBox(height: 10),
+            SizedBox(height: 10),
 
             _construirAlerta(
               titulo: 'Saídas registradas',
@@ -491,7 +497,7 @@ class _DashboardPageState extends State<DashboardPage> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: const Color(0xFFE6DFF0)),
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -500,34 +506,30 @@ class _DashboardPageState extends State<DashboardPage> {
             width: 58,
             height: 58,
             decoration: BoxDecoration(
-              color: widget.tema.corPrincipal,
+              color: Theme.of(context).colorScheme.primary,
               borderRadius: BorderRadius.circular(18),
             ),
-            child: const Icon(
-              Icons.auto_awesome,
-              color: Colors.white,
-              size: 30,
-            ),
+            child: Icon(Icons.auto_awesome, color: Colors.white, size: 30),
           ),
-          const SizedBox(width: 15),
+          SizedBox(width: 15),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   'Resumo StudioFlow',
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 18,
-                    color: Color(0xFF2D2140),
+                    color: Theme.of(context).colorScheme.onSurface,
                   ),
                 ),
-                const SizedBox(height: 5),
+                SizedBox(height: 5),
                 Text(
                   mensagem,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 14,
-                    color: Color(0xFF766A85),
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                     height: 1.4,
                   ),
                 ),
@@ -545,41 +547,40 @@ class _DashboardPageState extends State<DashboardPage> {
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [widget.tema.corPrincipal, widget.tema.corSecundaria],
+          colors: [
+            Theme.of(context).colorScheme.primary,
+            Theme.of(context).colorScheme.secondary,
+          ],
         ),
         borderRadius: BorderRadius.circular(28),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'Caixa de hoje',
             style: TextStyle(color: Colors.white70, fontSize: 18),
           ),
-          const SizedBox(height: 14),
+          SizedBox(height: 14),
           FittedBox(
             fit: BoxFit.scaleDown,
             alignment: Alignment.centerLeft,
             child: Text(
               AppFormatters.moeda(_resumoCaixa.saldo),
-              style: const TextStyle(
+              style: TextStyle(
                 color: Colors.white,
                 fontSize: 42,
                 fontWeight: FontWeight.bold,
               ),
             ),
           ),
-          const SizedBox(height: 10),
+          SizedBox(height: 10),
           Text(
             'Entradas: '
             '${AppFormatters.moeda(_resumoCaixa.totalEntradas)}'
             ' • Saídas: '
             '${AppFormatters.moeda(_resumoCaixa.totalSaidas)}',
-            style: const TextStyle(
-              color: Colors.white70,
-              fontSize: 14,
-              height: 1.4,
-            ),
+            style: TextStyle(color: Colors.white70, fontSize: 14, height: 1.4),
           ),
         ],
       ),
@@ -598,44 +599,44 @@ class _DashboardPageState extends State<DashboardPage> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFE6DFF0)),
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Icon(icone, color: cor, size: 30),
-          const SizedBox(height: 12),
+          SizedBox(height: 12),
           FittedBox(
             fit: BoxFit.scaleDown,
             alignment: Alignment.centerLeft,
             child: Text(
               valor,
               maxLines: 1,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 26,
                 fontWeight: FontWeight.bold,
-                color: Color(0xFF2D2140),
+                color: Theme.of(context).colorScheme.onSurface,
               ),
             ),
           ),
-          const SizedBox(height: 6),
+          SizedBox(height: 6),
           Text(
             titulo,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
+            style: TextStyle(
               fontWeight: FontWeight.bold,
-              color: Color(0xFF2D2140),
+              color: Theme.of(context).colorScheme.onSurface,
             ),
           ),
-          const SizedBox(height: 3),
+          SizedBox(height: 3),
           Expanded(
             child: Text(
               descricao,
               maxLines: 3,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: Color(0xFF766A85),
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
                 fontSize: 12,
                 height: 1.25,
               ),
@@ -657,7 +658,7 @@ class _DashboardPageState extends State<DashboardPage> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFE6DFF0)),
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -666,23 +667,23 @@ class _DashboardPageState extends State<DashboardPage> {
             backgroundColor: cor.withValues(alpha: 0.12),
             child: Icon(icone, color: cor),
           ),
-          const SizedBox(width: 14),
+          SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   titulo,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontWeight: FontWeight.bold,
-                    color: Color(0xFF2D2140),
+                    color: Theme.of(context).colorScheme.onSurface,
                   ),
                 ),
-                const SizedBox(height: 3),
+                SizedBox(height: 3),
                 Text(
                   descricao,
-                  style: const TextStyle(
-                    color: Color(0xFF766A85),
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                     height: 1.35,
                   ),
                 ),

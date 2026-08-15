@@ -19,13 +19,13 @@ class ServicosPage extends StatefulWidget {
 }
 
 class _ServicosPageState extends State<ServicosPage> {
-  static const Color _corPrincipal = Color(0xFF70569A);
+  Color get _corPrincipal => Theme.of(context).colorScheme.primary;
 
-  static const Color _corFundo = Color(0xFFF9F6FC);
+  Color get _corFundo => Theme.of(context).colorScheme.surface;
 
-  static const Color _textoEscuro = Color(0xFF2D2140);
+  Color get _textoEscuro => Theme.of(context).colorScheme.onSurface;
 
-  static const Color _textoClaro = Color(0xFF766A85);
+  Color get _textoClaro => Theme.of(context).colorScheme.onSurfaceVariant;
 
   static const Color _vermelho = Color(0xFFD64D64);
 
@@ -237,7 +237,7 @@ class _ServicosPageState extends State<ServicosPage> {
       context: context,
       builder: (_) {
         return AlertDialog(
-          title: const Text('Desativar serviço?'),
+          title: Text('Desativar serviço?'),
           content: Text(
             'O serviço “${servico.nome}” '
             'não aparecerá mais nos novos agendamentos.',
@@ -247,14 +247,14 @@ class _ServicosPageState extends State<ServicosPage> {
               onPressed: () {
                 Navigator.pop(context, false);
               },
-              child: const Text('Cancelar'),
+              child: Text('Cancelar'),
             ),
             FilledButton(
               onPressed: () {
                 Navigator.pop(context, true);
               },
               style: FilledButton.styleFrom(backgroundColor: _vermelho),
-              child: const Text('Desativar'),
+              child: Text('Desativar'),
             ),
           ],
         );
@@ -344,7 +344,7 @@ class _ServicosPageState extends State<ServicosPage> {
           children: [
             _cabecalho(),
             _barraPesquisa(),
-            const SizedBox(height: 12),
+            SizedBox(height: 12),
             Expanded(child: _conteudo()),
           ],
         ),
@@ -354,8 +354,8 @@ class _ServicosPageState extends State<ServicosPage> {
         onPressed: _novoServico,
         backgroundColor: _corPrincipal,
         foregroundColor: Colors.white,
-        icon: const Icon(Icons.add),
-        label: const Text(
+        icon: Icon(Icons.add),
+        label: Text(
           'Novo serviço',
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
@@ -368,7 +368,7 @@ class _ServicosPageState extends State<ServicosPage> {
       padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
       child: Row(
         children: [
-          const Expanded(
+          Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -396,7 +396,7 @@ class _ServicosPageState extends State<ServicosPage> {
             ),
             child: Text(
               '${_servicos.length}',
-              style: const TextStyle(
+              style: TextStyle(
                 color: _corPrincipal,
                 fontWeight: FontWeight.bold,
               ),
@@ -411,7 +411,7 @@ class _ServicosPageState extends State<ServicosPage> {
                     const AssistenteGestaoPage(contexto: CentroResultado.salao),
               ),
             ),
-            icon: const Icon(Icons.auto_awesome_outlined),
+            icon: Icon(Icons.auto_awesome_outlined),
           ),
         ],
       ),
@@ -432,7 +432,7 @@ class _ServicosPageState extends State<ServicosPage> {
             },
             decoration: InputDecoration(
               hintText: 'Buscar serviço...',
-              prefixIcon: const Icon(Icons.search),
+              prefixIcon: Icon(Icons.search),
               suffixIcon: _pesquisa.isEmpty
                   ? null
                   : IconButton(
@@ -443,15 +443,15 @@ class _ServicosPageState extends State<ServicosPage> {
                           _pesquisa = '';
                         });
                       },
-                      icon: const Icon(Icons.close),
+                      icon: Icon(Icons.close),
                     ),
             ),
           ),
-          const SizedBox(height: 8),
+          SizedBox(height: 8),
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
             value: _mostrarInativos,
-            title: const Text(
+            title: Text(
               'Mostrar serviços inativos',
               style: TextStyle(fontSize: 13, color: _textoClaro),
             ),
@@ -472,9 +472,7 @@ class _ServicosPageState extends State<ServicosPage> {
 
   Widget _conteudo() {
     if (_carregando) {
-      return const Center(
-        child: CircularProgressIndicator(color: _corPrincipal),
-      );
+      return Center(child: CircularProgressIndicator(color: _corPrincipal));
     }
 
     if (_erro != null) {
@@ -484,14 +482,14 @@ class _ServicosPageState extends State<ServicosPage> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.error_outline, size: 64, color: _vermelho),
-              const SizedBox(height: 14),
+              Icon(Icons.error_outline, size: 64, color: _vermelho),
+              SizedBox(height: 14),
               Text(
                 _erro!,
                 textAlign: TextAlign.center,
-                style: const TextStyle(color: _textoEscuro, fontSize: 16),
+                style: TextStyle(color: _textoEscuro, fontSize: 16),
               ),
-              const SizedBox(height: 16),
+              SizedBox(height: 16),
               FilledButton.icon(
                 onPressed: () {
                   setState(() {
@@ -501,8 +499,8 @@ class _ServicosPageState extends State<ServicosPage> {
 
                   _carregarServicos();
                 },
-                icon: const Icon(Icons.refresh),
-                label: const Text('Tentar novamente'),
+                icon: Icon(Icons.refresh),
+                label: Text('Tentar novamente'),
               ),
             ],
           ),
@@ -517,29 +515,29 @@ class _ServicosPageState extends State<ServicosPage> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(
+              Icon(
                 Icons.content_cut_outlined,
                 size: 70,
                 color: Color(0xFFB6A9C3),
               ),
-              const SizedBox(height: 16),
+              SizedBox(height: 16),
               Text(
                 _pesquisa.isEmpty
                     ? 'Nenhum serviço cadastrado'
                     : 'Nenhum serviço encontrado',
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 19,
                   fontWeight: FontWeight.bold,
                   color: _textoEscuro,
                 ),
               ),
-              const SizedBox(height: 7),
+              SizedBox(height: 7),
               Text(
                 _pesquisa.isEmpty
                     ? 'Toque em “Novo serviço” para cadastrar o primeiro.'
                     : 'Altere a pesquisa e tente novamente.',
                 textAlign: TextAlign.center,
-                style: const TextStyle(color: _textoClaro),
+                style: TextStyle(color: _textoClaro),
               ),
             ],
           ),
@@ -554,7 +552,7 @@ class _ServicosPageState extends State<ServicosPage> {
         padding: const EdgeInsets.fromLTRB(20, 0, 20, 110),
         itemCount: _servicosFiltrados.length,
         separatorBuilder: (_, _) {
-          return const SizedBox(height: 10);
+          return SizedBox(height: 10);
         },
         itemBuilder: (context, index) {
           final servico = _servicosFiltrados[index];
@@ -580,7 +578,7 @@ class _ServicoCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cor = servico.ativo
-        ? const Color(0xFF70569A)
+        ? Theme.of(context).colorScheme.primary
         : const Color(0xFF968AA5);
 
     return Material(
@@ -607,7 +605,7 @@ class _ServicoCard extends StatelessWidget {
                 ),
                 child: Icon(Icons.content_cut, color: cor),
               ),
-              const SizedBox(width: 13),
+              SizedBox(width: 13),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -617,10 +615,10 @@ class _ServicoCard extends StatelessWidget {
                         Expanded(
                           child: Text(
                             servico.nome,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
-                              color: Color(0xFF2D2140),
+                              color: Theme.of(context).colorScheme.onSurface,
                             ),
                           ),
                         ),
@@ -636,7 +634,7 @@ class _ServicoCard extends StatelessWidget {
                               ).withValues(alpha: 0.10),
                               borderRadius: BorderRadius.circular(20),
                             ),
-                            child: const Text(
+                            child: Text(
                               'Inativo',
                               style: TextStyle(
                                 fontSize: 10,
@@ -647,15 +645,15 @@ class _ServicoCard extends StatelessWidget {
                           ),
                       ],
                     ),
-                    const SizedBox(height: 5),
+                    SizedBox(height: 5),
                     Text(
                       servico.categoria,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12,
-                        color: Color(0xFF766A85),
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                     ),
-                    const SizedBox(height: 7),
+                    SizedBox(height: 7),
                     Wrap(
                       spacing: 8,
                       runSpacing: 6,
@@ -677,12 +675,12 @@ class _ServicoCard extends StatelessWidget {
                       ],
                     ),
                     if (servico.descricao.isNotEmpty) ...[
-                      const SizedBox(height: 8),
+                      SizedBox(height: 8),
                       Text(
                         servico.descricao,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 12,
                           color: Color(0xFF968AA5),
                           height: 1.3,
@@ -692,8 +690,8 @@ class _ServicoCard extends StatelessWidget {
                   ],
                 ),
               ),
-              const SizedBox(width: 8),
-              const Icon(Icons.more_vert, color: Color(0xFF968AA5)),
+              SizedBox(width: 8),
+              Icon(Icons.more_vert, color: Color(0xFF968AA5)),
             ],
           ),
         ),
@@ -719,14 +717,14 @@ class _ServicoInformacao extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icone, size: 14, color: const Color(0xFF70569A)),
-          const SizedBox(width: 4),
+          Icon(icone, size: 14, color: Theme.of(context).colorScheme.primary),
+          SizedBox(width: 4),
           Text(
             texto,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w600,
-              color: Color(0xFF70569A),
+              color: Theme.of(context).colorScheme.primary,
             ),
           ),
         ],
@@ -744,8 +742,8 @@ class OpcoesServicoSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.fromLTRB(22, 18, 22, 28),
-      decoration: const BoxDecoration(
-        color: Color(0xFFF9F6FC),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
       child: Column(
@@ -762,26 +760,28 @@ class OpcoesServicoSheet extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(height: 20),
+          SizedBox(height: 20),
           Text(
             servico.nome,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 23,
               fontWeight: FontWeight.bold,
-              color: Color(0xFF2D2140),
+              color: Theme.of(context).colorScheme.onSurface,
             ),
           ),
-          const SizedBox(height: 4),
+          SizedBox(height: 4),
           Text(
             '${servico.categoria} • '
             'R\$ ${servico.preco.toStringAsFixed(2)}',
-            style: const TextStyle(color: Color(0xFF766A85)),
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
           ),
-          const SizedBox(height: 22),
+          SizedBox(height: 22),
           _OpcaoServico(
             titulo: 'Editar serviço',
             icone: Icons.edit_outlined,
-            cor: const Color(0xFF70569A),
+            cor: Theme.of(context).colorScheme.primary,
             onTap: () {
               Navigator.pop(context, 'editar');
             },
@@ -849,12 +849,12 @@ class _OpcaoServico extends StatelessWidget {
       ),
       title: Text(
         titulo,
-        style: const TextStyle(
+        style: TextStyle(
           fontWeight: FontWeight.w600,
-          color: Color(0xFF2D2140),
+          color: Theme.of(context).colorScheme.onSurface,
         ),
       ),
-      trailing: const Icon(Icons.chevron_right),
+      trailing: Icon(Icons.chevron_right),
       onTap: onTap,
     );
   }
@@ -870,9 +870,9 @@ class ServicoFormSheet extends StatefulWidget {
 }
 
 class _ServicoFormSheetState extends State<ServicoFormSheet> {
-  static const Color _corPrincipal = Color(0xFF70569A);
+  Color get _corPrincipal => Theme.of(context).colorScheme.primary;
 
-  static const Color _corFundo = Color(0xFFF9F6FC);
+  Color get _corFundo => Theme.of(context).colorScheme.surface;
 
   final TextEditingController _nomeController = TextEditingController();
 
@@ -1087,7 +1087,7 @@ class _ServicoFormSheetState extends State<ServicoFormSheet> {
 
     return Container(
       padding: EdgeInsets.fromLTRB(22, 22, 22, teclado + 25),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: _corFundo,
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
@@ -1106,23 +1106,26 @@ class _ServicoFormSheetState extends State<ServicoFormSheet> {
                 ),
               ),
             ),
-            const SizedBox(height: 20),
+            SizedBox(height: 20),
             Text(
               editando ? 'Editar serviço' : 'Novo serviço',
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 25,
                 fontWeight: FontWeight.bold,
-                color: Color(0xFF2D2140),
+                color: Theme.of(context).colorScheme.onSurface,
               ),
             ),
-            const SizedBox(height: 6),
+            SizedBox(height: 6),
             Text(
               editando
                   ? 'Atualize os dados do serviço.'
                   : 'Cadastre um novo serviço para usar na agenda.',
-              style: const TextStyle(fontSize: 13, color: Color(0xFF766A85)),
+              style: TextStyle(
+                fontSize: 13,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
-            const SizedBox(height: 22),
+            SizedBox(height: 22),
             TextField(
               controller: _nomeController,
               textCapitalization: TextCapitalization.words,
@@ -1131,7 +1134,7 @@ class _ServicoFormSheetState extends State<ServicoFormSheet> {
                 prefixIcon: Icon(Icons.content_cut),
               ),
             ),
-            const SizedBox(height: 14),
+            SizedBox(height: 14),
             DropdownButtonFormField<String>(
               initialValue: _categoria,
               isExpanded: true,
@@ -1155,7 +1158,7 @@ class _ServicoFormSheetState extends State<ServicoFormSheet> {
                 });
               },
             ),
-            const SizedBox(height: 14),
+            SizedBox(height: 14),
             Row(
               children: [
                 Expanded(
@@ -1171,7 +1174,7 @@ class _ServicoFormSheetState extends State<ServicoFormSheet> {
                     ),
                   ),
                 ),
-                const SizedBox(width: 12),
+                SizedBox(width: 12),
                 Expanded(
                   child: TextField(
                     controller: _duracaoController,
@@ -1185,7 +1188,7 @@ class _ServicoFormSheetState extends State<ServicoFormSheet> {
                 ),
               ],
             ),
-            const SizedBox(height: 14),
+            SizedBox(height: 14),
             TextField(
               controller: _custoController,
               keyboardType: const TextInputType.numberWithOptions(
@@ -1197,7 +1200,7 @@ class _ServicoFormSheetState extends State<ServicoFormSheet> {
                 prefixIcon: Icon(Icons.inventory_2_outlined),
               ),
             ),
-            const SizedBox(height: 14),
+            SizedBox(height: 14),
             TextField(
               controller: _descricaoController,
               maxLines: 3,
@@ -1208,7 +1211,7 @@ class _ServicoFormSheetState extends State<ServicoFormSheet> {
                 prefixIcon: Icon(Icons.notes_outlined),
               ),
             ),
-            const SizedBox(height: 14),
+            SizedBox(height: 14),
             DropdownButtonFormField<String>(
               initialValue: _unidadeId,
               isExpanded: true,
@@ -1228,7 +1231,7 @@ class _ServicoFormSheetState extends State<ServicoFormSheet> {
                 });
               },
             ),
-            const SizedBox(height: 14),
+            SizedBox(height: 14),
             TextField(
               controller: _comissaoPercentualController,
               keyboardType: const TextInputType.numberWithOptions(
@@ -1239,15 +1242,15 @@ class _ServicoFormSheetState extends State<ServicoFormSheet> {
                 prefixIcon: Icon(Icons.percent_outlined),
               ),
             ),
-            const SizedBox(height: 14),
-            const Text(
+            SizedBox(height: 14),
+            Text(
               'Cor de Identificação',
               style: TextStyle(
                 fontWeight: FontWeight.w600,
-                color: Color(0xFF2D2140),
+                color: Theme.of(context).colorScheme.onSurface,
               ),
             ),
-            const SizedBox(height: 8),
+            SizedBox(height: 8),
             SizedBox(
               height: 40,
               child: ListView.builder(
@@ -1275,17 +1278,17 @@ class _ServicoFormSheetState extends State<ServicoFormSheet> {
                 },
               ),
             ),
-            const SizedBox(height: 14),
-            const Text(
+            SizedBox(height: 14),
+            Text(
               'Profissionais Autorizados',
               style: TextStyle(
                 fontWeight: FontWeight.w600,
-                color: Color(0xFF2D2140),
+                color: Theme.of(context).colorScheme.onSurface,
               ),
             ),
-            const SizedBox(height: 8),
+            SizedBox(height: 8),
             if (_carregandoDependencias)
-              const CircularProgressIndicator()
+              CircularProgressIndicator()
             else
               ..._profissionais.map((p) {
                 return CheckboxListTile(
@@ -1302,20 +1305,23 @@ class _ServicoFormSheetState extends State<ServicoFormSheet> {
                   },
                 );
               }),
-            const SizedBox(height: 8),
+            SizedBox(height: 8),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
               value: _ativo,
-              title: const Text(
+              title: Text(
                 'Serviço ativo',
                 style: TextStyle(
                   fontWeight: FontWeight.w600,
-                  color: Color(0xFF2D2140),
+                  color: Theme.of(context).colorScheme.onSurface,
                 ),
               ),
-              subtitle: const Text(
+              subtitle: Text(
                 'Serviços inativos não aparecem em novos agendamentos.',
-                style: TextStyle(fontSize: 12, color: Color(0xFF766A85)),
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
               ),
               activeThumbColor: _corPrincipal,
               onChanged: (valor) {
@@ -1324,16 +1330,13 @@ class _ServicoFormSheetState extends State<ServicoFormSheet> {
                 });
               },
             ),
-            const SizedBox(height: 18),
+            SizedBox(height: 18),
             FilledButton.icon(
               onPressed: _salvar,
-              icon: const Icon(Icons.save_outlined),
+              icon: Icon(Icons.save_outlined),
               label: Text(
                 editando ? 'Salvar alterações' : 'Salvar serviço',
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
               style: FilledButton.styleFrom(
                 backgroundColor: _corPrincipal,
@@ -1532,8 +1535,8 @@ class _FichaConsumoSheetState extends State<FichaConsumoSheet> {
     return Container(
       padding: EdgeInsets.fromLTRB(22, 22, 22, teclado + 25),
       height: MediaQuery.of(context).size.height * 0.85,
-      decoration: const BoxDecoration(
-        color: Color(0xFFF9F6FC),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
       child: Column(
@@ -1549,21 +1552,24 @@ class _FichaConsumoSheetState extends State<FichaConsumoSheet> {
               ),
             ),
           ),
-          const SizedBox(height: 20),
-          const Text(
+          SizedBox(height: 20),
+          Text(
             'Ficha de Consumo',
             style: TextStyle(
               fontSize: 25,
               fontWeight: FontWeight.bold,
-              color: Color(0xFF2D2140),
+              color: Theme.of(context).colorScheme.onSurface,
             ),
           ),
-          const SizedBox(height: 6),
+          SizedBox(height: 6),
           Text(
             'Materiais usados no serviço: ${widget.servico.nome}',
-            style: const TextStyle(fontSize: 13, color: Color(0xFF766A85)),
+            style: TextStyle(
+              fontSize: 13,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
           ),
-          const SizedBox(height: 22),
+          SizedBox(height: 22),
           DropdownButtonFormField<String>(
             initialValue: _itemSelecionado,
             isExpanded: true,
@@ -1573,7 +1579,7 @@ class _FichaConsumoSheetState extends State<FichaConsumoSheet> {
             }).toList(),
             onChanged: (v) => setState(() => _itemSelecionado = v),
           ),
-          const SizedBox(height: 14),
+          SizedBox(height: 14),
           Row(
             children: [
               Expanded(
@@ -1585,7 +1591,7 @@ class _FichaConsumoSheetState extends State<FichaConsumoSheet> {
                   decoration: const InputDecoration(labelText: 'Quantidade'),
                 ),
               ),
-              const SizedBox(width: 14),
+              SizedBox(width: 14),
               Expanded(
                 child: TextField(
                   controller: _unidadeController,
@@ -1594,21 +1600,21 @@ class _FichaConsumoSheetState extends State<FichaConsumoSheet> {
                   ),
                 ),
               ),
-              const SizedBox(width: 14),
+              SizedBox(width: 14),
               IconButton(
-                icon: const Icon(
+                icon: Icon(
                   Icons.add_circle,
-                  color: Color(0xFF70569A),
+                  color: Theme.of(context).colorScheme.primary,
                   size: 36,
                 ),
                 onPressed: _adicionarItem,
               ),
             ],
           ),
-          const SizedBox(height: 22),
+          SizedBox(height: 22),
           Expanded(
             child: _carregando
-                ? const Center(child: CircularProgressIndicator())
+                ? Center(child: CircularProgressIndicator())
                 : ListView.builder(
                     itemCount: _materiais.length,
                     itemBuilder: (context, index) {
@@ -1626,7 +1632,7 @@ class _FichaConsumoSheetState extends State<FichaConsumoSheet> {
                           '${material.quantidade} ${material.unidadeMedida ?? ''}',
                         ),
                         trailing: IconButton(
-                          icon: const Icon(Icons.delete, color: Colors.red),
+                          icon: Icon(Icons.delete, color: Colors.red),
                           onPressed: () => _removerItem(material.id),
                         ),
                       );

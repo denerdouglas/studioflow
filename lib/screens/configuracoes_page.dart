@@ -139,18 +139,18 @@ class _ConfiguracoesPageState extends State<ConfiguracoesPage> {
       );
     }
     return Scaffold(
-      appBar: AppBar(title: const Text('Configurações')),
+      appBar: AppBar(title: Text('Configurações')),
       body: _carregando
-          ? const Center(child: CircularProgressIndicator())
+          ? Center(child: CircularProgressIndicator())
           : ListView(
               padding: const EdgeInsets.all(20),
               children: [
                 Card(
                   child: ListTile(
-                    leading: const Icon(Icons.groups_outlined),
-                    title: const Text('Equipe'),
-                    subtitle: const Text('Ativos, solicitações e inativos'),
-                    trailing: const Icon(Icons.chevron_right),
+                    leading: Icon(Icons.groups_outlined),
+                    title: Text('Equipe'),
+                    subtitle: Text('Ativos, solicitações e inativos'),
+                    trailing: Icon(Icons.chevron_right),
                     onTap: () => Navigator.push(
                       context,
                       AppRoutes.material(builder: (_) => const EquipePage()),
@@ -159,10 +159,10 @@ class _ConfiguracoesPageState extends State<ConfiguracoesPage> {
                 ),
                 Card(
                   child: ListTile(
-                    leading: const Icon(Icons.swap_horiz),
-                    title: const Text('Minhas unidades'),
-                    subtitle: const Text('Trocar de unidade com segurança'),
-                    trailing: const Icon(Icons.chevron_right),
+                    leading: Icon(Icons.swap_horiz),
+                    title: Text('Minhas unidades'),
+                    subtitle: Text('Trocar de unidade com segurança'),
+                    trailing: Icon(Icons.chevron_right),
                     onTap: () => Navigator.push(
                       context,
                       AppRoutes.material(
@@ -188,15 +188,15 @@ class _ConfiguracoesPageState extends State<ConfiguracoesPage> {
                 ),
                 _campo(_endereco, 'Endereço', Icons.location_on_outlined),
                 _campo(_pix, 'Chave Pix', Icons.pix),
-                const SizedBox(height: 4),
+                SizedBox(height: 4),
                 Card(
                   child: ListTile(
-                    leading: const Icon(Icons.location_on_outlined),
-                    title: const Text('Endereço e localização'),
-                    subtitle: const Text(
+                    leading: Icon(Icons.location_on_outlined),
+                    title: Text('Endereço e localização'),
+                    subtitle: Text(
                       'Endereço completo, rota e compartilhamento',
                     ),
-                    trailing: const Icon(Icons.chevron_right),
+                    trailing: Icon(Icons.chevron_right),
                     onTap: () => Navigator.push(
                       context,
                       AppRoutes.material(
@@ -209,12 +209,12 @@ class _ConfiguracoesPageState extends State<ConfiguracoesPage> {
                     _usuario.podeAcao(AcaoPermissao.configurarPix))
                   Card(
                     child: ListTile(
-                      leading: const Icon(Icons.pix),
-                      title: const Text('Pagamentos e Pix'),
-                      subtitle: const Text(
+                      leading: Icon(Icons.pix),
+                      title: Text('Pagamentos e Pix'),
+                      subtitle: Text(
                         'Chave, recebedor, sinal e formas aceitas',
                       ),
-                      trailing: const Icon(Icons.chevron_right),
+                      trailing: Icon(Icons.chevron_right),
                       onTap: () => Navigator.push(
                         context,
                         AppRoutes.material(
@@ -225,12 +225,12 @@ class _ConfiguracoesPageState extends State<ConfiguracoesPage> {
                   ),
                 Card(
                   child: ListTile(
-                    leading: const Icon(Icons.category_outlined),
-                    title: const Text('Modalidades'),
-                    subtitle: const Text(
+                    leading: Icon(Icons.category_outlined),
+                    title: Text('Modalidades'),
+                    subtitle: Text(
                       'Áreas do estabelecimento, vínculos e atalhos da Home',
                     ),
-                    trailing: const Icon(Icons.chevron_right),
+                    trailing: Icon(Icons.chevron_right),
                     onTap: () => Navigator.push(
                       context,
                       AppRoutes.material(
@@ -241,12 +241,10 @@ class _ConfiguracoesPageState extends State<ConfiguracoesPage> {
                 ),
                 Card(
                   child: ListTile(
-                    leading: const Icon(Icons.event_available_outlined),
-                    title: const Text('Agendamento Online'),
-                    subtitle: const Text(
-                      'Link público, compartilhamento e QR Code',
-                    ),
-                    trailing: const Icon(Icons.chevron_right),
+                    leading: Icon(Icons.event_available_outlined),
+                    title: Text('Agendamento Online'),
+                    subtitle: Text('Link público, compartilhamento e QR Code'),
+                    trailing: Icon(Icons.chevron_right),
                     onTap: () => Navigator.push(
                       context,
                       AppRoutes.material(
@@ -257,10 +255,10 @@ class _ConfiguracoesPageState extends State<ConfiguracoesPage> {
                 ),
                 Card(
                   child: ListTile(
-                    leading: const Icon(Icons.palette_outlined),
-                    title: const Text('Aparência'),
-                    subtitle: const Text('Logo, cores e tema claro ou escuro'),
-                    trailing: const Icon(Icons.chevron_right),
+                    leading: Icon(Icons.palette_outlined),
+                    title: Text('Aparência'),
+                    subtitle: Text('Logo, cores e tema claro ou escuro'),
+                    trailing: Icon(Icons.chevron_right),
                     onTap: () => Navigator.push(
                       context,
                       AppRoutes.material(builder: (_) => const AparenciaPage()),
@@ -269,12 +267,12 @@ class _ConfiguracoesPageState extends State<ConfiguracoesPage> {
                 ),
                 Card(
                   child: ListTile(
-                    leading: const Icon(Icons.message_outlined),
-                    title: const Text('Modelos de mensagens'),
-                    subtitle: const Text(
+                    leading: Icon(Icons.message_outlined),
+                    title: Text('Modelos de mensagens'),
+                    subtitle: Text(
                       'Editar, testar, duplicar e restaurar modelos',
                     ),
-                    trailing: const Icon(Icons.chevron_right),
+                    trailing: Icon(Icons.chevron_right),
                     onTap: () => Navigator.push(
                       context,
                       AppRoutes.material(
@@ -283,14 +281,14 @@ class _ConfiguracoesPageState extends State<ConfiguracoesPage> {
                     ),
                   ),
                 ),
-                const SizedBox(height: 12),
+                SizedBox(height: 12),
                 _titulo('Funcionamento'),
                 Row(
                   children: [
                     Expanded(
                       child: _campo(_abertura, 'Abertura', Icons.schedule),
                     ),
-                    const SizedBox(width: 12),
+                    SizedBox(width: 12),
                     Expanded(
                       child: _campo(_fechamento, 'Fechamento', Icons.schedule),
                     ),
@@ -302,7 +300,7 @@ class _ConfiguracoesPageState extends State<ConfiguracoesPage> {
                   Icons.timer_outlined,
                   teclado: TextInputType.number,
                 ),
-                const Text('Dias de funcionamento'),
+                Text('Dias de funcionamento'),
                 Wrap(
                   spacing: 8,
                   children: List.generate(7, (indice) {
@@ -331,7 +329,7 @@ class _ConfiguracoesPageState extends State<ConfiguracoesPage> {
                     );
                   }),
                 ),
-                const SizedBox(height: 16),
+                SizedBox(height: 16),
                 _titulo('Preferências'),
                 const ListTile(
                   contentPadding: EdgeInsets.zero,
@@ -342,20 +340,20 @@ class _ConfiguracoesPageState extends State<ConfiguracoesPage> {
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
                   value: _notificacoes,
-                  title: const Text('Notificações ativadas'),
+                  title: Text('Notificações ativadas'),
                   onChanged: (valor) => setState(() => _notificacoes = valor),
                 ),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
                   value: _confirmarExclusoes,
-                  title: const Text('Confirmar antes de excluir registros'),
+                  title: Text('Confirmar antes de excluir registros'),
                   onChanged: (valor) =>
                       setState(() => _confirmarExclusoes = valor),
                 ),
-                const SizedBox(height: 20),
+                SizedBox(height: 20),
                 FilledButton.icon(
                   onPressed: _salvando ? null : _salvar,
-                  icon: const Icon(Icons.save_outlined),
+                  icon: Icon(Icons.save_outlined),
                   label: Text(
                     _salvando ? 'Salvando...' : 'Salvar configurações',
                   ),
@@ -370,7 +368,7 @@ class _ConfiguracoesPageState extends State<ConfiguracoesPage> {
       padding: const EdgeInsets.only(bottom: 12, top: 8),
       child: Text(
         texto,
-        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+        style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
       ),
     );
   }

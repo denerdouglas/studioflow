@@ -10,10 +10,10 @@ class CaixaPage extends StatefulWidget {
 }
 
 class _CaixaPageState extends State<CaixaPage> {
-  static const Color _corPrincipal = Color(0xFF70569A);
-  static const Color _corFundo = Color(0xFFF9F6FC);
-  static const Color _textoEscuro = Color(0xFF2D2140);
-  static const Color _textoClaro = Color(0xFF766A85);
+  Color get _corPrincipal => Theme.of(context).colorScheme.primary;
+  Color get _corFundo => Theme.of(context).colorScheme.surface;
+  Color get _textoEscuro => Theme.of(context).colorScheme.onSurface;
+  Color get _textoClaro => Theme.of(context).colorScheme.onSurfaceVariant;
   static const Color _verde = Color(0xFF15996B);
   static const Color _vermelho = Color(0xFFD64D64);
 
@@ -254,21 +254,21 @@ class _CaixaPageState extends State<CaixaPage> {
       context: context,
       builder: (_) {
         return AlertDialog(
-          title: const Text('Excluir movimentação?'),
+          title: Text('Excluir movimentação?'),
           content: Text('Deseja excluir “${movimento.descricao}”?'),
           actions: [
             TextButton(
               onPressed: () {
                 Navigator.pop(context, false);
               },
-              child: const Text('Cancelar'),
+              child: Text('Cancelar'),
             ),
             FilledButton(
               onPressed: () {
                 Navigator.pop(context, true);
               },
               style: FilledButton.styleFrom(backgroundColor: _vermelho),
-              child: const Text('Excluir'),
+              child: Text('Excluir'),
             ),
           ],
         );
@@ -287,9 +287,9 @@ class _CaixaPageState extends State<CaixaPage> {
           children: [
             _cabecalho(),
             _seletorData(),
-            const SizedBox(height: 14),
+            SizedBox(height: 14),
             _resumoFinanceiro(),
-            const SizedBox(height: 14),
+            SizedBox(height: 14),
             Expanded(child: _conteudo()),
           ],
         ),
@@ -299,8 +299,8 @@ class _CaixaPageState extends State<CaixaPage> {
         onPressed: _abrirNovaMovimentacao,
         backgroundColor: _corPrincipal,
         foregroundColor: Colors.white,
-        icon: const Icon(Icons.add),
-        label: const Text(
+        icon: Icon(Icons.add),
+        label: Text(
           'Nova movimentação',
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
@@ -309,7 +309,7 @@ class _CaixaPageState extends State<CaixaPage> {
   }
 
   Widget _cabecalho() {
-    return const Padding(
+    return Padding(
       padding: EdgeInsets.fromLTRB(20, 18, 20, 10),
       child: Row(
         children: [
@@ -355,19 +355,19 @@ class _CaixaPageState extends State<CaixaPage> {
             ),
             child: Row(
               children: [
-                const Icon(Icons.calendar_month_outlined, color: _corPrincipal),
-                const SizedBox(width: 12),
+                Icon(Icons.calendar_month_outlined, color: _corPrincipal),
+                SizedBox(width: 12),
                 Expanded(
                   child: Text(
                     _formatarData(_dataSelecionada),
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
                       color: _textoEscuro,
                     ),
                   ),
                 ),
-                const Icon(Icons.keyboard_arrow_down, color: _textoClaro),
+                Icon(Icons.keyboard_arrow_down, color: _textoClaro),
               ],
             ),
           ),
@@ -385,22 +385,25 @@ class _CaixaPageState extends State<CaixaPage> {
             width: double.infinity,
             padding: const EdgeInsets.all(22),
             decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF70569A), Color(0xFF9A78C5)],
+              gradient: LinearGradient(
+                colors: [
+                  Theme.of(context).colorScheme.primary,
+                  Color(0xFF9A78C5),
+                ],
               ),
               borderRadius: BorderRadius.circular(24),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   'Saldo do dia',
                   style: TextStyle(color: Colors.white70, fontSize: 15),
                 ),
-                const SizedBox(height: 8),
+                SizedBox(height: 8),
                 Text(
                   'R\$ ${_resumo.saldo.toStringAsFixed(2)}',
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: Colors.white,
                     fontSize: 34,
                     fontWeight: FontWeight.bold,
@@ -409,7 +412,7 @@ class _CaixaPageState extends State<CaixaPage> {
               ],
             ),
           ),
-          const SizedBox(height: 10),
+          SizedBox(height: 10),
           Row(
             children: [
               Expanded(
@@ -421,7 +424,7 @@ class _CaixaPageState extends State<CaixaPage> {
                   cor: _verde,
                 ),
               ),
-              const SizedBox(width: 10),
+              SizedBox(width: 10),
               Expanded(
                 child: _ResumoCard(
                   titulo: 'Saídas',
@@ -440,9 +443,7 @@ class _CaixaPageState extends State<CaixaPage> {
 
   Widget _conteudo() {
     if (_carregando) {
-      return const Center(
-        child: CircularProgressIndicator(color: _corPrincipal),
-      );
+      return Center(child: CircularProgressIndicator(color: _corPrincipal));
     }
 
     if (_erro != null) {
@@ -452,14 +453,14 @@ class _CaixaPageState extends State<CaixaPage> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.error_outline, size: 65, color: _vermelho),
-              const SizedBox(height: 14),
+              Icon(Icons.error_outline, size: 65, color: _vermelho),
+              SizedBox(height: 14),
               Text(
                 _erro!,
                 textAlign: TextAlign.center,
-                style: const TextStyle(color: _textoEscuro),
+                style: TextStyle(color: _textoEscuro),
               ),
-              const SizedBox(height: 16),
+              SizedBox(height: 16),
               FilledButton.icon(
                 onPressed: () {
                   setState(() {
@@ -469,8 +470,8 @@ class _CaixaPageState extends State<CaixaPage> {
 
                   _carregarCaixa();
                 },
-                icon: const Icon(Icons.refresh),
-                label: const Text('Tentar novamente'),
+                icon: Icon(Icons.refresh),
+                label: Text('Tentar novamente'),
               ),
             ],
           ),
@@ -479,7 +480,7 @@ class _CaixaPageState extends State<CaixaPage> {
     }
 
     if (_movimentos.isEmpty) {
-      return const Center(
+      return Center(
         child: Padding(
           padding: EdgeInsets.all(30),
           child: Column(
@@ -518,7 +519,7 @@ class _CaixaPageState extends State<CaixaPage> {
         padding: const EdgeInsets.fromLTRB(20, 0, 20, 110),
         itemCount: _movimentos.length,
         separatorBuilder: (_, _) {
-          return const SizedBox(height: 10);
+          return SizedBox(height: 10);
         },
         itemBuilder: (context, index) {
           final movimento = _movimentos[index];
@@ -579,24 +580,27 @@ class _ResumoCard extends StatelessWidget {
             ),
             child: Icon(icone, color: cor),
           ),
-          const SizedBox(height: 10),
+          SizedBox(height: 10),
           Text(
             titulo,
-            style: const TextStyle(fontSize: 13, color: Color(0xFF766A85)),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'R\$ ${valor.toStringAsFixed(2)}',
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF2D2140),
+            style: TextStyle(
+              fontSize: 13,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
           ),
-          const SizedBox(height: 3),
+          SizedBox(height: 4),
+          Text(
+            'R\$ ${valor.toStringAsFixed(2)}',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Theme.of(context).colorScheme.onSurface,
+            ),
+          ),
+          SizedBox(height: 3),
           Text(
             '$quantidade movimentações',
-            style: const TextStyle(fontSize: 11, color: Color(0xFF968AA5)),
+            style: TextStyle(fontSize: 11, color: Color(0xFF968AA5)),
           ),
         ],
       ),
@@ -644,26 +648,26 @@ class _MovimentoCard extends StatelessWidget {
                   color: cor,
                 ),
               ),
-              const SizedBox(width: 13),
+              SizedBox(width: 13),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       movimento.descricao,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.bold,
-                        color: Color(0xFF2D2140),
+                        color: Theme.of(context).colorScheme.onSurface,
                       ),
                     ),
-                    const SizedBox(height: 4),
+                    SizedBox(height: 4),
                     Text(
                       '${movimento.categoria} • '
                       '${movimento.formaPagamento}',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12,
-                        color: Color(0xFF766A85),
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                     ),
                   ],
@@ -681,13 +685,10 @@ class _MovimentoCard extends StatelessWidget {
                       color: cor,
                     ),
                   ),
-                  const SizedBox(height: 4),
+                  SizedBox(height: 4),
                   Text(
                     _formatarHora(movimento.data),
-                    style: const TextStyle(
-                      fontSize: 11,
-                      color: Color(0xFF968AA5),
-                    ),
+                    style: TextStyle(fontSize: 11, color: Color(0xFF968AA5)),
                   ),
                 ],
               ),
@@ -720,8 +721,8 @@ class OpcoesMovimentoSheet extends StatelessWidget {
 
     return Container(
       padding: const EdgeInsets.fromLTRB(22, 18, 22, 28),
-      decoration: const BoxDecoration(
-        color: Color(0xFFF9F6FC),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
       child: Column(
@@ -738,7 +739,7 @@ class OpcoesMovimentoSheet extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(height: 20),
+          SizedBox(height: 20),
           Row(
             children: [
               Container(
@@ -755,20 +756,20 @@ class OpcoesMovimentoSheet extends StatelessWidget {
                   color: cor,
                 ),
               ),
-              const SizedBox(width: 13),
+              SizedBox(width: 13),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       movimento.descricao,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
-                        color: Color(0xFF2D2140),
+                        color: Theme.of(context).colorScheme.onSurface,
                       ),
                     ),
-                    const SizedBox(height: 4),
+                    SizedBox(height: 4),
                     Text(
                       'R\$ ${movimento.valor.toStringAsFixed(2)}',
                       style: TextStyle(
@@ -782,11 +783,11 @@ class OpcoesMovimentoSheet extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 22),
+          SizedBox(height: 22),
           _OpcaoMovimento(
             titulo: 'Editar movimentação',
             icone: Icons.edit_outlined,
-            cor: const Color(0xFF70569A),
+            cor: Theme.of(context).colorScheme.primary,
             onTap: () {
               Navigator.pop(context, 'editar');
             },
@@ -833,12 +834,12 @@ class _OpcaoMovimento extends StatelessWidget {
       ),
       title: Text(
         titulo,
-        style: const TextStyle(
+        style: TextStyle(
           fontWeight: FontWeight.w600,
-          color: Color(0xFF2D2140),
+          color: Theme.of(context).colorScheme.onSurface,
         ),
       ),
-      trailing: const Icon(Icons.chevron_right),
+      trailing: Icon(Icons.chevron_right),
       onTap: onTap,
     );
   }
@@ -859,9 +860,9 @@ class NovaMovimentacaoSheet extends StatefulWidget {
 }
 
 class _NovaMovimentacaoSheetState extends State<NovaMovimentacaoSheet> {
-  static const Color _corPrincipal = Color(0xFF70569A);
+  Color get _corPrincipal => Theme.of(context).colorScheme.primary;
 
-  static const Color _corFundo = Color(0xFFF9F6FC);
+  Color get _corFundo => Theme.of(context).colorScheme.surface;
 
   final TextEditingController _descricaoController = TextEditingController();
 
@@ -1021,7 +1022,7 @@ class _NovaMovimentacaoSheetState extends State<NovaMovimentacaoSheet> {
 
     return Container(
       padding: EdgeInsets.fromLTRB(22, 22, 22, teclado + 25),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: _corFundo,
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
@@ -1040,21 +1041,24 @@ class _NovaMovimentacaoSheetState extends State<NovaMovimentacaoSheet> {
                 ),
               ),
             ),
-            const SizedBox(height: 20),
+            SizedBox(height: 20),
             Text(
               editando ? 'Editar movimentação' : 'Nova movimentação',
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 25,
                 fontWeight: FontWeight.bold,
-                color: Color(0xFF2D2140),
+                color: Theme.of(context).colorScheme.onSurface,
               ),
             ),
-            const SizedBox(height: 6),
-            const Text(
+            SizedBox(height: 6),
+            Text(
               'Registre uma entrada ou saída do caixa.',
-              style: TextStyle(fontSize: 13, color: Color(0xFF766A85)),
+              style: TextStyle(
+                fontSize: 13,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
-            const SizedBox(height: 22),
+            SizedBox(height: 22),
             SegmentedButton<String>(
               segments: const [
                 ButtonSegment(
@@ -1075,7 +1079,7 @@ class _NovaMovimentacaoSheetState extends State<NovaMovimentacaoSheet> {
                 });
               },
             ),
-            const SizedBox(height: 16),
+            SizedBox(height: 16),
             TextField(
               controller: _descricaoController,
               textCapitalization: TextCapitalization.sentences,
@@ -1084,7 +1088,7 @@ class _NovaMovimentacaoSheetState extends State<NovaMovimentacaoSheet> {
                 prefixIcon: Icon(Icons.description_outlined),
               ),
             ),
-            const SizedBox(height: 14),
+            SizedBox(height: 14),
             TextField(
               controller: _valorController,
               keyboardType: const TextInputType.numberWithOptions(
@@ -1096,7 +1100,7 @@ class _NovaMovimentacaoSheetState extends State<NovaMovimentacaoSheet> {
                 prefixIcon: Icon(Icons.attach_money),
               ),
             ),
-            const SizedBox(height: 14),
+            SizedBox(height: 14),
             DropdownButtonFormField<String>(
               initialValue: _categoria,
               decoration: const InputDecoration(
@@ -1119,7 +1123,7 @@ class _NovaMovimentacaoSheetState extends State<NovaMovimentacaoSheet> {
                 });
               },
             ),
-            const SizedBox(height: 14),
+            SizedBox(height: 14),
             DropdownButtonFormField<String>(
               initialValue: _formaPagamento,
               decoration: const InputDecoration(
@@ -1139,7 +1143,7 @@ class _NovaMovimentacaoSheetState extends State<NovaMovimentacaoSheet> {
                 });
               },
             ),
-            const SizedBox(height: 14),
+            SizedBox(height: 14),
             InkWell(
               onTap: _selecionarData,
               borderRadius: BorderRadius.circular(14),
@@ -1151,7 +1155,7 @@ class _NovaMovimentacaoSheetState extends State<NovaMovimentacaoSheet> {
                 child: Text(_formatarData(_dataSelecionada)),
               ),
             ),
-            const SizedBox(height: 14),
+            SizedBox(height: 14),
             TextField(
               controller: _observacoesController,
               maxLines: 3,
@@ -1162,16 +1166,13 @@ class _NovaMovimentacaoSheetState extends State<NovaMovimentacaoSheet> {
                 prefixIcon: Icon(Icons.notes_outlined),
               ),
             ),
-            const SizedBox(height: 22),
+            SizedBox(height: 22),
             FilledButton.icon(
               onPressed: _salvar,
-              icon: const Icon(Icons.save_outlined),
+              icon: Icon(Icons.save_outlined),
               label: Text(
                 editando ? 'Salvar alterações' : 'Salvar movimentação',
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
               style: FilledButton.styleFrom(
                 backgroundColor: _corPrincipal,

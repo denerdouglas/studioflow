@@ -32,17 +32,17 @@ class _JoiasConsignadasPageState extends State<JoiasConsignadasPage> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Loja • Consignados')),
+    appBar: AppBar(title: Text('Loja • Consignados')),
     floatingActionButton: FloatingActionButton.extended(
       onPressed: create,
-      icon: const Icon(Icons.add),
-      label: const Text('Nova remessa'),
+      icon: Icon(Icons.add),
+      label: Text('Nova remessa'),
     ),
     body: FutureBuilder<List<Map<String, Object?>>>(
       future: future,
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
-          return const Center(child: CircularProgressIndicator());
+          return Center(child: CircularProgressIndicator());
         }
         final lots = snapshot.data!
             .where(
@@ -90,7 +90,7 @@ class _JoiasConsignadasPageState extends State<JoiasConsignadasPage> {
                             subtitle: Text(
                               '${lot['status'] ?? 'aberta'} • recebidas ${lot['quantidade_recebida'] ?? 0} • vendidas ${lot['quantidade_vendida'] ?? 0} • disponíveis ${lot['quantidade_disponivel'] ?? 0}',
                             ),
-                            trailing: const Icon(Icons.chevron_right),
+                            trailing: Icon(Icons.chevron_right),
                             onTap: () => Navigator.push(
                               context,
                               MaterialPageRoute(
@@ -162,7 +162,7 @@ class _JoiasLotePageState extends State<JoiasLotePage> {
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialog) => AlertDialog(
-          title: const Text('Vender peça exata'),
+          title: Text('Vender peça exata'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -206,11 +206,11 @@ class _JoiasLotePageState extends State<JoiasLotePage> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancelar'),
+              child: Text('Cancelar'),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(context, true),
-              child: const Text('Confirmar venda'),
+              child: Text('Confirmar venda'),
             ),
           ],
         ),
@@ -267,13 +267,13 @@ class _JoiasLotePageState extends State<JoiasLotePage> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
-              child: const Text('Adicionar mais itens'),
+              child: Text('Adicionar mais itens'),
             ),
             FilledButton(
               onPressed: clientId.isEmpty
                   ? null
                   : () => Navigator.pop(context, true),
-              child: const Text('Finalizar comanda'),
+              child: Text('Finalizar comanda'),
             ),
           ],
         ),
@@ -301,7 +301,7 @@ class _JoiasLotePageState extends State<JoiasLotePage> {
       await showDialog<void>(
         context: context,
         builder: (context) => AlertDialog(
-          title: const Text('Venda da peça'),
+          title: Text('Venda da peça'),
           content: Text(
             '${piece['codigo_exclusivo']} • ${piece['nome']}\n'
             'Cliente: ${sale['cliente_nome'] ?? 'Não informado'}\n'
@@ -312,7 +312,7 @@ class _JoiasLotePageState extends State<JoiasLotePage> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Fechar'),
+              child: Text('Fechar'),
             ),
           ],
         ),
@@ -324,7 +324,7 @@ class _JoiasLotePageState extends State<JoiasLotePage> {
       final accepted = await showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
-          title: const Text('Devolver/Estornar'),
+          title: Text('Devolver/Estornar'),
           content: TextField(
             controller: reason,
             decoration: const InputDecoration(labelText: 'Motivo obrigatório'),
@@ -332,11 +332,11 @@ class _JoiasLotePageState extends State<JoiasLotePage> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancelar'),
+              child: Text('Cancelar'),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(context, true),
-              child: const Text('Estornar'),
+              child: Text('Estornar'),
             ),
           ],
         ),
@@ -358,7 +358,7 @@ class _JoiasLotePageState extends State<JoiasLotePage> {
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialog) => AlertDialog(
-          title: const Text('Editar venda'),
+          title: Text('Editar venda'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -391,11 +391,11 @@ class _JoiasLotePageState extends State<JoiasLotePage> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancelar'),
+              child: Text('Cancelar'),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(context, true),
-              child: const Text('Salvar'),
+              child: Text('Salvar'),
             ),
           ],
         ),
@@ -422,18 +422,18 @@ class _JoiasLotePageState extends State<JoiasLotePage> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Fechar/trocar remessa'),
+        title: Text('Fechar/trocar remessa'),
         content: Text(
           'As ${available.length} peças disponíveis serão devolvidas. Peças vendidas e eventos serão preservados.',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancelar'),
+            child: Text('Cancelar'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Devolver e fechar'),
+            child: Text('Devolver e fechar'),
           ),
         ],
       ),
@@ -459,7 +459,7 @@ class _JoiasLotePageState extends State<JoiasLotePage> {
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setLocal) => AlertDialog(
-          title: const Text('Acerto da remessa'),
+          title: Text('Acerto da remessa'),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -502,13 +502,13 @@ class _JoiasLotePageState extends State<JoiasLotePage> {
                   value: confirmarDivergencia,
                   onChanged: (value) =>
                       setLocal(() => confirmarDivergencia = value ?? false),
-                  title: const Text('Confirmar eventual divergência'),
+                  title: Text('Confirmar eventual divergência'),
                 ),
                 CheckboxListTile(
                   value: marcarPago,
                   onChanged: (value) =>
                       setLocal(() => marcarPago = value ?? false),
-                  title: const Text('Pagamento realmente efetuado'),
+                  title: Text('Pagamento realmente efetuado'),
                 ),
               ],
             ),
@@ -516,11 +516,11 @@ class _JoiasLotePageState extends State<JoiasLotePage> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancelar'),
+              child: Text('Cancelar'),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(context, true),
-              child: const Text('Conferir acerto'),
+              child: Text('Conferir acerto'),
             ),
           ],
         ),
@@ -571,7 +571,7 @@ class _JoiasLotePageState extends State<JoiasLotePage> {
                   ConsignacaoAcertoPage(remessaId: widget.lote['id'] as String),
             ),
           ).then((_) => reload()),
-          icon: const Icon(Icons.request_quote_outlined),
+          icon: Icon(Icons.request_quote_outlined),
         ),
         IconButton(
           tooltip: 'Conferir por Bip',
@@ -584,7 +584,7 @@ class _JoiasLotePageState extends State<JoiasLotePage> {
               ),
             ),
           ).then((_) => reload()),
-          icon: const Icon(Icons.qr_code_scanner),
+          icon: Icon(Icons.qr_code_scanner),
         ),
         if (widget.lote['status'] == 'aberta')
           IconButton(
@@ -598,13 +598,13 @@ class _JoiasLotePageState extends State<JoiasLotePage> {
                 ),
               ),
             ).then((_) => reload()),
-            icon: const Icon(Icons.assignment_return_outlined),
+            icon: Icon(Icons.assignment_return_outlined),
           ),
         if (widget.lote['status'] == 'aberta')
           IconButton(
             tooltip: 'Fechar/trocar remessa',
             onPressed: fechar,
-            icon: const Icon(Icons.inventory_2_outlined),
+            icon: Icon(Icons.inventory_2_outlined),
           ),
       ],
     ),
@@ -669,7 +669,7 @@ class _JoiasLotePageState extends State<JoiasLotePage> {
             future: future,
             builder: (context, snapshot) {
               if (!snapshot.hasData) {
-                return const Center(child: CircularProgressIndicator());
+                return Center(child: CircularProgressIndicator());
               }
               return ListView.builder(
                 itemCount: snapshot.data!.length,
@@ -749,7 +749,7 @@ class _JoiasLotePageState extends State<JoiasLotePage> {
               padding: const EdgeInsets.all(12),
               child: FilledButton.icon(
                 onPressed: finalizarComanda,
-                icon: const Icon(Icons.receipt_long_outlined),
+                icon: Icon(Icons.receipt_long_outlined),
                 label: Text('Finalizar comanda (${selecionadas.length} peças)'),
               ),
             ),

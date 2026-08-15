@@ -29,10 +29,10 @@ class AgendaPage extends StatefulWidget {
 }
 
 class _AgendaPageState extends State<AgendaPage> {
-  static const Color _corPrincipal = Color(0xFF70569A);
-  static const Color _corFundo = Color(0xFFF9F6FC);
-  static const Color _textoEscuro = Color(0xFF2D2140);
-  static const Color _textoClaro = Color(0xFF766A85);
+  Color get _corPrincipal => Theme.of(context).colorScheme.primary;
+  Color get _corFundo => Theme.of(context).colorScheme.surface;
+  Color get _textoEscuro => Theme.of(context).colorScheme.onSurface;
+  Color get _textoClaro => Theme.of(context).colorScheme.onSurfaceVariant;
 
   final AgendaRepository _agendaRepository = AgendaRepository();
   final ModalidadesRepository _modalidadesRepository = ModalidadesRepository();
@@ -487,7 +487,7 @@ class _AgendaPageState extends State<AgendaPage> {
             mainAxisSize: MainAxisSize.min,
             children: [
               ListTile(
-                title: const Text('Nova data'),
+                title: Text('Nova data'),
                 subtitle: Text('${data.day}/${data.month}/${data.year}'),
                 onTap: () async {
                   final valor = await showDatePicker(
@@ -500,7 +500,7 @@ class _AgendaPageState extends State<AgendaPage> {
                 },
               ),
               ListTile(
-                title: const Text('Novo horário'),
+                title: Text('Novo horário'),
                 subtitle: Text(horario.format(context)),
                 onTap: () async {
                   final valor = await showTimePicker(
@@ -521,11 +521,11 @@ class _AgendaPageState extends State<AgendaPage> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancelar'),
+              child: Text('Cancelar'),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(context, true),
-              child: const Text('Reagendar'),
+              child: Text('Reagendar'),
             ),
           ],
         ),
@@ -613,18 +613,18 @@ class _AgendaPageState extends State<AgendaPage> {
     await showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Histórico do agendamento'),
+        title: Text('Histórico do agendamento'),
         content: SizedBox(
           width: double.maxFinite,
           child: eventos.isEmpty
-              ? const Text('Nenhuma alteração registrada ainda.')
+              ? Text('Nenhuma alteração registrada ainda.')
               : ListView(
                   shrinkWrap: true,
                   children: eventos
                       .map(
                         (e) => ListTile(
                           contentPadding: EdgeInsets.zero,
-                          leading: const Icon(Icons.history),
+                          leading: Icon(Icons.history),
                           title: Text(e.acao),
                           subtitle: Text(
                             '${e.data.day}/${e.data.month}/${e.data.year} ${e.data.hour.toString().padLeft(2, '0')}:${e.data.minute.toString().padLeft(2, '0')}\n${e.detalhes}',
@@ -637,7 +637,7 @@ class _AgendaPageState extends State<AgendaPage> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Fechar'),
+            child: Text('Fechar'),
           ),
         ],
       ),
@@ -653,14 +653,14 @@ class _AgendaPageState extends State<AgendaPage> {
       await showDialog<void>(
         context: context,
         builder: (context) => AlertDialog(
-          title: const Text('Exclusão bloqueada'),
-          content: const Text(
+          title: Text('Exclusão bloqueada'),
+          content: Text(
             'Este horário possui atendimento concluído, recebimento, comissão, cobrança paga ou sessão de pacote. Faça os estornos necessários ou apenas cancele o agendamento.',
           ),
           actions: [
             FilledButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Entendi'),
+              child: Text('Entendi'),
             ),
           ],
         ),
@@ -694,7 +694,7 @@ class _AgendaPageState extends State<AgendaPage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(mensagem),
-              const SizedBox(height: 14),
+              SizedBox(height: 14),
               TextField(
                 controller: controller,
                 autofocus: true,
@@ -710,7 +710,7 @@ class _AgendaPageState extends State<AgendaPage> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Voltar'),
+              child: Text('Voltar'),
             ),
             FilledButton(
               style: perigo
@@ -752,7 +752,7 @@ class _AgendaPageState extends State<AgendaPage> {
     final modeloSelecionado = await showDialog<ModeloMensagem>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Enviar lembrete'),
+        title: Text('Enviar lembrete'),
         content: SizedBox(
           width: double.maxFinite,
           child: ListView(
@@ -773,7 +773,7 @@ class _AgendaPageState extends State<AgendaPage> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancelar'),
+            child: Text('Cancelar'),
           ),
         ],
       ),
@@ -856,9 +856,9 @@ class _AgendaPageState extends State<AgendaPage> {
           children: [
             _cabecalho(),
             _seletorData(),
-            const SizedBox(height: 10),
+            SizedBox(height: 10),
             _filtroModalidade(),
-            const SizedBox(height: 12),
+            SizedBox(height: 12),
             Expanded(child: _conteudo()),
           ],
         ),
@@ -870,8 +870,8 @@ class _AgendaPageState extends State<AgendaPage> {
         },
         backgroundColor: _corPrincipal,
         foregroundColor: Colors.white,
-        icon: const Icon(Icons.add),
-        label: const Text(
+        icon: Icon(Icons.add),
+        label: Text(
           'Novo agendamento',
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
@@ -886,20 +886,20 @@ class _AgendaPageState extends State<AgendaPage> {
     return showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Conflito de Horário'),
+        title: Text('Conflito de Horário'),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(erro.mensagem),
-              const SizedBox(height: 16),
+              SizedBox(height: 16),
               if (erro.sugestoes.isNotEmpty) ...[
-                const Text(
+                Text(
                   'Sugestões de horários livres:',
                   style: TextStyle(fontWeight: FontWeight.bold),
                 ),
-                const SizedBox(height: 8),
+                SizedBox(height: 8),
                 ...erro.sugestoes.take(5).map((alt) {
                   final dataStr =
                       '${alt.day.toString().padLeft(2, '0')}/${alt.month.toString().padLeft(2, '0')}';
@@ -907,7 +907,7 @@ class _AgendaPageState extends State<AgendaPage> {
                       '${alt.hour.toString().padLeft(2, '0')}:${alt.minute.toString().padLeft(2, '0')}';
                   return ListTile(
                     contentPadding: EdgeInsets.zero,
-                    leading: const Icon(
+                    leading: Icon(
                       Icons.check_circle_outline,
                       color: _corPrincipal,
                     ),
@@ -930,7 +930,7 @@ class _AgendaPageState extends State<AgendaPage> {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancelar'),
+            child: Text('Cancelar'),
           ),
         ],
       ),
@@ -942,7 +942,7 @@ class _AgendaPageState extends State<AgendaPage> {
       padding: EdgeInsets.fromLTRB(20, 18, 20, 10),
       child: Row(
         children: [
-          const Expanded(
+          Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -968,7 +968,7 @@ class _AgendaPageState extends State<AgendaPage> {
               context,
               MaterialPageRoute(builder: (_) => const DisponibilidadePage()),
             ),
-            icon: const Icon(Icons.event_available),
+            icon: Icon(Icons.event_available),
           ),
         ],
       ),
@@ -992,19 +992,19 @@ class _AgendaPageState extends State<AgendaPage> {
             ),
             child: Row(
               children: [
-                const Icon(Icons.calendar_month_outlined, color: _corPrincipal),
-                const SizedBox(width: 12),
+                Icon(Icons.calendar_month_outlined, color: _corPrincipal),
+                SizedBox(width: 12),
                 Expanded(
                   child: Text(
                     _formatarData(_dataSelecionada),
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
                       color: _textoEscuro,
                     ),
                   ),
                 ),
-                const Icon(Icons.keyboard_arrow_down, color: _textoClaro),
+                Icon(Icons.keyboard_arrow_down, color: _textoClaro),
               ],
             ),
           ),
@@ -1020,7 +1020,7 @@ class _AgendaPageState extends State<AgendaPage> {
       scrollDirection: Axis.horizontal,
       children: [
         ChoiceChip(
-          label: const Text('Todos'),
+          label: Text('Todos'),
           selected: _modalidadeId == null,
           onSelected: (_) => setState(() {
             _modalidadeId = null;
@@ -1028,7 +1028,7 @@ class _AgendaPageState extends State<AgendaPage> {
             _profissionaisModalidade = const {};
           }),
         ),
-        const SizedBox(width: 8),
+        SizedBox(width: 8),
         ..._modalidades.map(
           (item) => Padding(
             padding: const EdgeInsets.only(right: 8),
@@ -1060,9 +1060,7 @@ class _AgendaPageState extends State<AgendaPage> {
   );
   Widget _conteudo() {
     if (_carregando) {
-      return const Center(
-        child: CircularProgressIndicator(color: _corPrincipal),
-      );
+      return Center(child: CircularProgressIndicator(color: _corPrincipal));
     }
 
     if (_erro != null) {
@@ -1079,7 +1077,7 @@ class _AgendaPageState extends State<AgendaPage> {
               )
               .toList();
     if (visible.isEmpty && _bloqueios.isEmpty) {
-      return const Center(
+      return Center(
         child: Text('Nenhum agendamento ou bloqueio para este filtro.'),
       );
     }
@@ -1134,14 +1132,14 @@ class _BloqueioCard extends StatelessWidget {
     color: const Color(0xFFFFF1F1),
     child: ListTile(
       onTap: onTap,
-      leading: const Icon(Icons.block, color: Colors.redAccent),
+      leading: Icon(Icons.block, color: Colors.redAccent),
       title: Text(
         bloqueio.motivo.isEmpty ? 'Horário bloqueado' : bloqueio.motivo,
       ),
       subtitle: Text(
         '${bloqueio.profissionalNome} • ${_hora(bloqueio.inicio)}–${_hora(bloqueio.fim)}',
       ),
-      trailing: const Icon(Icons.edit_outlined),
+      trailing: Icon(Icons.edit_outlined),
     ),
   );
 
@@ -1157,7 +1155,7 @@ class _AgendamentoCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const corPrincipal = Color(0xFF70569A);
+    final corPrincipal = Theme.of(context).colorScheme.primary;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
@@ -1187,77 +1185,81 @@ class _AgendamentoCard extends StatelessWidget {
                     children: [
                       Text(
                         _formatarHora(agendamento.inicio),
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
                           color: corPrincipal,
                         ),
                       ),
-                      const SizedBox(height: 3),
+                      SizedBox(height: 3),
                       Text(
                         _formatarHora(agendamento.fim),
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 11,
-                          color: Color(0xFF766A85),
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(width: 14),
+                SizedBox(width: 14),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         agendamento.clienteNome,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 17,
                           fontWeight: FontWeight.bold,
-                          color: Color(0xFF2D2140),
+                          color: Theme.of(context).colorScheme.onSurface,
                         ),
                       ),
-                      const SizedBox(height: 5),
+                      SizedBox(height: 5),
                       Row(
                         children: [
-                          const Icon(
+                          Icon(
                             Icons.content_cut,
                             size: 16,
                             color: corPrincipal,
                           ),
-                          const SizedBox(width: 6),
+                          SizedBox(width: 6),
                           Expanded(
                             child: Text(
                               agendamento.servicoNome,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 13,
-                                color: Color(0xFF766A85),
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSurfaceVariant,
                               ),
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 4),
+                      SizedBox(height: 4),
                       Row(
                         children: [
-                          const Icon(
+                          Icon(
                             Icons.badge_outlined,
                             size: 16,
                             color: corPrincipal,
                           ),
-                          const SizedBox(width: 6),
+                          SizedBox(width: 6),
                           Expanded(
                             child: Text(
                               agendamento.profissionalNome,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 13,
-                                color: Color(0xFF766A85),
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSurfaceVariant,
                               ),
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 9),
+                      SizedBox(height: 9),
                       Wrap(
                         spacing: 7,
                         runSpacing: 7,
@@ -1281,7 +1283,7 @@ class _AgendamentoCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                const Icon(Icons.more_vert, color: Color(0xFF968AA5)),
+                Icon(Icons.more_vert, color: Color(0xFF968AA5)),
               ],
             ),
           ),
@@ -1364,8 +1366,8 @@ class OpcoesAgendamentoSheet extends StatelessWidget {
         maxHeight: MediaQuery.sizeOf(context).height * 0.9,
       ),
       child: Container(
-        decoration: const BoxDecoration(
-          color: Color(0xFFF9F6FC),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surface,
           borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
         ),
         child: SafeArea(
@@ -1385,22 +1387,24 @@ class OpcoesAgendamentoSheet extends StatelessWidget {
                     ),
                   ),
                 ),
-                const SizedBox(height: 20),
+                SizedBox(height: 20),
                 Text(
                   agendamento.clienteNome,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 23,
                     fontWeight: FontWeight.bold,
-                    color: Color(0xFF2D2140),
+                    color: Theme.of(context).colorScheme.onSurface,
                   ),
                 ),
-                const SizedBox(height: 4),
+                SizedBox(height: 4),
                 Text(
                   '${agendamento.servicoNome} • '
                   '${_formatarHora(agendamento.inicio)}',
-                  style: const TextStyle(color: Color(0xFF766A85)),
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
                 ),
-                const SizedBox(height: 22),
+                SizedBox(height: 22),
                 _OpcaoAgendamento(
                   titulo: 'Confirmar',
                   icone: Icons.check_circle_outline,
@@ -1431,7 +1435,7 @@ class OpcoesAgendamentoSheet extends StatelessWidget {
                 _OpcaoAgendamento(
                   titulo: 'Reagendar este serviço',
                   icone: Icons.edit_calendar_outlined,
-                  cor: const Color(0xFF70569A),
+                  cor: Theme.of(context).colorScheme.primary,
                   onTap: () {
                     Navigator.pop(context, 'reagendar');
                   },
@@ -1542,12 +1546,12 @@ class _OpcaoAgendamento extends StatelessWidget {
       ),
       title: Text(
         titulo,
-        style: const TextStyle(
+        style: TextStyle(
           fontWeight: FontWeight.w600,
-          color: Color(0xFF2D2140),
+          color: Theme.of(context).colorScheme.onSurface,
         ),
       ),
-      trailing: const Icon(Icons.chevron_right),
+      trailing: Icon(Icons.chevron_right),
       onTap: onTap,
     );
   }
@@ -1618,7 +1622,7 @@ class _ConcluirAgendamentoDialogState extends State<ConcluirAgendamentoDialog> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(widget.instrucao),
-          const SizedBox(height: 14),
+          SizedBox(height: 14),
           TextField(
             controller: _valorController,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -1634,7 +1638,7 @@ class _ConcluirAgendamentoDialogState extends State<ConcluirAgendamentoDialog> {
           onPressed: () {
             Navigator.pop(context);
           },
-          child: const Text('Cancelar'),
+          child: Text('Cancelar'),
         ),
         FilledButton(onPressed: _confirmar, child: Text(widget.rotuloBotao)),
       ],

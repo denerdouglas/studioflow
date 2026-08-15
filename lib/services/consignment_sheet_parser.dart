@@ -1,14 +1,6 @@
 import '../models/domain/consignment_document_import.dart';
 
 class ConsignmentSheetParser {
-  static final _itemPattern = RegExp(
-    r'(?<![A-Z0-9])([A-Z]+\d+|\d{4,14})\s+(\d{1,3})\s+(\d{1,6}(?:[.,]\d{2}))(?!\d)',
-    caseSensitive: false,
-  );
-  static final _reversedItemPattern = RegExp(
-    r'(?<![\d.,])(\d{1,3})\s+(\d{1,6}(?:[.,]\d{2}))\s+([A-Z]+\d+|\d{4,14})(?![A-Z0-9])',
-    caseSensitive: false,
-  );
   static final _categoryPattern = RegExp(
     r'^\s*\d{3}\s*[-–]\s*(.+?)\s*$',
     caseSensitive: false,
@@ -48,28 +40,91 @@ class ConsignmentSheetParser {
       if (materialMatch != null) {
         material = _title(materialMatch.group(1)!);
       }
-      final matches = _itemPattern.allMatches(line).toList();
-      final reversedMatches = _reversedItemPattern.allMatches(line).toList();
-      final reversed =
-          reversedMatches.isNotEmpty &&
-          (matches.isEmpty ||
-              reversedMatches.first.start < matches.first.start);
-      for (final match in reversed ? reversedMatches : matches) {
-        items.add(
-          ConsignmentImportItem(
-            codigo: match.group(reversed ? 3 : 1)!,
-            categoria: category ?? '',
-            material: material ?? '',
-            quantidade: int.parse(match.group(reversed ? 1 : 2)!),
-            valorUnitario: _brazilianMoney(match.group(reversed ? 2 : 3)!),
-            descricao: category ?? '',
-          ),
-        );
+
+      if (_isHeader(line)) continue;
+
+      // Universal item parsing
+      final lineClean = line.replaceAll(RegExp(r'\s*\|\s*'), ' ');
+
+      // Procurar por preço e quantidade
+      final pricePattern = RegExp(r'(?:R\$\s*)?(\d{1,6}[.,]\d{2})(?!\d)');
+      final qtyPattern = RegExp(r'(?<!\d[.,])\b(\d{1,4})\b(?![.,]\d)');
+
+      var remainingLine = lineClean;
+      var foundAnyItem = false;
+
+      while (true) {
+        final priceMatch = pricePattern.firstMatch(remainingLine);
+        if (priceMatch == null) break;
+
+        final priceStr = priceMatch.group(1)!;
+        final price = _brazilianMoney(priceStr);
+
+        // A parte da string ANTES do preço + o próprio preço é o chunk atual
+        final chunk = remainingLine.substring(0, priceMatch.end);
+        remainingLine = remainingLine.substring(priceMatch.end).trim();
+
+        // Remover o preço do chunk para procurar a quantidade e código
+        var chunkSemPreco = chunk.replaceFirst(priceMatch.group(0)!, '').trim();
+
+        var qty = 1;
+        final qtyMatches = qtyPattern.allMatches(chunkSemPreco).toList();
+        if (qtyMatches.isNotEmpty) {
+          RegExpMatch bestMatch = qtyMatches.last;
+          for (final m in qtyMatches) {
+            if (int.parse(m.group(1)!) < 100) {
+              bestMatch = m;
+            }
+          }
+          qty = int.parse(bestMatch.group(1)!);
+          chunkSemPreco = chunkSemPreco
+              .replaceRange(bestMatch.start, bestMatch.end, '')
+              .replaceAll(RegExp(r'\s+'), ' ')
+              .trim();
+        }
+
+        final parts = chunkSemPreco.split(' ').where((e) => e.isNotEmpty).toList();
+        if (parts.isNotEmpty) {
+          String codigo = '';
+          String descricao = '';
+
+          final maybeCodeLast = parts.last;
+          final maybeCodeFirst = parts.first;
+
+          if (RegExp(r'^\d+$').hasMatch(maybeCodeLast) ||
+              (maybeCodeLast.length <= 6 && RegExp(r'\d').hasMatch(maybeCodeLast))) {
+            codigo = maybeCodeLast;
+            parts.removeLast();
+            descricao = parts.join(' ');
+          } else if (RegExp(r'^\d+$').hasMatch(maybeCodeFirst) ||
+              (maybeCodeFirst.length <= 6 && RegExp(r'\d').hasMatch(maybeCodeFirst))) {
+            codigo = maybeCodeFirst;
+            parts.removeAt(0);
+            descricao = parts.join(' ');
+          } else {
+            codigo = parts.length > 1 ? parts.removeLast() : parts.first;
+            descricao = parts.join(' ');
+          }
+
+          if (descricao.isEmpty) descricao = category ?? '';
+
+          items.add(
+            ConsignmentImportItem(
+              codigo: codigo,
+              categoria: category ?? '',
+              material: material ?? '',
+              quantidade: qty,
+              valorUnitario: price,
+              descricao: descricao.isNotEmpty ? _title(descricao) : (category ?? ''),
+            ),
+          );
+          foundAnyItem = true;
+        }
       }
-      if (matches.isEmpty &&
-          reversedMatches.isEmpty &&
-          RegExp(r'\d{4,}').hasMatch(line) &&
-          !_isHeader(line)) {
+
+      if (foundAnyItem) continue;
+
+      if (RegExp(r'\d{4,}').hasMatch(line) && !_isHeader(line)) {
         pending.add(
           ConsignmentPendingLine(
             lineNumber: rawIndex + 1,
@@ -118,7 +173,11 @@ class ConsignmentSheetParser {
   );
 
   static String? _representative(List<String> lines) {
-    final direct = _header(lines, const ['REPRESENTANTE', 'REPRESENT']);
+    final direct = _header(lines, const [
+      'FORNECEDOR',
+      'REPRESENTANTE',
+      'REPRESENT',
+    ]);
     if (direct != null &&
         !RegExp(
           r'^(?:VAL|QTD|PRODUTO)\b',
@@ -127,9 +186,13 @@ class ConsignmentSheetParser {
       return direct;
     }
     for (final line in lines) {
-      if (!_normalize(line).contains('REPRESENT')) continue;
+      if (!_normalize(line).contains('REPRESENT') &&
+          !_normalize(line).contains('FORNECEDOR')) {
+        continue;
+      }
       final cleaned = line
           .replaceAll(RegExp(r'REPRESENT(?:ANTE)?', caseSensitive: false), ' ')
+          .replaceAll(RegExp(r'FORNECEDOR', caseSensitive: false), ' ')
           .replaceAll(RegExp(r'DATA\s*ENVIO', caseSensitive: false), ' ')
           .replaceAll(RegExp(r'^\s*\d+\s*'), '')
           .replaceAll(RegExp(r'\s+'), ' ')
@@ -193,6 +256,7 @@ class ConsignmentSheetParser {
 
   static String? _header(List<String> lines, List<String> labels) {
     const allLabels = [
+      'FORNECEDOR',
       'REPRESENTANTE',
       'REPRESENT',
       'MOSTRUARIO',
@@ -214,8 +278,18 @@ class ConsignmentSheetParser {
         final valueStart = labelIndex + normalizedLabel.length;
         var valueEnd = line.length;
         for (final other in allLabels) {
-          final otherIndex = upper.indexOf(_normalize(other), valueStart);
-          if (otherIndex >= 0 && otherIndex < valueEnd) valueEnd = otherIndex;
+          if (other == label) continue;
+          final otherNormalized = _normalize(other);
+          // Look for other label as a distinct key, usually followed by : or -
+          final otherPattern = RegExp('\\b$otherNormalized\\b\\s*[:\\-]');
+          final match = otherPattern.firstMatch(upper.substring(valueStart));
+          if (match != null) {
+            final otherIndex = valueStart + match.start;
+            // Ensure it's not just a word in the middle of a sentence
+            if (otherIndex >= 0 && otherIndex < valueEnd) {
+              valueEnd = otherIndex;
+            }
+          }
         }
         var value = line
             .substring(valueStart.clamp(0, line.length), valueEnd)
@@ -229,6 +303,8 @@ class ConsignmentSheetParser {
         if (normalizedLabel == 'REPRESENT' ||
             normalizedLabel == 'REPRESENTANTE') {
           value = value.replaceFirst(RegExp(r'^\d+\s+(?=\S)'), '');
+        } else if (normalizedLabel == 'FORNECEDOR') {
+          value = value;
         }
         return value.isEmpty ? null : value;
       }
@@ -258,6 +334,7 @@ class ConsignmentSheetParser {
     }
     return const [
       'REPRESENT',
+      'FORNECEDOR',
       'MOSTRUARIO',
       'CONTRATO',
       'DATA ENVIO',
@@ -265,24 +342,49 @@ class ConsignmentSheetParser {
       'DATA PAGTO',
       'ZONA VENDA',
       'PRODUTO QTD VAL UN',
+      'TOTAL DE ITENS',
+      'VALOR TOTAL',
+      'CABEÇALHO',
     ].any(normalized.startsWith);
   }
 
   static (int?, double?) _declaredTotal(List<String> lines) {
-    final pattern = RegExp(
+    int? qty;
+    double? total;
+
+    final singleLinePattern = RegExp(
       r'(?<!\d)(\d{1,6})\s+ITENS?\s+TOTAL\s+(?:R\$\s*)?(\d{1,3}(?:\.\d{3})*(?:,\d{2})|\d+(?:[.,]\d{2}))',
       caseSensitive: false,
     );
+
+    final qtyPattern = RegExp(
+      r'TOTAL\s+(?:DE\s+)?ITENS\s+(\d{1,6})',
+      caseSensitive: false,
+    );
+    final totalPattern = RegExp(
+      r'VALOR\s+TOTAL\s+(?:R\$\s*)?(\d{1,3}(?:\.\d{3})*(?:,\d{2})|\d+(?:[.,]\d{2}))',
+      caseSensitive: false,
+    );
+
     for (final line in lines.reversed) {
-      final match = pattern.firstMatch(line);
-      if (match != null) {
+      final singleMatch = singleLinePattern.firstMatch(line);
+      if (singleMatch != null) {
         return (
-          int.tryParse(match.group(1)!),
-          _brazilianMoney(match.group(2)!),
+          int.tryParse(singleMatch.group(1)!),
+          _brazilianMoney(singleMatch.group(2)!),
         );
       }
+      if (qty == null) {
+        final qMatch = qtyPattern.firstMatch(line);
+        if (qMatch != null) qty = int.tryParse(qMatch.group(1)!);
+      }
+      if (total == null) {
+        final tMatch = totalPattern.firstMatch(line);
+        if (tMatch != null) total = _brazilianMoney(tMatch.group(1)!);
+      }
+      if (qty != null && total != null) break;
     }
-    return (null, null);
+    return (qty, total);
   }
 
   static String _normalize(String value) => value

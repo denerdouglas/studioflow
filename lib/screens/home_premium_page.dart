@@ -50,17 +50,15 @@ class _HomePremiumPageState extends State<HomePremiumPage> {
     _registry.register('ia_panel', (context, data) => _buildIaPanel());
     _registry.register('modalidades', (context, data) {
       if (_modalidades.isEmpty) return const SizedBox.shrink();
-      return Column(
-        children: [const SizedBox(height: 20), _buildModalidades()],
-      );
+      return Column(children: [SizedBox(height: 20), _buildModalidades()]);
     });
     _registry.register(
       'caixa',
       (context, data) => Column(
         children: [
-          const SizedBox(height: 24),
+          SizedBox(height: 24),
           _buildSectionTitle('Caixa'),
-          const SizedBox(height: 12),
+          SizedBox(height: 12),
           _buildCaixa(),
         ],
       ),
@@ -69,9 +67,9 @@ class _HomePremiumPageState extends State<HomePremiumPage> {
       'agenda',
       (context, data) => Column(
         children: [
-          const SizedBox(height: 24),
+          SizedBox(height: 24),
           _buildSectionTitle('Agenda de Hoje'),
-          const SizedBox(height: 12),
+          SizedBox(height: 12),
           _buildAgenda(),
         ],
       ),
@@ -80,9 +78,9 @@ class _HomePremiumPageState extends State<HomePremiumPage> {
       'estoque_alerts',
       (context, data) => Column(
         children: [
-          const SizedBox(height: 24),
+          SizedBox(height: 24),
           _buildSectionTitle('Alertas de Estoque'),
-          const SizedBox(height: 12),
+          SizedBox(height: 12),
           _buildEstoqueAlerts(),
         ],
       ),
@@ -91,11 +89,11 @@ class _HomePremiumPageState extends State<HomePremiumPage> {
       'indicadores',
       (context, data) => Column(
         children: [
-          const SizedBox(height: 24),
+          SizedBox(height: 24),
           _buildSectionTitle('Indicadores'),
-          const SizedBox(height: 12),
+          SizedBox(height: 12),
           _buildIndicadores(),
-          const SizedBox(height: 40),
+          SizedBox(height: 40),
         ],
       ),
     );
@@ -145,10 +143,10 @@ class _HomePremiumPageState extends State<HomePremiumPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: widget.tema.fundo,
+      backgroundColor: Theme.of(context).colorScheme.surface,
       body: RefreshIndicator(
         onRefresh: _loadData,
-        color: widget.tema.corPrincipal,
+        color: Theme.of(context).colorScheme.primary,
         child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
@@ -170,7 +168,7 @@ class _HomePremiumPageState extends State<HomePremiumPage> {
   Widget _buildAppBar() {
     return SliverAppBar(
       pinned: true,
-      backgroundColor: widget.tema.fundo,
+      backgroundColor: Theme.of(context).colorScheme.surface,
       surfaceTintColor: Colors.transparent,
       titleSpacing: 20,
       expandedHeight: 80,
@@ -182,18 +180,21 @@ class _HomePremiumPageState extends State<HomePremiumPage> {
             '$_saudacao, ${widget.nomeResponsavel}! ${widget.tema.emoji}',
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 21,
               fontWeight: FontWeight.bold,
-              color: Color(0xFF2D2140),
+              color: Theme.of(context).colorScheme.onSurface,
             ),
           ),
-          const SizedBox(height: 2),
+          SizedBox(height: 2),
           Text(
             widget.nomeNegocio,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 13, color: Color(0xFF766A85)),
+            style: TextStyle(
+              fontSize: 13,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
           ),
         ],
       ),
@@ -207,12 +208,18 @@ class _HomePremiumPageState extends State<HomePremiumPage> {
               ),
             );
           },
-          icon: Icon(Icons.search, color: widget.tema.corPrincipal),
+          icon: Icon(
+            Icons.search,
+            color: Theme.of(context).colorScheme.primary,
+          ),
         ),
         IconButton(
           tooltip: 'Atualizar',
           onPressed: _loadData,
-          icon: Icon(Icons.refresh, color: widget.tema.corPrincipal),
+          icon: Icon(
+            Icons.refresh,
+            color: Theme.of(context).colorScheme.primary,
+          ),
         ),
         IconButton(
           tooltip: 'StudioFlow IA',
@@ -224,7 +231,7 @@ class _HomePremiumPageState extends State<HomePremiumPage> {
           },
           icon: Icon(
             Icons.auto_awesome_outlined,
-            color: widget.tema.corPrincipal,
+            color: Theme.of(context).colorScheme.primary,
           ),
         ),
         IconButton(
@@ -242,9 +249,12 @@ class _HomePremiumPageState extends State<HomePremiumPage> {
               MaterialPageRoute(builder: (_) => const ConfiguracoesPage()),
             );
           },
-          icon: Icon(Icons.notifications_none, color: widget.tema.corPrincipal),
+          icon: Icon(
+            Icons.notifications_none,
+            color: Theme.of(context).colorScheme.primary,
+          ),
         ),
-        const SizedBox(width: 8),
+        SizedBox(width: 8),
       ],
     );
   }
@@ -256,18 +266,21 @@ class _HomePremiumPageState extends State<HomePremiumPage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.error_outline, size: 64, color: Color(0xFFD64D64)),
-            const SizedBox(height: 16),
+            Icon(Icons.error_outline, size: 64, color: Color(0xFFD64D64)),
+            SizedBox(height: 16),
             Text(
               _error!,
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 16, color: Color(0xFF2D2140)),
+              style: TextStyle(
+                fontSize: 16,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
             ),
-            const SizedBox(height: 24),
+            SizedBox(height: 24),
             FilledButton.icon(
               onPressed: _loadData,
-              icon: const Icon(Icons.refresh),
-              label: const Text('Tentar novamente'),
+              icon: Icon(Icons.refresh),
+              label: Text('Tentar novamente'),
             ),
           ],
         ),
@@ -292,7 +305,7 @@ class _HomePremiumPageState extends State<HomePremiumPage> {
     children: [
       Row(
         children: [
-          const Expanded(
+          Expanded(
             child: Text(
               'Áreas do estabelecimento',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
@@ -306,11 +319,11 @@ class _HomePremiumPageState extends State<HomePremiumPage> {
                 context,
                 MaterialPageRoute(builder: (_) => const ModalidadesPage()),
               ).then((_) => _loadData()),
-              child: const Text('Organizar'),
+              child: Text('Organizar'),
             ),
         ],
       ),
-      const SizedBox(height: 8),
+      SizedBox(height: 8),
       Wrap(
         spacing: 8,
         runSpacing: 8,
@@ -331,10 +344,10 @@ class _HomePremiumPageState extends State<HomePremiumPage> {
   Widget _buildSectionTitle(String title) {
     return Text(
       title,
-      style: const TextStyle(
+      style: TextStyle(
         fontSize: 18,
         fontWeight: FontWeight.bold,
-        color: Color(0xFF2D2140),
+        color: Theme.of(context).colorScheme.onSurface,
       ),
     );
   }
@@ -367,34 +380,30 @@ class _HomePremiumPageState extends State<HomePremiumPage> {
             width: 48,
             height: 48,
             decoration: BoxDecoration(
-              color: widget.tema.corPrincipal,
+              color: Theme.of(context).colorScheme.primary,
               borderRadius: BorderRadius.circular(16),
             ),
-            child: const Icon(
-              Icons.auto_awesome,
-              color: Colors.white,
-              size: 28,
-            ),
+            child: Icon(Icons.auto_awesome, color: Colors.white, size: 28),
           ),
-          const SizedBox(width: 16),
+          SizedBox(width: 16),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   'IA StudioFlow',
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 16,
-                    color: Color(0xFF2D2140),
+                    color: Theme.of(context).colorScheme.onSurface,
                   ),
                 ),
-                const SizedBox(height: 6),
+                SizedBox(height: 6),
                 Text(
                   mensagem,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 14,
-                    color: Color(0xFF766A85),
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                     height: 1.4,
                   ),
                 ),
@@ -416,7 +425,10 @@ class _HomePremiumPageState extends State<HomePremiumPage> {
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [widget.tema.corPrincipal, widget.tema.corSecundaria],
+                colors: [
+                  Theme.of(context).colorScheme.primary,
+                  Theme.of(context).colorScheme.secondary,
+                ],
               ),
               borderRadius: const BorderRadius.vertical(
                 top: Radius.circular(24),
@@ -424,7 +436,7 @@ class _HomePremiumPageState extends State<HomePremiumPage> {
             ),
             child: Row(
               children: [
-                const Expanded(
+                Expanded(
                   child: Text(
                     'Saldo Atual',
                     style: TextStyle(color: Colors.white70, fontSize: 16),
@@ -432,7 +444,7 @@ class _HomePremiumPageState extends State<HomePremiumPage> {
                 ),
                 Text(
                   AppFormatters.moeda(caixa.saldo),
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: Colors.white,
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
@@ -450,10 +462,14 @@ class _HomePremiumPageState extends State<HomePremiumPage> {
                     title: 'Entradas',
                     value: AppFormatters.moeda(caixa.totalEntradas),
                     icon: Icons.arrow_downward,
-                    color: const Color(0xFF15996B),
+                    color: Color(0xFF15996B),
                   ),
                 ),
-                Container(width: 1, height: 40, color: Colors.grey.shade200),
+                Container(
+                  width: 1,
+                  height: 40,
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                ),
                 Expanded(
                   child: _buildMetricMini(
                     title: 'Saídas',
@@ -482,24 +498,24 @@ class _HomePremiumPageState extends State<HomePremiumPage> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(icon, size: 16, color: color),
-            const SizedBox(width: 4),
+            SizedBox(width: 4),
             Text(
               title,
-              style: const TextStyle(
-                color: Color(0xFF766A85),
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
                 fontSize: 12,
                 fontWeight: FontWeight.w500,
               ),
             ),
           ],
         ),
-        const SizedBox(height: 6),
+        SizedBox(height: 6),
         Text(
           value,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.bold,
-            color: Color(0xFF2D2140),
+            color: Theme.of(context).colorScheme.onSurface,
           ),
         ),
       ],
@@ -509,12 +525,14 @@ class _HomePremiumPageState extends State<HomePremiumPage> {
   Widget _buildAgenda() {
     final validos = _summary!.agendamentosValidos;
     if (validos.isEmpty) {
-      return const PremiumCard(
+      return PremiumCard(
         child: Padding(
           padding: EdgeInsets.all(16.0),
           child: Text(
             'Nenhum agendamento para hoje.',
-            style: TextStyle(color: Color(0xFF766A85)),
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
           ),
         ),
       );
@@ -530,36 +548,38 @@ class _HomePremiumPageState extends State<HomePremiumPage> {
                 child: Row(
                   children: [
                     CircleAvatar(
-                      backgroundColor: widget.tema.corPrincipal.withValues(
-                        alpha: 0.1,
-                      ),
+                      backgroundColor: Theme.of(
+                        context,
+                      ).colorScheme.primary.withValues(alpha: 0.1),
                       child: Text(
                         a.clienteNome.isNotEmpty
                             ? a.clienteNome[0].toUpperCase()
                             : '?',
                         style: TextStyle(
-                          color: widget.tema.corPrincipal,
+                          color: Theme.of(context).colorScheme.primary,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
                     ),
-                    const SizedBox(width: 16),
+                    SizedBox(width: 16),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
                             a.clienteNome,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontWeight: FontWeight.bold,
                               fontSize: 16,
                             ),
                           ),
-                          const SizedBox(height: 4),
+                          SizedBox(height: 4),
                           Text(
                             '${AppFormatters.hora(a.inicio)} - ${a.servicoNome}',
-                            style: const TextStyle(
-                              color: Color(0xFF766A85),
+                            style: TextStyle(
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onSurfaceVariant,
                               fontSize: 13,
                             ),
                           ),
@@ -568,7 +588,7 @@ class _HomePremiumPageState extends State<HomePremiumPage> {
                     ),
                     IconButton(
                       onPressed: () {},
-                      icon: const Icon(Icons.chat, color: Color(0xFF15996B)),
+                      icon: Icon(Icons.chat, color: Color(0xFF15996B)),
                       tooltip: 'WhatsApp',
                     ),
                   ],
@@ -583,12 +603,14 @@ class _HomePremiumPageState extends State<HomePremiumPage> {
   Widget _buildEstoqueAlerts() {
     final baixos = _summary!.produtosBaixoEstoque;
     if (baixos.isEmpty) {
-      return const PremiumCard(
+      return PremiumCard(
         child: Padding(
           padding: EdgeInsets.all(16.0),
           child: Text(
             'Estoque regularizado.',
-            style: TextStyle(color: Color(0xFF766A85)),
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
           ),
         ),
       );
@@ -609,27 +631,27 @@ class _HomePremiumPageState extends State<HomePremiumPage> {
                         color: const Color(0xFFD64D64).withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      child: const Icon(
+                      child: Icon(
                         Icons.warning_amber_rounded,
                         color: Color(0xFFD64D64),
                       ),
                     ),
-                    const SizedBox(width: 16),
+                    SizedBox(width: 16),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
                             p.nome,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontWeight: FontWeight.bold,
                               fontSize: 15,
                             ),
                           ),
-                          const SizedBox(height: 4),
+                          SizedBox(height: 4),
                           Text(
                             'Apenas ${p.quantidadeAtual} ${p.unidade} (Mín: ${p.estoqueMinimo})',
-                            style: const TextStyle(
+                            style: TextStyle(
                               color: Color(0xFFD64D64),
                               fontSize: 13,
                               fontWeight: FontWeight.w500,
@@ -660,7 +682,7 @@ class _HomePremiumPageState extends State<HomePremiumPage> {
           'Atendimentos',
           _summary!.agendamentosValidos.length.toString(),
           Icons.people_alt,
-          widget.tema.corPrincipal,
+          Theme.of(context).colorScheme.primary,
         ),
         _buildIndicadorCard(
           'Receita Prevista',
@@ -701,22 +723,22 @@ class _HomePremiumPageState extends State<HomePremiumPage> {
             fit: BoxFit.scaleDown,
             child: Text(
               value,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 22,
                 fontWeight: FontWeight.bold,
-                color: Color(0xFF2D2140),
+                color: Theme.of(context).colorScheme.onSurface,
               ),
             ),
           ),
-          const SizedBox(height: 4),
+          SizedBox(height: 4),
           Text(
             title,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w500,
-              color: Color(0xFF766A85),
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
           ),
         ],

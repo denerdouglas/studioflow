@@ -230,13 +230,22 @@ class BackendSyncService {
 
     try {
       await _detectarAlteracoes(db, comercioId);
-      final pushResult = await _enviarPendentes(
-        db,
-        endpoint,
-        session,
-        comercioId,
-      );
-      session = pushResult.session;
+
+      var totalApplied = 0;
+      var totalConflicts = 0;
+      while (true) {
+        final pushResult = await _enviarPendentes(
+          db,
+          endpoint,
+          session!,
+          comercioId,
+        );
+        session = pushResult.session;
+        totalApplied += pushResult.applied;
+        totalConflicts += pushResult.conflicts;
+        if (pushResult.applied == 0 && pushResult.conflicts == 0) break;
+      }
+
       final recebidas = await _receberAlteracoes(
         db,
         endpoint,
@@ -264,9 +273,9 @@ class BackendSyncService {
         whereArgs: [comercioId],
       );
       return ResultadoSincronizacao(
-        enviadas: pushResult.applied,
+        enviadas: totalApplied,
         recebidas: recebidas,
-        conflitos: pushResult.conflicts,
+        conflitos: totalConflicts,
         pendentes: pendentes,
       );
     } on Object catch (error) {
@@ -390,6 +399,98 @@ class BackendSyncService {
     });
   }
 
+  Future<_PushOutcome> _enviarComIsolamento(
+    Database db,
+    Uri endpoint,
+    SessaoBackend session,
+    String comercioId,
+    List<Map<String, Object?>> operations,
+    List<Map<String, dynamic>> rows,
+  ) async {
+    var applied = 0;
+    var conflicts = 0;
+
+    for (int i = 0; i < operations.length; i++) {
+      final op = operations[i];
+      final row = rows[i];
+      final operationId = op['operationId'] as String;
+
+      try {
+        final res = await _api.push(
+          endpoint: endpoint,
+          accessToken: session.accessToken,
+          operations: [op],
+        );
+        final results = res['results'] as List? ?? const [];
+        if (results.isNotEmpty) {
+          final result = Map<String, dynamic>.from(results.first as Map);
+          final version = (result['serverVersion'] as num).toInt();
+          if (result['status'] == 'applied') {
+            applied++;
+            final payload = jsonDecode(row['payload_json'] as String);
+            await db.transaction((txn) async {
+              await txn.update(
+                'fila_sincronizacao',
+                {
+                  'status': 'sincronizado',
+                  'versao_servidor': version,
+                  'sincronizada_em': DateTime.now().toUtc().toIso8601String(),
+                  'ultimo_erro': null,
+                  'atualizada_em': DateTime.now().toUtc().toIso8601String(),
+                },
+                where: 'id = ?',
+                whereArgs: [operationId],
+              );
+              await txn.insert('registro_sync_estado', {
+                'comercio_id': comercioId,
+                'entidade': row['entidade'],
+                'entidade_id': row['entidade_id'],
+                'hash_local': _payloadHash(
+                  payload is Map ? Map<String, Object?>.from(payload) : const {},
+                ),
+                'versao_servidor': version,
+                'atualizado_em': DateTime.now().toUtc().toIso8601String(),
+              }, conflictAlgorithm: ConflictAlgorithm.replace);
+            });
+          } else {
+            conflicts++;
+            await db.update(
+              'fila_sincronizacao',
+              {
+                'status': 'conflito',
+                'versao_servidor': version,
+                'ultimo_erro': 'Conflito de versão.',
+                'atualizada_em': DateTime.now().toUtc().toIso8601String(),
+              },
+              where: 'id = ?',
+              whereArgs: [operationId],
+            );
+          }
+        }
+      } on BackendHttpException catch (e) {
+        if (e.statusCode >= 400 && e.statusCode < 500) {
+          final tentativas = (row['tentativas'] as int? ?? 0) + 1;
+          final next = DateTime.now().toUtc().add(Duration(minutes: tentativas * 5)).toIso8601String();
+          await db.update(
+            'fila_sincronizacao',
+            {
+              'status': tentativas >= 3 ? 'erro' : 'pendente',
+              'ultimo_erro': e.message,
+              'tentativas': tentativas,
+              'proxima_tentativa': tentativas >= 3 ? null : next,
+              'atualizada_em': DateTime.now().toUtc().toIso8601String(),
+            },
+            where: 'id = ?',
+            whereArgs: [operationId],
+          );
+        } else {
+          rethrow;
+        }
+      }
+    }
+    return _PushOutcome(session, applied, conflicts);
+  }
+
   Future<_PushOutcome> _enviarPendentes(
     Database db,
     Uri endpoint,
@@ -398,8 +499,8 @@ class BackendSyncService {
   ) async {
     final rows = await db.query(
       'fila_sincronizacao',
-      where: "comercio_id = ? AND status = 'pendente'",
-      whereArgs: [comercioId],
+      where: "comercio_id = ? AND status = 'pendente' AND (proxima_tentativa IS NULL OR proxima_tentativa <= ?)",
+      whereArgs: [comercioId, DateTime.now().toUtc().toIso8601String()],
       orderBy: 'criada_em',
       limit: 100,
     );
@@ -428,13 +529,45 @@ class BackendSyncService {
         operations: operations,
       );
     } on BackendHttpException catch (error) {
-      if (error.statusCode != 401) rethrow;
-      session = await _refreshSession(endpoint, session);
-      response = await _api.push(
-        endpoint: endpoint,
-        accessToken: session.accessToken,
-        operations: operations,
-      );
+      if (error.statusCode == 401) {
+        session = await _refreshSession(endpoint, session);
+        response = await _api.push(
+          endpoint: endpoint,
+          accessToken: session.accessToken,
+          operations: operations,
+        );
+      } else if (error.statusCode >= 400 && error.statusCode < 500) {
+        if (operations.length > 1) {
+          return await _enviarComIsolamento(
+            db,
+            endpoint,
+            session,
+            comercioId,
+            operations,
+            rows,
+          );
+        } else {
+          final row = rows.first;
+          final operationId = row['id'] as String;
+          final tentativas = (row['tentativas'] as int? ?? 0) + 1;
+          final next = DateTime.now().toUtc().add(Duration(minutes: tentativas * 5)).toIso8601String();
+          await db.update(
+            'fila_sincronizacao',
+            {
+              'status': tentativas >= 3 ? 'erro' : 'pendente',
+              'ultimo_erro': error.message,
+              'tentativas': tentativas,
+              'proxima_tentativa': tentativas >= 3 ? null : next,
+              'atualizada_em': DateTime.now().toUtc().toIso8601String(),
+            },
+            where: 'id = ?',
+            whereArgs: [operationId],
+          );
+          return _PushOutcome(session, 0, 0);
+        }
+      } else {
+        rethrow;
+      }
     }
     var applied = 0;
     var conflicts = 0;

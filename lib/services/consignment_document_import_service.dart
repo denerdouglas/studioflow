@@ -61,9 +61,9 @@ class ConsignmentDocumentImportService {
     final parsed = ConsignmentSheetParser.parse(
       text,
     ).copyWith(usedOcr: usedOcr);
-    if (parsed.itens.isEmpty) {
+    if (parsed.itens.isEmpty && parsed.linhasPendentes.isEmpty) {
       throw const ConsignmentImportException(
-        'Documento lido, mas nenhum produto foi identificado.',
+        'Nenhum produto identificado. Nenhuma estratégia (Texto/OCR) conseguiu extrair dados utilizáveis deste documento.',
       );
     }
     return parsed;

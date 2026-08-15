@@ -93,6 +93,18 @@ class _NovaRemessaConsignacaoPageState
         _applyHeader(data);
         conferindo = true;
       });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Documento analisado:\n'
+              '${data.quantidadeImportada} produtos encontrados\n'
+              '${data.linhasPendentes.length} pendentes de revisão',
+            ),
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
     } on ConsignmentImportException catch (error) {
       if (mounted) await _showImportError(error.message, path);
     } catch (_) {

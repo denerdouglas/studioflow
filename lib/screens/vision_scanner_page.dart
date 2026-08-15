@@ -190,7 +190,7 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
     final codigo = await showDialog<String>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Digitar código'),
+        title: Text('Digitar código'),
         content: TextField(
           controller: controller,
           autofocus: true,
@@ -200,16 +200,16 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
           if (continuous)
             TextButton(
               onPressed: () => Navigator.pop(context, bipSession.items),
-              child: const Text('Conferir'),
+              child: Text('Conferir'),
             ),
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancelar'),
+            child: Text('Cancelar'),
           ),
           FilledButton(
             onPressed: () =>
                 Navigator.pop(dialogContext, controller.text.trim()),
-            child: const Text('Revisar'),
+            child: Text('Revisar'),
           ),
         ],
       ),
@@ -281,10 +281,10 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
-        title: const Text('Ler Etiqueta / Código'),
+        title: Text('Ler Etiqueta / Código'),
         actions: [
           IconButton(
-            icon: const Icon(Icons.document_scanner),
+            icon: Icon(Icons.document_scanner),
             tooltip: 'Usar OCR na imagem',
             onPressed: _processando ? null : _usarOcr,
           ),
@@ -302,21 +302,17 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(
-                      Icons.no_photography,
-                      color: Colors.white,
-                      size: 56,
-                    ),
-                    const SizedBox(height: 16),
-                    const Text(
+                    Icon(Icons.no_photography, color: Colors.white, size: 56),
+                    SizedBox(height: 16),
+                    Text(
                       'Não foi possível acessar a câmera para o código de barras.',
                       textAlign: TextAlign.center,
                       style: TextStyle(color: Colors.white),
                     ),
-                    const SizedBox(height: 16),
+                    SizedBox(height: 16),
                     FilledButton(
                       onPressed: _usarOcr,
-                      child: const Text('Usar Leitura de Texto (OCR)'),
+                      child: Text('Usar Leitura de Texto (OCR)'),
                     ),
                   ],
                 ),
@@ -358,7 +354,7 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
                 margin: const EdgeInsets.all(16),
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Colors.black87,
+                  color: Theme.of(context).colorScheme.onSurface,
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: Column(
@@ -367,19 +363,19 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
                     Text(
                       _erro ?? 'Centralize o código na moldura ou use o OCR.',
                       textAlign: TextAlign.center,
-                      style: const TextStyle(color: Colors.white),
+                      style: TextStyle(color: Colors.white),
                     ),
-                    const SizedBox(height: 8),
+                    SizedBox(height: 8),
                     FilledButton.icon(
                       onPressed: _processando ? null : _usarOcr,
-                      icon: const Icon(Icons.text_fields),
-                      label: const Text('Ler Textos / Extrair Etiqueta (OCR)'),
+                      icon: Icon(Icons.text_fields),
+                      label: Text('Ler Textos / Extrair Etiqueta (OCR)'),
                     ),
-                    const SizedBox(height: 8),
+                    SizedBox(height: 8),
                     TextButton.icon(
                       onPressed: _processando ? null : _digitarCodigo,
-                      icon: const Icon(Icons.keyboard),
-                      label: const Text('Digitar manualmente'),
+                      icon: Icon(Icons.keyboard),
+                      label: Text('Digitar manualmente'),
                     ),
                   ],
                 ),
