@@ -83,7 +83,10 @@ class ConsignmentSheetParser {
               .trim();
         }
 
-        final parts = chunkSemPreco.split(' ').where((e) => e.isNotEmpty).toList();
+        final parts = chunkSemPreco
+            .split(' ')
+            .where((e) => e.isNotEmpty)
+            .toList();
         if (parts.isNotEmpty) {
           String codigo = '';
           String descricao = '';
@@ -92,12 +95,14 @@ class ConsignmentSheetParser {
           final maybeCodeFirst = parts.first;
 
           if (RegExp(r'^\d+$').hasMatch(maybeCodeLast) ||
-              (maybeCodeLast.length <= 6 && RegExp(r'\d').hasMatch(maybeCodeLast))) {
+              (maybeCodeLast.length <= 6 &&
+                  RegExp(r'\d').hasMatch(maybeCodeLast))) {
             codigo = maybeCodeLast;
             parts.removeLast();
             descricao = parts.join(' ');
           } else if (RegExp(r'^\d+$').hasMatch(maybeCodeFirst) ||
-              (maybeCodeFirst.length <= 6 && RegExp(r'\d').hasMatch(maybeCodeFirst))) {
+              (maybeCodeFirst.length <= 6 &&
+                  RegExp(r'\d').hasMatch(maybeCodeFirst))) {
             codigo = maybeCodeFirst;
             parts.removeAt(0);
             descricao = parts.join(' ');
@@ -115,7 +120,9 @@ class ConsignmentSheetParser {
               material: material ?? '',
               quantidade: qty,
               valorUnitario: price,
-              descricao: descricao.isNotEmpty ? _title(descricao) : (category ?? ''),
+              descricao: descricao.isNotEmpty
+                  ? _title(descricao)
+                  : (category ?? ''),
             ),
           );
           foundAnyItem = true;

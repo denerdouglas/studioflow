@@ -78,8 +78,12 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
         confirmed: true,
       ),
     );
-    await SystemSound.play(SystemSoundType.click);
-    await HapticFeedback.selectionClick();
+    if (added) {
+      // Feedback forte de vibração
+      await HapticFeedback.heavyImpact();
+      // Feedback audível nativo (alert é o mais perceptível sem pacotes externos)
+      await SystemSound.play(SystemSoundType.alert);
+    }
     if (!mounted) return;
     setState(() {
       _processando = false;

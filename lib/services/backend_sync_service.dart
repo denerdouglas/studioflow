@@ -441,16 +441,22 @@ class BackendSyncService {
                 where: 'id = ?',
                 whereArgs: [operationId],
               );
-              await txn.insert('registro_sync_estado', {
-                'comercio_id': comercioId,
-                'entidade': row['entidade'],
-                'entidade_id': row['entidade_id'],
-                'hash_local': _payloadHash(
-                  payload is Map ? Map<String, Object?>.from(payload) : const {},
-                ),
-                'versao_servidor': version,
-                'atualizado_em': DateTime.now().toUtc().toIso8601String(),
-              }, conflictAlgorithm: ConflictAlgorithm.replace);
+              await txn.insert(
+                'registro_sync_estado',
+                {
+                  'comercio_id': comercioId,
+                  'entidade': row['entidade'],
+                  'entidade_id': row['entidade_id'],
+                  'hash_local': _payloadHash(
+                    payload is Map
+                        ? Map<String, Object?>.from(payload)
+                        : const {},
+                  ),
+                  'versao_servidor': version,
+                  'atualizado_em': DateTime.now().toUtc().toIso8601String(),
+                },
+                conflictAlgorithm: ConflictAlgorithm.replace,
+              );
             });
           } else {
             conflicts++;
@@ -470,7 +476,10 @@ class BackendSyncService {
       } on BackendHttpException catch (e) {
         if (e.statusCode >= 400 && e.statusCode < 500) {
           final tentativas = (row['tentativas'] as int? ?? 0) + 1;
-          final next = DateTime.now().toUtc().add(Duration(minutes: tentativas * 5)).toIso8601String();
+          final next = DateTime.now()
+              .toUtc()
+              .add(Duration(minutes: tentativas * 5))
+              .toIso8601String();
           await db.update(
             'fila_sincronizacao',
             {
@@ -499,7 +508,8 @@ class BackendSyncService {
   ) async {
     final rows = await db.query(
       'fila_sincronizacao',
-      where: "comercio_id = ? AND status = 'pendente' AND (proxima_tentativa IS NULL OR proxima_tentativa <= ?)",
+      where:
+          "comercio_id = ? AND status = 'pendente' AND (proxima_tentativa IS NULL OR proxima_tentativa <= ?)",
       whereArgs: [comercioId, DateTime.now().toUtc().toIso8601String()],
       orderBy: 'criada_em',
       limit: 100,
@@ -550,7 +560,10 @@ class BackendSyncService {
           final row = rows.first;
           final operationId = row['id'] as String;
           final tentativas = (row['tentativas'] as int? ?? 0) + 1;
-          final next = DateTime.now().toUtc().add(Duration(minutes: tentativas * 5)).toIso8601String();
+          final next = DateTime.now()
+              .toUtc()
+              .add(Duration(minutes: tentativas * 5))
+              .toIso8601String();
           await db.update(
             'fila_sincronizacao',
             {

@@ -4,6 +4,7 @@ import '../core/helpers/app_formatters.dart';
 import '../repositories/consignacao_repository.dart';
 import '../repositories/cliente_repository.dart';
 import '../repositories/consignacao_acerto_repository.dart';
+import '../widgets/cliente_search_selector.dart';
 import 'nova_remessa_consignacao_page.dart';
 import 'consignacao_conferencia_page.dart';
 import 'consignacao_acerto_page.dart';
@@ -182,24 +183,26 @@ class _JoiasLotePageState extends State<JoiasLotePage> {
                 ],
                 onChanged: (value) => setDialog(() => payment = value!),
               ),
-              DropdownButtonFormField<String>(
-                initialValue: clientId,
-                decoration: const InputDecoration(
-                  labelText: 'Cliente (opcional)',
+              ListTile(
+                title: Text(
+                  clientId.isEmpty
+                      ? 'Venda sem cliente'
+                      : clients.firstWhere((c) => c.id == clientId).nome,
                 ),
-                items: [
-                  const DropdownMenuItem(
-                    value: '',
-                    child: Text('Venda sem cliente'),
-                  ),
-                  ...clients.map(
-                    (client) => DropdownMenuItem(
-                      value: client.id,
-                      child: Text(client.nome),
-                    ),
-                  ),
-                ],
-                onChanged: (value) => setDialog(() => clientId = value ?? ''),
+                subtitle: const Text('Tocar para alterar'),
+                trailing: const Icon(Icons.search),
+                onTap: () async {
+                  final escolhido = await showModalBottomSheet<dynamic>(
+                    context: context,
+                    isScrollControlled: true,
+                    builder: (_) => const ClienteSearchSelector(),
+                  );
+                  if (escolhido == 'sem_cliente') {
+                    setDialog(() => clientId = '');
+                  } else if (escolhido is ClienteRegistro) {
+                    setDialog(() => clientId = escolhido.id);
+                  }
+                },
               ),
             ],
           ),
@@ -239,18 +242,26 @@ class _JoiasLotePageState extends State<JoiasLotePage> {
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              DropdownButtonFormField<String>(
-                initialValue: clientId,
-                decoration: const InputDecoration(labelText: 'Cliente'),
-                items: clients
-                    .map(
-                      (client) => DropdownMenuItem(
-                        value: client.id,
-                        child: Text(client.nome),
-                      ),
-                    )
-                    .toList(),
-                onChanged: (value) => setDialog(() => clientId = value ?? ''),
+              ListTile(
+                title: Text(
+                  clientId.isEmpty
+                      ? 'Venda sem cliente'
+                      : clients.firstWhere((c) => c.id == clientId).nome,
+                ),
+                subtitle: const Text('Tocar para alterar'),
+                trailing: const Icon(Icons.search),
+                onTap: () async {
+                  final escolhido = await showModalBottomSheet<dynamic>(
+                    context: context,
+                    isScrollControlled: true,
+                    builder: (_) => const ClienteSearchSelector(),
+                  );
+                  if (escolhido == 'sem_cliente') {
+                    setDialog(() => clientId = '');
+                  } else if (escolhido is ClienteRegistro) {
+                    setDialog(() => clientId = escolhido.id);
+                  }
+                },
               ),
               DropdownButtonFormField<String>(
                 initialValue: payment,

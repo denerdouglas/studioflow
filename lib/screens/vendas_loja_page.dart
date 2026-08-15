@@ -6,6 +6,8 @@ import '../models/domain/loja.dart';
 import '../repositories/cliente_repository.dart';
 import '../repositories/loja_repository.dart';
 import '../services/session_controller.dart';
+import '../widgets/cliente_search_selector.dart';
+import '../widgets/produto_search_selector.dart';
 import 'vision_scanner_page.dart';
 
 class VendasLojaPage extends StatefulWidget {
@@ -68,63 +70,26 @@ class _VendasLojaPageState extends State<VendasLojaPage> {
   }
 
   Future<void> selecionarProduto() async {
-    final produtos = await repo.listarItensParaVenda();
-    if (!mounted) return;
     final p = await showModalBottomSheet<ProdutoLoja>(
       context: context,
       isScrollControlled: true,
-      builder: (context) => SafeArea(
-        child: ListView(
-          children: [
-            const ListTile(
-              title: Text(
-                'Adicionar produto',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-            ),
-            ...produtos.map(
-              (p) => ListTile(
-                title: Text(p.nome),
-                subtitle: Text(
-                  '${p.modalidade == ModalidadeProduto.consignado ? 'Consignado' : 'Próprio'} • ${p.quantidadeAtual} ${p.unidade} • R\$ ${p.precoVenda.toStringAsFixed(2)}',
-                ),
-                enabled: p.quantidadeAtual > 0,
-                onTap: () => Navigator.pop(context, p),
-              ),
-            ),
-          ],
-        ),
-      ),
+      builder: (context) => const ProdutoSearchSelector(),
     );
     if (p != null) adicionar(p);
   }
 
   Future<void> selecionarCliente() async {
-    final clientes = await ClienteRepository().listar();
-    if (!mounted) return;
-    final escolhido = await showModalBottomSheet<ClienteRegistro?>(
+    final escolhido = await showModalBottomSheet<dynamic>(
       context: context,
-      builder: (context) => SafeArea(
-        child: ListView(
-          children: [
-            ListTile(
-              leading: Icon(Icons.person_off_outlined),
-              title: Text('Venda sem cliente'),
-              onTap: () => Navigator.pop(context),
-            ),
-            ...clientes.map(
-              (c) => ListTile(
-                leading: Icon(Icons.person_outline),
-                title: Text(c.nome),
-                subtitle: Text(c.whatsapp),
-                onTap: () => Navigator.pop(context, c),
-              ),
-            ),
-          ],
-        ),
-      ),
+      isScrollControlled: true,
+      builder: (context) => const ClienteSearchSelector(),
     );
-    if (mounted) setState(() => cliente = escolhido);
+    if (!mounted || escolhido == null) return;
+    if (escolhido == 'sem_cliente') {
+      setState(() => cliente = null);
+    } else if (escolhido is ClienteRegistro) {
+      setState(() => cliente = escolhido);
+    }
   }
 
   Future<Map<String, double>?> obterPagamentos() async {

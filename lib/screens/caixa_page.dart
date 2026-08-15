@@ -21,9 +21,49 @@ class _CaixaPageState extends State<CaixaPage> {
 
   DateTime _dataSelecionada = DateTime.now();
 
-  List<MovimentoFinanceiroRegistro> _movimentos = [];
+  List<MovimentoFinanceiroRegistro> _movimentosTodos = [];
 
-  ResumoCaixa _resumo = ResumoCaixa.vazio();
+  String _abaSelecionada = 'geral';
+
+  List<MovimentoFinanceiroRegistro> get _movimentos {
+    if (_abaSelecionada == 'servico') {
+      return _movimentosTodos
+          .where((m) => m.centroResultado == 'salao')
+          .toList();
+    } else if (_abaSelecionada == 'loja') {
+      return _movimentosTodos
+          .where((m) => m.centroResultado == 'loja')
+          .toList();
+    } else if (_abaSelecionada == 'consignado') {
+      return _movimentosTodos
+          .where((m) => m.centroResultado == 'consignado')
+          .toList();
+    }
+    return _movimentosTodos;
+  }
+
+  ResumoCaixa get _resumoAtual {
+    double entradas = 0;
+    double saidas = 0;
+    int qtdEntradas = 0;
+    int qtdSaidas = 0;
+    for (final item in _movimentos) {
+      if (item.entrada) {
+        entradas += item.valor;
+        qtdEntradas++;
+      } else {
+        saidas += item.valor;
+        qtdSaidas++;
+      }
+    }
+    return ResumoCaixa(
+      totalEntradas: entradas,
+      totalSaidas: saidas,
+      saldo: entradas - saidas,
+      quantidadeEntradas: qtdEntradas,
+      quantidadeSaidas: qtdSaidas,
+    );
+  }
 
   bool _carregando = true;
   String? _erro;
@@ -46,9 +86,7 @@ class _CaixaPageState extends State<CaixaPage> {
       }
 
       setState(() {
-        _movimentos = resultados[0] as List<MovimentoFinanceiroRegistro>;
-
-        _resumo = resultados[1] as ResumoCaixa;
+        _movimentosTodos = resultados[0] as List<MovimentoFinanceiroRegistro>;
 
         _carregando = false;
         _erro = null;
@@ -288,6 +326,8 @@ class _CaixaPageState extends State<CaixaPage> {
             _cabecalho(),
             _seletorData(),
             SizedBox(height: 14),
+            _seletorAbas(),
+            SizedBox(height: 14),
             _resumoFinanceiro(),
             SizedBox(height: 14),
             Expanded(child: _conteudo()),
@@ -376,6 +416,53 @@ class _CaixaPageState extends State<CaixaPage> {
     );
   }
 
+  Widget _seletorAbas() {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Row(
+        children: [
+          _abaCard('Geral', 'geral'),
+          const SizedBox(width: 8),
+          _abaCard('Serviços', 'servico'),
+          const SizedBox(width: 8),
+          _abaCard('Loja', 'loja'),
+          const SizedBox(width: 8),
+          _abaCard('Consignado', 'consignado'),
+        ],
+      ),
+    );
+  }
+
+  Widget _abaCard(String titulo, String valor) {
+    final selecionado = _abaSelecionada == valor;
+    return InkWell(
+      onTap: () {
+        setState(() {
+          _abaSelecionada = valor;
+        });
+      },
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: selecionado ? _corPrincipal : Colors.transparent,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: selecionado ? _corPrincipal : Colors.grey.shade300,
+          ),
+        ),
+        child: Text(
+          titulo,
+          style: TextStyle(
+            color: selecionado ? Colors.white : _textoEscuro,
+            fontWeight: selecionado ? FontWeight.bold : FontWeight.normal,
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _resumoFinanceiro() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -402,7 +489,7 @@ class _CaixaPageState extends State<CaixaPage> {
                 ),
                 SizedBox(height: 8),
                 Text(
-                  'R\$ ${_resumo.saldo.toStringAsFixed(2)}',
+                  'R\$ ${_resumoAtual.saldo.toStringAsFixed(2)}',
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 34,
@@ -418,8 +505,8 @@ class _CaixaPageState extends State<CaixaPage> {
               Expanded(
                 child: _ResumoCard(
                   titulo: 'Entradas',
-                  valor: _resumo.totalEntradas,
-                  quantidade: _resumo.quantidadeEntradas,
+                  valor: _resumoAtual.totalEntradas,
+                  quantidade: _resumoAtual.quantidadeEntradas,
                   icone: Icons.arrow_downward_rounded,
                   cor: _verde,
                 ),
@@ -428,8 +515,8 @@ class _CaixaPageState extends State<CaixaPage> {
               Expanded(
                 child: _ResumoCard(
                   titulo: 'Saídas',
-                  valor: _resumo.totalSaidas,
-                  quantidade: _resumo.quantidadeSaidas,
+                  valor: _resumoAtual.totalSaidas,
+                  quantidade: _resumoAtual.quantidadeSaidas,
                   icone: Icons.arrow_upward_rounded,
                   cor: _vermelho,
                 ),

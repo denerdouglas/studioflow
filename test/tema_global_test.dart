@@ -37,7 +37,10 @@ void main() {
     // 2. Verificar cor primary
     // ColorScheme fromSeed de '#006400' gera uma paleta tonal.
     // O primary NÃO será exatamente #006400 devido ao Tonal Palette do Material 3, mas será derivado dele.
-    expect(colorScheme.primary.toARGB32(), isNot(AppColors.principal.toARGB32()));
+    expect(
+      colorScheme.primary.toARGB32(),
+      isNot(AppColors.principal.toARGB32()),
+    );
 
     // 4. InputDecoration focado usa primary
     final focusedBorder =
@@ -71,12 +74,17 @@ void main() {
     SessionController.instance.entrar(userDarkPink);
     await tester.pumpAndSettle();
 
-    final BuildContext contextDark = tester.element(find.byType(Scaffold).first);
+    final BuildContext contextDark = tester.element(
+      find.byType(Scaffold).first,
+    );
     final themeDark = Theme.of(contextDark);
     final colorSchemeDark = themeDark.colorScheme;
 
     // A cor mudou
-    expect(colorSchemeDark.primary.toARGB32(), isNot(colorScheme.primary.toARGB32()));
+    expect(
+      colorSchemeDark.primary.toARGB32(),
+      isNot(colorScheme.primary.toARGB32()),
+    );
 
     // O modo de brilho agora é escuro, garantindo contraste reverso
     expect(colorSchemeDark.brightness, Brightness.dark);
