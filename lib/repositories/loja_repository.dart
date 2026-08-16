@@ -111,7 +111,7 @@ class LojaRepository {
   Future<ProdutoLoja?> buscarCodigo(String codigo) async {
     final u = _exigir(AcaoPermissao.visualizarEstoque);
     final valor = codigo.trim();
-    if (valor.length < 4) throw StateError('Código de barras inválido.');
+    if (valor.isEmpty) throw StateError('Código inválido.');
     final db = await _databaseProvider();
 
     final pecas = await db.query(
@@ -153,11 +153,13 @@ class LojaRepository {
       SELECT e.*, COALESCE(s.quantidade_atual, e.quantidade_atual) as quantidade_atual, COALESCE(s.estoque_minimo, e.estoque_minimo) as estoque_minimo
       FROM estoque e
       LEFT JOIN estoque_saldos s ON e.id = s.estoque_id AND s.finalidade = 'venda'
-      WHERE e.comercio_id = ? AND e.codigo_barras = ? AND (e.tipo_produto = 'venda' OR e.tipo_produto = 'ambos' OR e.estoque_destino = 'loja')
+      WHERE e.comercio_id = ?
+        AND (e.codigo_barras = ? OR e.codigo_interno = ? OR e.id = ?)
+        AND (e.tipo_produto = 'venda' OR e.tipo_produto = 'ambos' OR e.estoque_destino = 'loja')
       LIMIT 1
     ''';
-    final maps = await db.rawQuery(query, [u.comercioId, valor]);
-    return maps.isEmpty ? null : ProdutoLoja.fromMap(maps.first);
+    final res = await db.rawQuery(query, [u.comercioId, valor, valor, valor]);
+    return res.isEmpty ? null : ProdutoLoja.fromMap(res.first);
   }
 
   Future<List<ProdutoLoja>> listarItensParaVenda({String pesquisa = ''}) async {

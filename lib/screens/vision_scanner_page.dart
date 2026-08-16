@@ -1,5 +1,10 @@
-import 'package:flutter/material.dart';
+import 'dart:async';
+import 'dart:ui' as ui;
+import 'dart:io';
 import 'package:flutter/services.dart';
+import 'package:flutter/rendering.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import '../services/scanner/scanner_coordinator.dart';
 import '../services/scanner/mlkit_vision_provider.dart';
@@ -24,17 +29,107 @@ class VisionScannerPage extends StatefulWidget {
 
 class _VisionScannerPageState extends State<VisionScannerPage> {
   final MobileScannerController _controller = MobileScannerController(
-    detectionSpeed: DetectionSpeed.noDuplicates,
+    detectionSpeed: DetectionSpeed.normal,
   );
 
   bool _processando = false;
   String? _erro;
   final BipSessionController bipSession = BipSessionController();
 
+  final GlobalKey _scannerKey = GlobalKey();
+  Timer? _ocrFallbackTimer;
+
   bool get continuous => widget.policy?.continuous ?? false;
 
   @override
+  void initState() {
+    super.initState();
+    _startOcrTimer();
+  }
+
+  void _startOcrTimer() {
+    _ocrFallbackTimer?.cancel();
+    _ocrFallbackTimer = Timer(
+      const Duration(seconds: 4),
+      _executarOcrAutomatico,
+    );
+  }
+
+  Future<void> _executarOcrAutomatico() async {
+    if (_processando) return;
+
+    try {
+      final boundary =
+          _scannerKey.currentContext?.findRenderObject()
+              as RenderRepaintBoundary?;
+      if (boundary == null || boundary.debugNeedsPaint) {
+        _startOcrTimer();
+        return;
+      }
+
+      final image = await boundary.toImage(pixelRatio: 1.0);
+      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      if (byteData == null) {
+        _startOcrTimer();
+        return;
+      }
+
+      setState(() {
+        _processando = true;
+        _erro = 'Nenhum código encontrado. Tentando OCR automático...';
+      });
+      await _controller.stop();
+
+      final tempDir = await getTemporaryDirectory();
+      final file = File(
+        '${tempDir.path}/ocr_frame_${DateTime.now().millisecondsSinceEpoch}.png',
+      );
+      await file.writeAsBytes(byteData.buffer.asUint8List());
+
+      final coordinator = ScannerCoordinator(
+        externalProviders: [MlKitVisionProvider()],
+      );
+      final draft = await coordinator.analyzeImages(file.path);
+
+      if (!mounted) return;
+      final resolved = await BipContextService().resolve(draft);
+      if (resolved.kind != BipItemKind.desconhecido) {
+        HapticFeedback.heavyImpact();
+        await _acceptResult({'draft': draft});
+        return;
+      }
+
+      if (!mounted) return;
+      final accepted = await Navigator.push<Map<String, dynamic>?>(
+        context,
+        MaterialPageRoute(builder: (_) => ScannerDraftPage(draft: draft)),
+      );
+      if (accepted != null && mounted) {
+        await _acceptResult(accepted);
+      } else {
+        if (mounted) {
+          setState(() {
+            _processando = false;
+            _erro = null;
+          });
+          await _controller.start();
+          _startOcrTimer();
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _processando = false;
+        });
+        await _controller.start();
+        _startOcrTimer();
+      }
+    }
+  }
+
+  @override
   void dispose() {
+    _ocrFallbackTimer?.cancel();
     _controller.dispose();
     super.dispose();
   }
@@ -62,6 +157,7 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
       if (action == null) {
         setState(() => _processando = false);
         await _controller.start();
+        _startOcrTimer();
         return;
       }
     }
@@ -78,18 +174,13 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
         confirmed: true,
       ),
     );
-    if (added) {
-      // Feedback forte de vibração
-      await HapticFeedback.heavyImpact();
-      // Feedback audível nativo (alert é o mais perceptível sem pacotes externos)
-      await SystemSound.play(SystemSoundType.alert);
-    }
     if (!mounted) return;
     setState(() {
       _processando = false;
       _erro = added ? 'Leitura adicionada.' : 'Leitura duplicada ignorada.';
     });
     await _controller.start();
+    _startOcrTimer();
   }
 
   Future<void> _processarCodigo(String codigo, {bool isQr = false}) async {
@@ -101,6 +192,7 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
     });
 
     await _controller.stop();
+    _ocrFallbackTimer?.cancel();
     if (!mounted) return;
 
     final normalized = GtinValidator.normalize(codigo);
@@ -110,6 +202,7 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
         _erro = 'GTIN inválido. Confira o código ou preencha manualmente.';
       });
       await _controller.start();
+      _startOcrTimer();
       return;
     }
     final commerceId = SessionController.instance.usuario?.comercioId;
@@ -156,6 +249,15 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
 
     if (!mounted) return;
 
+    final resolved = await BipContextService().resolve(draft);
+    if (resolved.kind != BipItemKind.desconhecido) {
+      HapticFeedback.heavyImpact();
+      await _acceptResult({'draft': draft});
+      return;
+    }
+
+    if (!mounted) return;
+
     final result = await Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => ScannerDraftPage(draft: draft)),
@@ -168,17 +270,22 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
     } else {
       setState(() => _processando = false);
       _controller.start();
+      _startOcrTimer();
     }
   }
 
   Future<void> _detectar(BarcodeCapture captura) async {
     if (_processando || captura.barcodes.isEmpty) return;
+    _ocrFallbackTimer?.cancel();
     final raw = captura.barcodes
         .map((barcode) => barcode.rawValue)
         .whereType<String>()
         .firstOrNull;
 
-    if (raw == null) return;
+    if (raw == null) {
+      _startOcrTimer();
+      return;
+    }
     final detected = captura.barcodes.firstWhere(
       (barcode) => barcode.rawValue == raw,
       orElse: () => captura.barcodes.first,
@@ -190,6 +297,7 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
   }
 
   Future<void> _digitarCodigo() async {
+    _ocrFallbackTimer?.cancel();
     final controller = TextEditingController();
     final codigo = await showDialog<String>(
       context: context,
@@ -221,16 +329,22 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
     controller.dispose();
     if (codigo != null && codigo.trim().isNotEmpty) {
       await _processarCodigo(codigo.trim());
+    } else {
+      _startOcrTimer();
     }
   }
 
   Future<void> _usarOcr() async {
+    _ocrFallbackTimer?.cancel();
     final resultPaths = await Navigator.push<Map<String, String?>>(
       context,
       MaterialPageRoute(builder: (_) => const VisionOcrCapturePage()),
     );
 
-    if (resultPaths == null || resultPaths['front'] == null) return;
+    if (resultPaths == null || resultPaths['front'] == null) {
+      _startOcrTimer();
+      return;
+    }
 
     final frontPath = resultPaths['front']!;
     final backPath = resultPaths['back'];
@@ -248,6 +362,15 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
         frontPath,
         backPath: backPath,
       );
+
+      if (!mounted) return;
+
+      final resolved = await BipContextService().resolve(draft);
+      if (resolved.kind != BipItemKind.desconhecido) {
+        HapticFeedback.heavyImpact();
+        await _acceptResult({'draft': draft});
+        return;
+      }
 
       if (!mounted) return;
 
@@ -269,6 +392,7 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
       } else {
         setState(() => _processando = false);
         _controller.start();
+        _startOcrTimer();
       }
     } catch (e) {
       if (mounted) {
@@ -276,6 +400,7 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
           _erro = 'Falha ao processar imagem: $e';
           _processando = false;
         });
+        _startOcrTimer();
       }
     }
   }
@@ -297,28 +422,31 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
       body: Stack(
         fit: StackFit.expand,
         children: [
-          MobileScanner(
-            controller: _controller,
-            onDetect: _detectar,
-            errorBuilder: (context, error) => Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.no_photography, color: Colors.white, size: 56),
-                    SizedBox(height: 16),
-                    Text(
-                      'Não foi possível acessar a câmera para o código de barras.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: Colors.white),
-                    ),
-                    SizedBox(height: 16),
-                    FilledButton(
-                      onPressed: _usarOcr,
-                      child: Text('Usar Leitura de Texto (OCR)'),
-                    ),
-                  ],
+          RepaintBoundary(
+            key: _scannerKey,
+            child: MobileScanner(
+              controller: _controller,
+              onDetect: _detectar,
+              errorBuilder: (context, error) => Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.no_photography, color: Colors.white, size: 56),
+                      SizedBox(height: 16),
+                      Text(
+                        'Não foi possível acessar a câmera para o código de barras.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: Colors.white),
+                      ),
+                      SizedBox(height: 16),
+                      FilledButton(
+                        onPressed: _usarOcr,
+                        child: Text('Usar Leitura de Texto (OCR)'),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -335,17 +463,18 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
               ),
             ),
           if (_processando)
-            const ColoredBox(
-              color: Color(0x99000000),
+            Container(
+              color: const Color(0x99000000),
               child: Center(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    CircularProgressIndicator(color: Colors.white),
-                    SizedBox(height: 16),
+                    const CircularProgressIndicator(color: Colors.white),
+                    const SizedBox(height: 16),
                     Text(
-                      'Processando...',
-                      style: TextStyle(color: Colors.white),
+                      _erro ?? 'Processando...',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(color: Colors.white, fontSize: 16),
                     ),
                   ],
                 ),
@@ -369,7 +498,7 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
                       textAlign: TextAlign.center,
                       style: TextStyle(color: Colors.white),
                     ),
-                    SizedBox(height: 8),
+                    SizedBox(height: 16),
                     FilledButton.icon(
                       onPressed: _processando ? null : _usarOcr,
                       icon: Icon(Icons.text_fields),

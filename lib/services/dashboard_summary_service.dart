@@ -6,19 +6,23 @@ import '../repositories/loja_repository.dart';
 
 class DashboardSummary {
   final List<AgendamentoRegistro> agendamentosHoje;
-  final ResumoCaixa resumoCaixa;
+  final ResumoCaixa resumoCaixaGeral;
+  final ResumoCaixa resumoCaixaSalao;
+  final ResumoCaixa resumoCaixaLoja;
   final List<ProdutoLoja> produtosBaixoEstoque;
 
   DashboardSummary({
     required this.agendamentosHoje,
-    required this.resumoCaixa,
+    required this.resumoCaixaGeral,
+    required this.resumoCaixaSalao,
+    required this.resumoCaixaLoja,
     required this.produtosBaixoEstoque,
   });
 
   bool get isEmpty =>
       agendamentosHoje.isEmpty &&
-      resumoCaixa.totalEntradas == 0 &&
-      resumoCaixa.totalSaidas == 0 &&
+      resumoCaixaGeral.totalEntradas == 0 &&
+      resumoCaixaGeral.totalSaidas == 0 &&
       produtosBaixoEstoque.isEmpty;
 
   List<AgendamentoRegistro> get agendamentosValidos =>
@@ -27,7 +31,8 @@ class DashboardSummary {
   double get receitaPrevista =>
       agendamentosValidos.fold(0.0, (s, a) => s + a.valorFinal);
 
-  double get lucroDiario => resumoCaixa.saldo; // Saldo já é Entradas - Saídas
+  double get lucroDiario =>
+      resumoCaixaGeral.saldo; // Saldo já é Entradas - Saídas
 }
 
 class DashboardSummaryService {
@@ -37,13 +42,16 @@ class DashboardSummaryService {
 
   Future<DashboardSummary> loadSummary(DateTime date) async {
     List<AgendamentoRegistro> agenda = [];
-    ResumoCaixa caixa = const ResumoCaixa(
+    ResumoCaixa caixaGeral = const ResumoCaixa(
       saldo: 0,
       totalEntradas: 0,
       totalSaidas: 0,
       quantidadeEntradas: 0,
       quantidadeSaidas: 0,
     );
+    ResumoCaixa caixaSalao = caixaGeral;
+    ResumoCaixa caixaLoja = caixaGeral;
+
     List<ProdutoLoja> baixoEstoque = [];
 
     try {
@@ -53,9 +61,16 @@ class DashboardSummaryService {
     }
 
     try {
-      caixa = await _caixaRepository.resumoDoDia(date);
+      final resumos = await Future.wait([
+        _caixaRepository.resumoDoDia(date),
+        _caixaRepository.resumoDoDia(date, centroResultado: 'salao'),
+        _caixaRepository.resumoDoDia(date, centroResultado: 'loja'),
+      ]);
+      caixaGeral = resumos[0];
+      caixaSalao = resumos[1];
+      caixaLoja = resumos[2];
     } catch (e, st) {
-      debugPrint('DashboardSummary: Erro ao carregar caixa: $e\n$st');
+      debugPrint('DashboardSummary: Erro ao carregar caixas: $e\n$st');
     }
 
     try {
@@ -66,7 +81,9 @@ class DashboardSummaryService {
 
     return DashboardSummary(
       agendamentosHoje: agenda,
-      resumoCaixa: caixa,
+      resumoCaixaGeral: caixaGeral,
+      resumoCaixaSalao: caixaSalao,
+      resumoCaixaLoja: caixaLoja,
       produtosBaixoEstoque: baixoEstoque,
     );
   }

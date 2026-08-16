@@ -11,6 +11,7 @@ import '../registry/dashboard_configuration.dart';
 import 'ia_local_page.dart';
 import 'modalidades_page.dart';
 import 'configuracoes_page.dart';
+import 'caixa_page.dart';
 
 class HomePremiumPage extends StatefulWidget {
   final String nomeResponsavel;
@@ -416,72 +417,93 @@ class _HomePremiumPageState extends State<HomePremiumPage> {
   }
 
   Widget _buildCaixa() {
-    final caixa = _summary!.resumoCaixa;
-    return PremiumCard(
-      padding: EdgeInsets.zero,
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  Theme.of(context).colorScheme.primary,
-                  Theme.of(context).colorScheme.secondary,
+    return Column(
+      children: [
+        _buildCaixaCard('Caixa Geral', _summary!.resumoCaixaGeral, 'geral'),
+        SizedBox(height: 12),
+        _buildCaixaCard('Caixa Salão', _summary!.resumoCaixaSalao, 'servico'),
+        SizedBox(height: 12),
+        _buildCaixaCard('Caixa Loja', _summary!.resumoCaixaLoja, 'loja'),
+      ],
+    );
+  }
+
+  Widget _buildCaixaCard(String titulo, dynamic caixa, String aba) {
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => CaixaPage(abaInicial: aba)),
+        ).then((_) => _loadData());
+      },
+      child: PremiumCard(
+        padding: EdgeInsets.zero,
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    Theme.of(context).colorScheme.primary,
+                    Theme.of(context).colorScheme.secondary,
+                  ],
+                ),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(24),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      titulo,
+                      style: TextStyle(color: Colors.white70, fontSize: 16),
+                    ),
+                  ),
+                  Text(
+                    AppFormatters.moeda(caixa.saldo),
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ],
               ),
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(24),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(20),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _buildMetricMini(
+                      title: 'Entradas',
+                      value: AppFormatters.moeda(caixa.totalEntradas),
+                      icon: Icons.arrow_downward,
+                      color: Color(0xFF15996B),
+                    ),
+                  ),
+                  Container(
+                    width: 1,
+                    height: 40,
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.surfaceContainerHighest,
+                  ),
+                  Expanded(
+                    child: _buildMetricMini(
+                      title: 'Saídas',
+                      value: AppFormatters.moeda(caixa.totalSaidas),
+                      icon: Icons.arrow_upward,
+                      color: const Color(0xFFD64D64),
+                    ),
+                  ),
+                ],
               ),
             ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    'Saldo Atual',
-                    style: TextStyle(color: Colors.white70, fontSize: 16),
-                  ),
-                ),
-                Text(
-                  AppFormatters.moeda(caixa.saldo),
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(20),
-            child: Row(
-              children: [
-                Expanded(
-                  child: _buildMetricMini(
-                    title: 'Entradas',
-                    value: AppFormatters.moeda(caixa.totalEntradas),
-                    icon: Icons.arrow_downward,
-                    color: Color(0xFF15996B),
-                  ),
-                ),
-                Container(
-                  width: 1,
-                  height: 40,
-                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                ),
-                Expanded(
-                  child: _buildMetricMini(
-                    title: 'Saídas',
-                    value: AppFormatters.moeda(caixa.totalSaidas),
-                    icon: Icons.arrow_upward,
-                    color: const Color(0xFFD64D64),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -698,7 +720,7 @@ class _HomePremiumPageState extends State<HomePremiumPage> {
         ),
         _buildIndicadorCard(
           'Receita Realizada',
-          AppFormatters.moeda(_summary!.resumoCaixa.totalEntradas),
+          AppFormatters.moeda(_summary!.resumoCaixaGeral.totalEntradas),
           Icons.account_balance_wallet,
           const Color(0xFF3078C5),
         ),

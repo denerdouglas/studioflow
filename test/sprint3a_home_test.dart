@@ -6,7 +6,21 @@ import 'package:studioflow/repositories/caixa_repository.dart';
 void main() {
   group('Sprint 3A - DashboardSummaryService Cálculos', () {
     test('Calcula corretamente o saldo, entradas e saídas', () {
-      final resumoCaixa = ResumoCaixa(
+      final resumoCaixaGeral = const ResumoCaixa(
+        quantidadeEntradas: 2,
+        totalEntradas: 150.0,
+        quantidadeSaidas: 1,
+        totalSaidas: 50.0,
+        saldo: 100.0,
+      );
+      final resumoCaixaSalao = const ResumoCaixa(
+        quantidadeEntradas: 2,
+        totalEntradas: 150.0,
+        quantidadeSaidas: 1,
+        totalSaidas: 50.0,
+        saldo: 100.0,
+      );
+      final resumoCaixaLoja = const ResumoCaixa(
         quantidadeEntradas: 2,
         totalEntradas: 150.0,
         quantidadeSaidas: 1,
@@ -16,13 +30,15 @@ void main() {
 
       final summary = DashboardSummary(
         agendamentosHoje: [],
-        resumoCaixa: resumoCaixa,
+        resumoCaixaGeral: resumoCaixaGeral,
+        resumoCaixaSalao: resumoCaixaSalao,
+        resumoCaixaLoja: resumoCaixaLoja,
         produtosBaixoEstoque: [],
       );
 
       expect(summary.lucroDiario, 100.0);
-      expect(summary.resumoCaixa.totalEntradas, 150.0);
-      expect(summary.resumoCaixa.totalSaidas, 50.0);
+      expect(summary.resumoCaixaGeral.totalEntradas, 150.0);
+      expect(summary.resumoCaixaGeral.totalSaidas, 50.0);
     });
 
     test('Calcula corretamente a receita prevista ignorando cancelados', () {
@@ -88,7 +104,9 @@ void main() {
 
       final summary = DashboardSummary(
         agendamentosHoje: agendamentos,
-        resumoCaixa: ResumoCaixa.vazio(),
+        resumoCaixaGeral: ResumoCaixa.vazio(),
+        resumoCaixaSalao: ResumoCaixa.vazio(),
+        resumoCaixaLoja: ResumoCaixa.vazio(),
         produtosBaixoEstoque: [],
       );
 
@@ -99,7 +117,9 @@ void main() {
     test('Identifica estado vazio corretamente', () {
       final summary = DashboardSummary(
         agendamentosHoje: [],
-        resumoCaixa: ResumoCaixa.vazio(),
+        resumoCaixaGeral: ResumoCaixa.vazio(),
+        resumoCaixaSalao: ResumoCaixa.vazio(),
+        resumoCaixaLoja: ResumoCaixa.vazio(),
         produtosBaixoEstoque: [],
       );
 

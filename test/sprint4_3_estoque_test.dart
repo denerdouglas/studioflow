@@ -139,6 +139,21 @@ void main() {
         dataCriacao: inicio,
       );
 
+      final db = await DatabaseService.instance.database;
+      final consumoPrevisto = [
+        {'produtoId': 'prod1', 'quantidade': 30},
+      ];
+      await db.insert('servicos', {
+        'id': 'srv1',
+        'comercio_id': bizId,
+        'nome': 'Servico',
+        'preco': 100,
+        'duracao_minutos': 30,
+        'categoria': 'Geral',
+        'data_cadastro': inicio.toIso8601String(),
+        'insumos_json': jsonEncode(consumoPrevisto),
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
+
       await agendaRepo.inserirGrupo(grupo, [agendamento]);
 
       final agCriado = await agendaRepo.buscarPorId('ag1');
@@ -152,7 +167,6 @@ void main() {
       expect(agCriado.estoqueConsumido, false);
 
       // Saldo nÃ£o alterado
-      final db = await DatabaseService.instance.database;
       final saldo = await db.query(
         'estoque_saldos',
         where: 'estoque_id = ? AND business_id = ? AND finalidade = ?',
@@ -168,9 +182,9 @@ void main() {
       final agendaRepo = AgendaRepository();
       final inicio = DateTime.now();
       final bizId = SessionController.instance.usuario!.comercioId;
+      final db = await DatabaseService.instance.database;
 
       // Configura agendamento sem estoque deduzido
-      final db = await DatabaseService.instance.database;
       await db.insert('agendamentos', {
         'id': 'ag2',
         'cliente_id': 'cli1',
@@ -182,14 +196,18 @@ void main() {
         'valor_servico': 100,
         'desconto': 0,
         'valor_recebido': 0,
-        'confirmado': 0,
-        'compareceu': 0,
-        'excluido': 0,
+        'observacoes': '',
+        'consumo_previsto_json': null,
+        'consumo_realizado_json': null,
+        'estoque_consumido': 0,
+        'confirmado': 0, // Restored
+        'compareceu': 0, // Restored
+        'excluido': 0, // Restored
+        'data_criacao': inicio.toIso8601String(), // Restored
         'comercio_id': bizId,
-        'data_criacao': inicio.toIso8601String(),
+        'business_id': bizId,
         'created_at': inicio.toIso8601String(),
         'updated_at': inicio.toIso8601String(),
-        'estoque_consumido': 0,
       });
 
       final consumoEfetivo = [

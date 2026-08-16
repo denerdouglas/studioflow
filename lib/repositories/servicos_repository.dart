@@ -1,7 +1,27 @@
+import 'dart:convert';
 import 'package:sqflite/sqflite.dart';
 
 import '../database/database_service.dart';
 import '../services/session_controller.dart';
+
+class ConsumoInsumo {
+  final String produtoId;
+  final double quantidade;
+
+  const ConsumoInsumo({required this.produtoId, required this.quantidade});
+
+  Map<String, dynamic> toJson() => {
+    'produtoId': produtoId,
+    'quantidade': quantidade,
+  };
+
+  factory ConsumoInsumo.fromJson(Map<String, dynamic> json) {
+    return ConsumoInsumo(
+      produtoId: json['produtoId'] as String,
+      quantidade: (json['quantidade'] as num).toDouble(),
+    );
+  }
+}
 
 class ServicoRegistro {
   final String id;
@@ -17,6 +37,7 @@ class ServicoRegistro {
   final String? corIdentificacao;
   final double? comissaoPercentual;
   final List<String> profissionaisAutorizados;
+  final String? insumosJson;
 
   const ServicoRegistro({
     required this.id,
@@ -32,7 +53,20 @@ class ServicoRegistro {
     this.corIdentificacao,
     this.comissaoPercentual,
     this.profissionaisAutorizados = const [],
+    this.insumosJson,
   });
+
+  List<ConsumoInsumo> get insumosParsed {
+    if (insumosJson == null || insumosJson!.isEmpty) return [];
+    try {
+      final List<dynamic> decoded = jsonDecode(insumosJson!);
+      return decoded
+          .map((e) => ConsumoInsumo.fromJson(e as Map<String, dynamic>))
+          .toList();
+    } catch (_) {
+      return [];
+    }
+  }
 
   Map<String, Object?> paraMapa() {
     return {
@@ -48,6 +82,7 @@ class ServicoRegistro {
       'unidade_id': unidadeId,
       'cor_identificacao': corIdentificacao,
       'comissao_percentual': comissaoPercentual,
+      'insumos_json': insumosJson,
     };
   }
 
@@ -66,9 +101,8 @@ class ServicoRegistro {
           DateTime.now(),
       unidadeId: mapa['unidade_id'] as String?,
       corIdentificacao: mapa['cor_identificacao'] as String?,
-      comissaoPercentual: mapa['comissao_percentual'] != null
-          ? (mapa['comissao_percentual'] as num).toDouble()
-          : null,
+      comissaoPercentual: (mapa['comissao_percentual'] as num?)?.toDouble(),
+      insumosJson: mapa['insumos_json'] as String?,
       profissionaisAutorizados: _parseProfissionais(
         mapa['profissionais_autorizados'],
       ),

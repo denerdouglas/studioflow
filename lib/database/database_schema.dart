@@ -114,7 +114,8 @@ abstract final class DatabaseSchema {
         updated_at TEXT,
         deleted_at TEXT,
         created_by TEXT,
-        updated_by TEXT
+        updated_by TEXT,
+        insumos_json TEXT
       )
     ''');
 

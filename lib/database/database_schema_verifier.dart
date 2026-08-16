@@ -95,6 +95,60 @@ abstract final class DatabaseSchemaVerifier {
       await _addCol(txn, 'estoque', colunasEstoque, 'updated_by', 'TEXT');
     }
 
+    // MOVIMENTACOES_ESTOQUE
+    final colunasMovEstoque = await _getColunas(txn, 'movimentacoes_estoque');
+    if (colunasMovEstoque.isNotEmpty) {
+      await _addCol(
+        txn,
+        'movimentacoes_estoque',
+        colunasMovEstoque,
+        'finalidade',
+        'TEXT',
+      );
+      await _addCol(
+        txn,
+        'movimentacoes_estoque',
+        colunasMovEstoque,
+        'origem',
+        'TEXT',
+      );
+      await _addCol(
+        txn,
+        'movimentacoes_estoque',
+        colunasMovEstoque,
+        'referencia_id',
+        'TEXT',
+      );
+      await _addCol(
+        txn,
+        'movimentacoes_estoque',
+        colunasMovEstoque,
+        'justificativa_negativo',
+        'TEXT',
+      );
+      await _addCol(
+        txn,
+        'movimentacoes_estoque',
+        colunasMovEstoque,
+        'business_id',
+        'TEXT',
+      );
+      await _addCol(
+        txn,
+        'movimentacoes_estoque',
+        colunasMovEstoque,
+        'comercio_id',
+        'TEXT',
+      );
+      await _addCol(
+        txn,
+        'movimentacoes_estoque',
+        colunasMovEstoque,
+        'idempotency_key',
+        'TEXT',
+      );
+    }
+
     // AGENDAMENTOS
     final colunasAgendamentos = await _getColunas(txn, 'agendamentos');
     if (colunasAgendamentos.isNotEmpty) {
@@ -189,6 +243,12 @@ abstract final class DatabaseSchemaVerifier {
         'updated_by',
         'TEXT',
       );
+    }
+
+    // SERVICOS
+    final colunasServicos = await _getColunas(txn, 'servicos');
+    if (colunasServicos.isNotEmpty) {
+      await _addCol(txn, 'servicos', colunasServicos, 'insumos_json', 'TEXT');
     }
   }
 

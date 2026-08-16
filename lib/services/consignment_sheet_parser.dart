@@ -142,6 +142,22 @@ class ConsignmentSheetParser {
       }
     }
 
+    if (items.isEmpty && text.contains('\n')) {
+      final dataLines = rawLines
+          .map((line) => line.replaceAll(RegExp(r'\s+'), ' ').trim())
+          .where((line) => line.isNotEmpty && !_isHeader(line))
+          .toList();
+      if (dataLines.length > 1) {
+        final joinedText = dataLines.join('  ');
+        final fallbackParsed = parse(joinedText);
+        if (fallbackParsed.itens.isNotEmpty) {
+          items.addAll(fallbackParsed.itens);
+          pending.clear();
+          pending.addAll(fallbackParsed.linhasPendentes);
+        }
+      }
+    }
+
     return ConsignmentDocumentImport(
       representante: _representative(lines),
       contrato: _header(lines, const ['CONTRATO']),

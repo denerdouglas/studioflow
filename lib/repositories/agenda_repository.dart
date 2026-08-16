@@ -480,22 +480,35 @@ class AgendaRepository {
     Transaction txn,
     String servicoId,
   ) async {
-    final materiais = await txn.query(
-      'servico_materiais',
-      where: 'servico_id = ? AND comercio_id = ?',
+    final res = await txn.query(
+      'servicos',
+      columns: ['insumos_json'],
+      where: 'id = ? AND comercio_id = ?',
       whereArgs: [servicoId, _comercioId],
     );
-    if (materiais.isEmpty) return null;
 
-    final listaJson = materiais.map((m) {
-      return {
-        'produto_id': m['estoque_id'],
-        'quantidade': m['quantidade'],
-        'unidade': m['unidade_medida'],
-      };
-    }).toList();
+    if (res.isEmpty) return null;
+    final jsonStr = res.first['insumos_json'] as String?;
+    if (jsonStr == null || jsonStr.isEmpty) return null;
 
-    return jsonEncode(listaJson);
+    // Convert from ConsumoInsumo schema to Agenda schema if needed,
+    // actually, let's keep it generic. The original code built:
+    // [{"produto_id": ..., "quantidade": ..., "unidade": ...}]
+    // We have [{"produtoId": ..., "quantidade": ...}] stored in insumos_json.
+    // Let's rewrite it to match the expected format just in case!
+    try {
+      final List<dynamic> decoded = jsonDecode(jsonStr);
+      final listaJson = decoded.map((m) {
+        return {
+          'produto_id': m['produtoId'],
+          'quantidade': m['quantidade'],
+          'unidade': '', // We didn't store unit in insumos_json
+        };
+      }).toList();
+      return jsonEncode(listaJson);
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<void> atualizar(AgendamentoRegistro agendamento) async {
@@ -958,9 +971,103 @@ class AgendaRepository {
       );
       if (rows.isEmpty) throw StateError('Agendamento não encontrado.');
       final agenda = rows.single;
+
+      final estoqueConsumido =
+          (agenda['estoque_consumido'] as num?)?.toInt() == 1;
+      final consumoStr = agenda['consumo_previsto_json'] as String?;
+      final profissionalId = agenda['profissional_id'] as String;
+
+      List<Map<String, dynamic>> consumoEfetivo = [];
+      if (consumoStr != null && consumoStr.isNotEmpty) {
+        try {
+          final decoded = jsonDecode(consumoStr) as List;
+          consumoEfetivo = decoded
+              .map((e) => Map<String, dynamic>.from(e as Map))
+              .toList();
+        } catch (_) {}
+      }
+
+      if (!estoqueConsumido && consumoEfetivo.isNotEmpty) {
+        for (final item in consumoEfetivo) {
+          final produtoId = item['produto_id'] as String;
+          final quantidade = (item['quantidade'] as num).toDouble();
+
+          if (quantidade <= 0) continue;
+
+          final saldoAtual = await txn.query(
+            'estoque_saldos',
+            columns: ['quantidade_atual'],
+            where: 'estoque_id = ? AND business_id = ? AND finalidade = ?',
+            whereArgs: [produtoId, _comercioId, 'uso_interno'],
+          );
+
+          final qteAnterior = saldoAtual.isNotEmpty
+              ? (saldoAtual.first['quantidade_atual'] as num).toDouble()
+              : 0.0;
+          final qtePosterior = qteAnterior - quantidade;
+
+          final idempotencyKey =
+              '${_comercioId}_${agendamentoId}_${produtoId}_uso_interno';
+
+          final mov = await txn.query(
+            'movimentacoes_estoque',
+            columns: ['id'],
+            where: 'idempotency_key = ?',
+            whereArgs: [idempotencyKey],
+          );
+
+          if (mov.isEmpty) {
+            await txn.insert('movimentacoes_estoque', {
+              'id': '${DateTime.now().microsecondsSinceEpoch}_$produtoId',
+              'item_estoque_id': produtoId,
+              'tipo': 'saida',
+              'finalidade': 'uso_interno',
+              'quantidade': quantidade,
+              'quantidade_anterior': qteAnterior,
+              'quantidade_posterior': qtePosterior,
+              'data': DateTime.now().toIso8601String(),
+              'motivo': 'Consumo automático no atendimento',
+              'agendamento_id': agendamentoId,
+              'profissional_id': profissionalId,
+              'idempotency_key': idempotencyKey,
+            });
+
+            if (saldoAtual.isEmpty) {
+              await txn.insert('estoque_saldos', {
+                'id': '${DateTime.now().microsecondsSinceEpoch}_$produtoId',
+                'business_id': _comercioId,
+                'estoque_id': produtoId,
+                'finalidade': 'uso_interno',
+                'quantidade_atual': qtePosterior,
+                'created_at': DateTime.now().toIso8601String(),
+                'updated_at': DateTime.now().toIso8601String(),
+              });
+            } else {
+              await txn.update(
+                'estoque_saldos',
+                {
+                  'quantidade_atual': qtePosterior,
+                  'updated_at': DateTime.now().toIso8601String(),
+                },
+                where: 'estoque_id = ? AND business_id = ? AND finalidade = ?',
+                whereArgs: [produtoId, _comercioId, 'uso_interno'],
+              );
+            }
+          }
+        }
+      }
+
+      final consumoRealizadoJson = jsonEncode(consumoEfetivo);
+
       await txn.update(
         'agendamentos',
-        {'status': 'concluido', 'confirmado': 1, 'compareceu': 1},
+        {
+          'status': 'concluido',
+          'confirmado': 1,
+          'compareceu': 1,
+          'estoque_consumido': 1,
+          'consumo_realizado_json': consumoRealizadoJson,
+        },
         where: 'id = ? AND comercio_id = ? AND excluido = 0',
         whereArgs: [agendamentoId, _comercioId],
       );

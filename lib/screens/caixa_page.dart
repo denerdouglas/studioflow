@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import '../repositories/caixa_repository.dart';
 
 class CaixaPage extends StatefulWidget {
-  const CaixaPage({super.key});
+  final String abaInicial;
+
+  const CaixaPage({super.key, this.abaInicial = 'geral'});
 
   @override
   State<CaixaPage> createState() => _CaixaPageState();
@@ -23,7 +25,7 @@ class _CaixaPageState extends State<CaixaPage> {
 
   List<MovimentoFinanceiroRegistro> _movimentosTodos = [];
 
-  String _abaSelecionada = 'geral';
+  late String _abaSelecionada;
 
   List<MovimentoFinanceiroRegistro> get _movimentos {
     if (_abaSelecionada == 'servico') {
@@ -42,28 +44,7 @@ class _CaixaPageState extends State<CaixaPage> {
     return _movimentosTodos;
   }
 
-  ResumoCaixa get _resumoAtual {
-    double entradas = 0;
-    double saidas = 0;
-    int qtdEntradas = 0;
-    int qtdSaidas = 0;
-    for (final item in _movimentos) {
-      if (item.entrada) {
-        entradas += item.valor;
-        qtdEntradas++;
-      } else {
-        saidas += item.valor;
-        qtdSaidas++;
-      }
-    }
-    return ResumoCaixa(
-      totalEntradas: entradas,
-      totalSaidas: saidas,
-      saldo: entradas - saidas,
-      quantidadeEntradas: qtdEntradas,
-      quantidadeSaidas: qtdSaidas,
-    );
-  }
+  ResumoCaixa? _resumoAtual;
 
   bool _carregando = true;
   String? _erro;
@@ -71,14 +52,23 @@ class _CaixaPageState extends State<CaixaPage> {
   @override
   void initState() {
     super.initState();
+    _abaSelecionada = widget.abaInicial;
     _carregarCaixa();
+  }
+
+  String? get _centroResultadoAtual {
+    if (_abaSelecionada == 'servico') return 'salao';
+    if (_abaSelecionada == 'loja') return 'loja';
+    if (_abaSelecionada == 'consignado') return 'consignado';
+    return null;
   }
 
   Future<void> _carregarCaixa() async {
     try {
+      final filtro = _centroResultadoAtual;
       final resultados = await Future.wait([
-        _repository.listarPorDia(_dataSelecionada),
-        _repository.resumoDoDia(_dataSelecionada),
+        _repository.listarPorDia(_dataSelecionada, centroResultado: filtro),
+        _repository.resumoDoDia(_dataSelecionada, centroResultado: filtro),
       ]);
 
       if (!mounted) {
@@ -87,6 +77,7 @@ class _CaixaPageState extends State<CaixaPage> {
 
       setState(() {
         _movimentosTodos = resultados[0] as List<MovimentoFinanceiroRegistro>;
+        _resumoAtual = resultados[1] as ResumoCaixa;
 
         _carregando = false;
         _erro = null;
@@ -438,9 +429,13 @@ class _CaixaPageState extends State<CaixaPage> {
     final selecionado = _abaSelecionada == valor;
     return InkWell(
       onTap: () {
-        setState(() {
-          _abaSelecionada = valor;
-        });
+        if (_abaSelecionada != valor) {
+          setState(() {
+            _abaSelecionada = valor;
+            _carregando = true;
+          });
+          _carregarCaixa();
+        }
       },
       borderRadius: BorderRadius.circular(20),
       child: Container(
@@ -489,7 +484,7 @@ class _CaixaPageState extends State<CaixaPage> {
                 ),
                 SizedBox(height: 8),
                 Text(
-                  'R\$ ${_resumoAtual.saldo.toStringAsFixed(2)}',
+                  'R\$ ${(_resumoAtual?.saldo ?? 0.0).toStringAsFixed(2)}',
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 34,
@@ -505,8 +500,8 @@ class _CaixaPageState extends State<CaixaPage> {
               Expanded(
                 child: _ResumoCard(
                   titulo: 'Entradas',
-                  valor: _resumoAtual.totalEntradas,
-                  quantidade: _resumoAtual.quantidadeEntradas,
+                  valor: _resumoAtual?.totalEntradas ?? 0.0,
+                  quantidade: _resumoAtual?.quantidadeEntradas ?? 0,
                   icone: Icons.arrow_downward_rounded,
                   cor: _verde,
                 ),
@@ -515,8 +510,8 @@ class _CaixaPageState extends State<CaixaPage> {
               Expanded(
                 child: _ResumoCard(
                   titulo: 'Saídas',
-                  valor: _resumoAtual.totalSaidas,
-                  quantidade: _resumoAtual.quantidadeSaidas,
+                  valor: _resumoAtual?.totalSaidas ?? 0.0,
+                  quantidade: _resumoAtual?.quantidadeSaidas ?? 0,
                   icone: Icons.arrow_upward_rounded,
                   cor: _vermelho,
                 ),
@@ -960,6 +955,7 @@ class _NovaMovimentacaoSheetState extends State<NovaMovimentacaoSheet> {
   String _tipo = 'entrada';
   String _categoria = 'Serviços';
   String _formaPagamento = 'Dinheiro';
+  String _caixa = 'salao';
 
   late DateTime _dataSelecionada;
 
@@ -985,6 +981,12 @@ class _NovaMovimentacaoSheetState extends State<NovaMovimentacaoSheet> {
     'Outro',
   ];
 
+  final List<Map<String, String>> _caixasDisponiveis = const [
+    {'valor': 'salao', 'label': 'Serviços'},
+    {'valor': 'loja', 'label': 'Loja'},
+    {'valor': 'consignado', 'label': 'Consignado'},
+  ];
+
   @override
   void initState() {
     super.initState();
@@ -997,6 +999,7 @@ class _NovaMovimentacaoSheetState extends State<NovaMovimentacaoSheet> {
       _tipo = movimento.tipo;
       _categoria = movimento.categoria;
       _formaPagamento = movimento.formaPagamento;
+      _caixa = movimento.centroResultado ?? 'salao';
 
       _descricaoController.text = movimento.descricao;
 
@@ -1096,6 +1099,7 @@ class _NovaMovimentacaoSheetState extends State<NovaMovimentacaoSheet> {
       servicoId: existente?.servicoId,
       usuarioResponsavelId: existente?.usuarioResponsavelId,
       observacoes: _observacoesController.text.trim(),
+      centroResultado: _caixa,
     );
 
     Navigator.pop(context, movimento);
@@ -1227,6 +1231,29 @@ class _NovaMovimentacaoSheetState extends State<NovaMovimentacaoSheet> {
 
                 setState(() {
                   _formaPagamento = valor;
+                });
+              },
+            ),
+            SizedBox(height: 14),
+            DropdownButtonFormField<String>(
+              initialValue: _caixa,
+              decoration: const InputDecoration(
+                labelText: 'Caixa de Destino',
+                prefixIcon: Icon(Icons.account_balance_wallet_outlined),
+              ),
+              items: _caixasDisponiveis.map((caixa) {
+                return DropdownMenuItem(
+                  value: caixa['valor']!,
+                  child: Text(caixa['label']!),
+                );
+              }).toList(),
+              onChanged: (valor) {
+                if (valor == null) {
+                  return;
+                }
+
+                setState(() {
+                  _caixa = valor;
                 });
               },
             ),

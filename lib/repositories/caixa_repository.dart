@@ -179,35 +179,62 @@ class CaixaRepository {
   Future<List<MovimentoFinanceiroRegistro>> listarPorPeriodo({
     required DateTime inicio,
     required DateTime fim,
+    String? centroResultado,
   }) async {
     final Database db = await _databaseService.database;
 
+    String whereStr = 'data >= ? AND data < ? AND comercio_id = ?';
+    List<Object?> whereArgs = [
+      inicio.toIso8601String(),
+      fim.toIso8601String(),
+      _comercioId,
+    ];
+
+    if (centroResultado != null) {
+      whereStr += ' AND centro_resultado = ?';
+      whereArgs.add(centroResultado);
+    }
+
     final registros = await db.query(
       'movimentacoes_financeiras',
-      where: 'data >= ? AND data < ? AND comercio_id = ?',
-      whereArgs: [inicio.toIso8601String(), fim.toIso8601String(), _comercioId],
+      where: whereStr,
+      whereArgs: whereArgs,
       orderBy: 'data DESC, data_criacao DESC',
     );
 
     return registros.map(MovimentoFinanceiroRegistro.doMapa).toList();
   }
 
-  Future<List<MovimentoFinanceiroRegistro>> listarPorDia(DateTime data) async {
+  Future<List<MovimentoFinanceiroRegistro>> listarPorDia(
+    DateTime data, {
+    String? centroResultado,
+  }) async {
     final inicio = DateTime(data.year, data.month, data.day);
 
     final fim = inicio.add(const Duration(days: 1));
 
-    return listarPorPeriodo(inicio: inicio, fim: fim);
+    return listarPorPeriodo(
+      inicio: inicio,
+      fim: fim,
+      centroResultado: centroResultado,
+    );
   }
 
-  Future<List<MovimentoFinanceiroRegistro>> listarPorMes(DateTime data) async {
+  Future<List<MovimentoFinanceiroRegistro>> listarPorMes(
+    DateTime data, {
+    String? centroResultado,
+  }) async {
     final inicio = DateTime(data.year, data.month, 1);
 
     final fim = data.month == 12
         ? DateTime(data.year + 1, 1, 1)
         : DateTime(data.year, data.month + 1, 1);
 
-    return listarPorPeriodo(inicio: inicio, fim: fim);
+    return listarPorPeriodo(
+      inicio: inicio,
+      fim: fim,
+      centroResultado: centroResultado,
+    );
   }
 
   Future<void> inserir(MovimentoFinanceiroRegistro movimento) async {
@@ -260,8 +287,13 @@ class CaixaRepository {
   Future<ResumoCaixa> resumoDoPeriodo({
     required DateTime inicio,
     required DateTime fim,
+    String? centroResultado,
   }) async {
-    final lista = await listarPorPeriodo(inicio: inicio, fim: fim);
+    final lista = await listarPorPeriodo(
+      inicio: inicio,
+      fim: fim,
+      centroResultado: centroResultado,
+    );
 
     double entradas = 0;
     double saidas = 0;
@@ -393,12 +425,18 @@ class CaixaRepository {
     );
   }
 
-  Future<ResumoCaixa> resumoDoDia(DateTime data) async {
+  Future<ResumoCaixa> resumoDoDia(
+    DateTime data, {
+    String? centroResultado,
+  }) async {
     final inicio = DateTime(data.year, data.month, data.day);
-
     final fim = inicio.add(const Duration(days: 1));
 
-    return resumoDoPeriodo(inicio: inicio, fim: fim);
+    return resumoDoPeriodo(
+      inicio: inicio,
+      fim: fim,
+      centroResultado: centroResultado,
+    );
   }
 
   Future<ResumoCaixa> resumoDaSemana(DateTime data) async {
@@ -411,14 +449,20 @@ class CaixaRepository {
     return resumoDoPeriodo(inicio: inicio, fim: fim);
   }
 
-  Future<ResumoCaixa> resumoDoMes(DateTime data) async {
+  Future<ResumoCaixa> resumoDoMes(
+    DateTime data, {
+    String? centroResultado,
+  }) async {
     final inicio = DateTime(data.year, data.month, 1);
-
     final fim = data.month == 12
         ? DateTime(data.year + 1, 1, 1)
         : DateTime(data.year, data.month + 1, 1);
 
-    return resumoDoPeriodo(inicio: inicio, fim: fim);
+    return resumoDoPeriodo(
+      inicio: inicio,
+      fim: fim,
+      centroResultado: centroResultado,
+    );
   }
 
   Future<double> totalPorProfissional({

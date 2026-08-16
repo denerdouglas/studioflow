@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 
 import '../repositories/servicos_repository.dart';
@@ -920,15 +921,18 @@ class _ServicoFormSheetState extends State<ServicoFormSheet> {
   final UnidadesRepository _unidadesRepository = UnidadesRepository();
   final FuncionariosRepository _funcionariosRepository =
       FuncionariosRepository();
+  final EstoqueRepository _repoEstoque = EstoqueRepository();
 
   List<Unidade> _unidades = [];
   List<ProfissionalRegistro> _profissionais = [];
+  List<ItemEstoqueRegistro> _estoque = [];
 
   String? _unidadeId;
   String? _corIdentificacao;
   final TextEditingController _comissaoPercentualController =
       TextEditingController();
   List<String> _profissionaisAutorizados = [];
+  List<ConsumoInsumo> _insumos = [];
 
   bool _carregandoDependencias = true;
 
@@ -957,6 +961,7 @@ class _ServicoFormSheetState extends State<ServicoFormSheet> {
       _comissaoPercentualController.text =
           servico.comissaoPercentual?.toStringAsFixed(2) ?? '';
       _profissionaisAutorizados = List.from(servico.profissionaisAutorizados);
+      _insumos = List.from(servico.insumosParsed);
 
       if (!_categorias.contains(_categoria)) {
         _categoria = 'Outros';
@@ -972,10 +977,12 @@ class _ServicoFormSheetState extends State<ServicoFormSheet> {
       final profissionais = await _funcionariosRepository.listar(
         incluirInativos: false,
       );
+      final estoque = await _repoEstoque.listar(incluirInativos: false);
       if (mounted) {
         setState(() {
           _unidades = unidades;
           _profissionais = profissionais;
+          _estoque = estoque;
           _carregandoDependencias = false;
         });
       }
@@ -1074,9 +1081,360 @@ class _ServicoFormSheetState extends State<ServicoFormSheet> {
       corIdentificacao: _corIdentificacao,
       comissaoPercentual: comissaoPercentual,
       profissionaisAutorizados: _profissionaisAutorizados,
+      insumosJson: jsonEncode(_insumos.map((i) => i.toJson()).toList()),
     );
 
     Navigator.pop(context, servico);
+  }
+
+  Widget _buildInsumos() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(height: 24),
+        Text(
+          'Insumos Consumidos (Ficha Técnica)',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: Theme.of(context).colorScheme.onSurface,
+          ),
+        ),
+        SizedBox(height: 8),
+        if (_insumos.isEmpty)
+          Text(
+            'Nenhum produto de estoque vinculado.',
+            style: TextStyle(
+              fontSize: 14,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          )
+        else
+          ListView.builder(
+            shrinkWrap: true,
+            physics: NeverScrollableScrollPhysics(),
+            itemCount: _insumos.length,
+            itemBuilder: (context, i) {
+              final insumo = _insumos[i];
+              final prodList = _estoque.where((p) => p.id == insumo.produtoId);
+              final prodNome = prodList.isNotEmpty
+                  ? prodList.first.nome
+                  : 'Produto não encontrado';
+              final prodUnidade = prodList.isNotEmpty
+                  ? prodList.first.unidade
+                  : '';
+
+              return ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text(prodNome),
+                subtitle: Text('${insumo.quantidade} $prodUnidade'),
+                trailing: IconButton(
+                  icon: Icon(Icons.delete_outline, color: Colors.red),
+                  onPressed: () {
+                    setState(() {
+                      _insumos.removeAt(i);
+                    });
+                  },
+                ),
+              );
+            },
+          ),
+        SizedBox(height: 8),
+        OutlinedButton.icon(
+          onPressed: _adicionarInsumo,
+          icon: Icon(Icons.add),
+          label: Text('Adicionar Produto'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: _corPrincipal,
+            side: BorderSide(color: _corPrincipal),
+            minimumSize: const Size.fromHeight(48),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        ),
+        if (_insumos.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          Builder(
+            builder: (context) {
+              double custoTotalInsumos = 0.0;
+              for (final insumo in _insumos) {
+                final prodList = _estoque.where(
+                  (p) => p.id == insumo.produtoId,
+                );
+                if (prodList.isNotEmpty) {
+                  custoTotalInsumos +=
+                      (prodList.first.custoUnitario) * insumo.quantidade;
+                }
+              }
+              final precoServico =
+                  double.tryParse(
+                    _precoController.text.trim().replaceAll(',', '.'),
+                  ) ??
+                  0.0;
+              final outrosCustos =
+                  double.tryParse(
+                    _custoController.text.trim().replaceAll(',', '.'),
+                  ) ??
+                  0.0;
+              final comissaoPct =
+                  double.tryParse(
+                    _comissaoPercentualController.text.trim().replaceAll(
+                      ',',
+                      '.',
+                    ),
+                  ) ??
+                  0.0;
+              final comissaoEstimada = precoServico * (comissaoPct / 100);
+              final lucro =
+                  precoServico -
+                  custoTotalInsumos -
+                  outrosCustos -
+                  comissaoEstimada;
+              final margem = precoServico > 0
+                  ? (lucro / precoServico) * 100
+                  : 0.0;
+
+              return Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: Theme.of(context).colorScheme.outlineVariant,
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Resumo Financeiro da Ficha',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Custo Total (Insumos):',
+                          style: TextStyle(fontSize: 14),
+                        ),
+                        Text(
+                          'R\$ ${custoTotalInsumos.toStringAsFixed(2)}',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: Colors.red.shade700,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    if (outrosCustos > 0) ...[
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Outros Custos:',
+                            style: TextStyle(fontSize: 14),
+                          ),
+                          Text(
+                            'R\$ ${outrosCustos.toStringAsFixed(2)}',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: Colors.red.shade700,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                    ],
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Preço do Serviço:',
+                          style: TextStyle(fontSize: 14),
+                        ),
+                        Text(
+                          'R\$ ${precoServico.toStringAsFixed(2)}',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Comissão Estimada (${comissaoPct.toStringAsFixed(1)}%):',
+                          style: TextStyle(fontSize: 14),
+                        ),
+                        Text(
+                          'R\$ ${comissaoEstimada.toStringAsFixed(2)}',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: Colors.orange.shade700,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const Divider(height: 16),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Resultado Esperado:',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        Text(
+                          'R\$ ${lucro.toStringAsFixed(2)}',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: lucro >= 0
+                                ? Colors.green.shade700
+                                : Colors.red.shade700,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Margem Estimada:',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        Text(
+                          '${margem.toStringAsFixed(1)}%',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: margem >= 0
+                                ? Colors.green.shade700
+                                : Colors.red.shade700,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ],
+      ],
+    );
+  }
+
+  void _adicionarInsumo() {
+    String? itemSelecionado;
+    final TextEditingController qtdController = TextEditingController();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) {
+        return StatefulBuilder(
+          builder: (context, setStateSheet) {
+            final teclado = MediaQuery.viewInsetsOf(context).bottom;
+            return Container(
+              padding: EdgeInsets.fromLTRB(22, 22, 22, teclado + 25),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surface,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Adicionar Produto',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  ),
+                  SizedBox(height: 16),
+                  DropdownButtonFormField<String>(
+                    decoration: InputDecoration(
+                      labelText: 'Produto do Estoque',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                    initialValue: itemSelecionado,
+                    items: _estoque.map((e) {
+                      return DropdownMenuItem(value: e.id, child: Text(e.nome));
+                    }).toList(),
+                    onChanged: (val) {
+                      setStateSheet(() {
+                        itemSelecionado = val;
+                      });
+                    },
+                  ),
+                  SizedBox(height: 16),
+                  TextField(
+                    controller: qtdController,
+                    keyboardType: TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    decoration: InputDecoration(
+                      labelText: 'Quantidade consumida',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                  ),
+                  SizedBox(height: 24),
+                  FilledButton(
+                    onPressed: () {
+                      final qtd = double.tryParse(
+                        qtdController.text.replaceAll(',', '.'),
+                      );
+                      if (itemSelecionado != null && qtd != null && qtd > 0) {
+                        setState(() {
+                          _insumos.add(
+                            ConsumoInsumo(
+                              produtoId: itemSelecionado!,
+                              quantidade: qtd,
+                            ),
+                          );
+                        });
+                        Navigator.pop(context);
+                      }
+                    },
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size.fromHeight(54),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                    child: Text('Confirmar'),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   @override
@@ -1164,6 +1522,7 @@ class _ServicoFormSheetState extends State<ServicoFormSheet> {
                 Expanded(
                   child: TextField(
                     controller: _precoController,
+                    onChanged: (_) => setState(() {}),
                     keyboardType: const TextInputType.numberWithOptions(
                       decimal: true,
                     ),
@@ -1234,6 +1593,7 @@ class _ServicoFormSheetState extends State<ServicoFormSheet> {
             SizedBox(height: 14),
             TextField(
               controller: _comissaoPercentualController,
+              onChanged: (_) => setState(() {}),
               keyboardType: const TextInputType.numberWithOptions(
                 decimal: true,
               ),
@@ -1305,6 +1665,7 @@ class _ServicoFormSheetState extends State<ServicoFormSheet> {
                   },
                 );
               }),
+            _buildInsumos(),
             SizedBox(height: 8),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
