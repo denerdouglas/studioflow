@@ -60,10 +60,10 @@ class _ConsignacaoConferenciaPageState
             final draft = result.draft ?? ScannerProductDraft();
             final code = draft.referenciaComercial?.value ?? draft.gtin?.value;
             if (code == null) return false;
-            
+
             final choices = await repository.resolverCodigo(id!, code);
             if (choices.isEmpty || !mounted) return false;
-            
+
             var piece = choices.first;
             if (choices.length > 1) {
               final selected = await showDialog<Map<String, Object?>>(
@@ -83,7 +83,7 @@ class _ConsignacaoConferenciaPageState
               if (selected == null) return false;
               piece = selected;
             }
-            
+
             await repository.conferirPeca(
               conferenciaId: id!,
               pecaId: piece['id'] as String,

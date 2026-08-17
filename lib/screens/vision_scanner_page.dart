@@ -25,7 +25,13 @@ Future<Uint8List?> _cropImage(Uint8List jpegBytes) async {
     final cropH = (cropW * (150 / 290)).toInt();
     final cropX = (original.width - cropW) ~/ 2;
     final cropY = (original.height - cropH) ~/ 2;
-    final cropped = img.copyCrop(original, x: cropX, y: cropY, width: cropW, height: cropH);
+    final cropped = img.copyCrop(
+      original,
+      x: cropX,
+      y: cropY,
+      width: cropW,
+      height: cropH,
+    );
     return Uint8List.fromList(img.encodeJpg(cropped));
   }, jpegBytes);
 }
@@ -35,7 +41,12 @@ class VisionScannerPage extends StatefulWidget {
   final bool returnList;
   final Future<bool> Function(ScannerResult)? onContinuousItem;
 
-  const VisionScannerPage({super.key, this.policy, this.returnList = false, this.onContinuousItem});
+  const VisionScannerPage({
+    super.key,
+    this.policy,
+    this.returnList = false,
+    this.onContinuousItem,
+  });
 
   @override
   State<VisionScannerPage> createState() => _VisionScannerPageState();
@@ -84,23 +95,33 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
       if (!mounted) return;
 
       final tempDir = await getTemporaryDirectory();
-      final file = File('${tempDir.path}/ocr_frame_${DateTime.now().millisecondsSinceEpoch}.jpg');
+      final file = File(
+        '${tempDir.path}/ocr_frame_${DateTime.now().millisecondsSinceEpoch}.jpg',
+      );
       await file.writeAsBytes(cropped);
 
       final coordinator = ScannerCoordinator(
         externalProviders: [MlKitVisionProvider()],
       );
       final draft = await coordinator.analyzeImages(file.path);
-      
+
       if (!mounted) return;
       final resolved = await BipContextService().resolve(draft);
       if (resolved.kind != BipItemKind.desconhecido) {
-        await _processarCodigo(draft.referenciaComercial?.value ?? draft.gtin?.value ?? '', isOcrResult: true, draftOcr: draft);
+        await _processarCodigo(
+          draft.referenciaComercial?.value ?? draft.gtin?.value ?? '',
+          isOcrResult: true,
+          draftOcr: draft,
+        );
         return;
       }
-      
+
       if (draft.referenciaComercial != null || draft.gtin != null) {
-          await _processarCodigo(draft.referenciaComercial?.value ?? draft.gtin?.value ?? '', isOcrResult: true, draftOcr: draft);
+        await _processarCodigo(
+          draft.referenciaComercial?.value ?? draft.gtin?.value ?? '',
+          isOcrResult: true,
+          draftOcr: draft,
+        );
       }
     } catch (_) {
     } finally {
@@ -135,27 +156,27 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
 
     // Em modo contínuo, resolvemos e adicionamos à sessão.
     if (widget.onContinuousItem != null) {
-       final success = await widget.onContinuousItem!(sResult);
-       if (success && mounted) {
-           _adicionarASessao(draft, resolvedItem);
-       } else if (mounted) {
-           setState(() => _processando = false);
-           _controller.start();
-       }
-       return;
+      final success = await widget.onContinuousItem!(sResult);
+      if (success && mounted) {
+        _adicionarASessao(draft, resolvedItem);
+      } else if (mounted) {
+        setState(() => _processando = false);
+        _controller.start();
+      }
+      return;
     }
 
     if (resolvedItem != null && mounted) {
-       _adicionarASessao(draft, resolvedItem);
-       return;
+      _adicionarASessao(draft, resolvedItem);
+      return;
     }
-    
+
     final resolved = await BipContextService().resolve(draft);
     if (resolved.kind != BipItemKind.desconhecido && mounted) {
-       _adicionarASessao(draft, resolved.product);
-       return;
+      _adicionarASessao(draft, resolved.product);
+      return;
     }
-    
+
     if (mounted) _adicionarASessao(draft, null);
   }
 
@@ -176,7 +197,9 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
     if (mounted) {
       setState(() {
         _processando = false;
-        _erro = added ? 'Item adicionado: ${produto?.nome ?? draft.nome?.value ?? key}' : 'Item já lido.';
+        _erro = added
+            ? 'Item adicionado: ${produto?.nome ?? draft.nome?.value ?? key}'
+            : 'Item já lido.';
       });
       _controller.start();
     }
@@ -185,7 +208,13 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
   String? _ultimoCodigoLido;
   DateTime? _ultimoTempoLeitura;
 
-  Future<void> _processarCodigo(String codigo, {bool isQr = false, bool isOcrResult = false, ScannerProductDraft? draftOcr, Uint8List? rawImage}) async {
+  Future<void> _processarCodigo(
+    String codigo, {
+    bool isQr = false,
+    bool isOcrResult = false,
+    ScannerProductDraft? draftOcr,
+    Uint8List? rawImage,
+  }) async {
     if (_processando) return;
 
     final agora = DateTime.now();
@@ -223,33 +252,37 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
       ],
     );
 
-    ScannerProductDraft draft = draftOcr ?? (isQr
-        ? ScannerProductDraft(
-            qr: ScannerField(
-              codigo,
-              source: 'qr',
-              confidence: ScannerConfidence.alta,
-            ),
-            rawSignals: [codigo],
-          )
-        : GtinValidator.isValid(normalized)
-        ? (await coordinator.searchExternalBarcode(normalized)) ?? ScannerProductDraft(
-            gtin: ScannerField(
-              normalized,
-              source: 'barcode',
-              confidence: ScannerConfidence.baixa,
-              reviewReason: 'GTIN válido, mas sem correspondência exata.',
-            ),
-          )
-        : ScannerProductDraft(
-            referenciaComercial: ScannerField(
-              codigo.trim(),
-              source: 'barcode',
-              confidence: ScannerConfidence.alta,
-            ),
-            reviewReasons: const ['Confirme o código comercial.'],
-            rawSignals: [codigo],
-          ));
+    ScannerProductDraft draft =
+        draftOcr ??
+        (isQr
+            ? ScannerProductDraft(
+                qr: ScannerField(
+                  codigo,
+                  source: 'qr',
+                  confidence: ScannerConfidence.alta,
+                ),
+                rawSignals: [codigo],
+              )
+            : GtinValidator.isValid(normalized)
+            ? (await coordinator.searchExternalBarcode(normalized)) ??
+                  ScannerProductDraft(
+                    gtin: ScannerField(
+                      normalized,
+                      source: 'barcode',
+                      confidence: ScannerConfidence.baixa,
+                      reviewReason:
+                          'GTIN válido, mas sem correspondência exata.',
+                    ),
+                  )
+            : ScannerProductDraft(
+                referenciaComercial: ScannerField(
+                  codigo.trim(),
+                  source: 'barcode',
+                  confidence: ScannerConfidence.alta,
+                ),
+                reviewReasons: const ['Confirme o código comercial.'],
+                rawSignals: [codigo],
+              ));
 
     if (!mounted) return;
 
@@ -269,9 +302,13 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
         final cropped = await _cropImage(rawImage);
         if (cropped != null) {
           final tempDir = await getTemporaryDirectory();
-          final file = File('${tempDir.path}/ocr_complemento_${DateTime.now().millisecondsSinceEpoch}.jpg');
+          final file = File(
+            '${tempDir.path}/ocr_complemento_${DateTime.now().millisecondsSinceEpoch}.jpg',
+          );
           await file.writeAsBytes(cropped);
-          final draftOcrComp = await ScannerCoordinator(externalProviders: [MlKitVisionProvider()]).analyzeImages(file.path);
+          final draftOcrComp = await ScannerCoordinator(
+            externalProviders: [MlKitVisionProvider()],
+          ).analyzeImages(file.path);
           draftFinal = ScannerCoordinator.mergeDrafts(draftFinal, draftOcrComp);
         }
       } catch (_) {}
@@ -282,9 +319,9 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
     _tocarBip(); // Bipa para produto novo/rascunho
 
     if (continuous) {
-       // Em inventario, podemos apenas aceitar o rascunho
-       await _acceptResult(ScannerResult.draft(draftFinal));
-       return;
+      // Em inventario, podemos apenas aceitar o rascunho
+      await _acceptResult(ScannerResult.draft(draftFinal));
+      return;
     }
 
     final result = await Navigator.push<ScannerResult?>(
@@ -305,22 +342,22 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
   Future<void> _detectar(BarcodeCapture captura) async {
     final image = captura.image;
     if (image != null && !_ocrEmExecucao && !_processando) {
-       final agora = DateTime.now();
-       if (agora.difference(_ultimoTempoOcr).inMilliseconds > 1500) {
-           _ultimoTempoOcr = agora;
-           _executarOcrFrame(image);
-       }
+      final agora = DateTime.now();
+      if (agora.difference(_ultimoTempoOcr).inMilliseconds > 1500) {
+        _ultimoTempoOcr = agora;
+        _executarOcrFrame(image);
+      }
     }
 
     if (_processando || captura.barcodes.isEmpty) return;
-    
+
     final raw = captura.barcodes
         .map((barcode) => barcode.rawValue)
         .whereType<String>()
         .firstOrNull;
 
     if (raw == null) return;
-    
+
     final detected = captura.barcodes.firstWhere(
       (barcode) => barcode.rawValue == raw,
       orElse: () => captura.barcodes.first,
@@ -348,7 +385,10 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
             TextButton(
               onPressed: () {
                 Navigator.pop(dialogContext);
-                Navigator.pop(context, bipSession.items); // Retorna a lista e fecha o scanner!
+                Navigator.pop(
+                  context,
+                  bipSession.items,
+                ); // Retorna a lista e fecha o scanner!
               },
               child: Text('Conferir tudo e Sair'),
             ),
@@ -357,8 +397,7 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
             child: Text('Cancelar'),
           ),
           FilledButton(
-            onPressed: () =>
-                Navigator.pop(dialogContext, localCodigo.trim()),
+            onPressed: () => Navigator.pop(dialogContext, localCodigo.trim()),
             child: Text('Aplicar código'),
           ),
         ],
@@ -374,13 +413,17 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
-        title: Text(continuous ? 'Lendo lote (${bipSession.items.length})' : 'Ler Etiqueta / Código'),
+        title: Text(
+          continuous
+              ? 'Lendo lote (${bipSession.items.length})'
+              : 'Ler Etiqueta / Código',
+        ),
         actions: [
           if (continuous)
-             FilledButton(
-                onPressed: () => Navigator.pop(context, bipSession.items),
-                child: Text('Finalizar (${bipSession.items.length})'),
-             )
+            FilledButton(
+              onPressed: () => Navigator.pop(context, bipSession.items),
+              child: Text('Finalizar (${bipSession.items.length})'),
+            ),
         ],
       ),
       body: Stack(
