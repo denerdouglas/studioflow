@@ -222,6 +222,27 @@ class _AgendaPageState extends State<AgendaPage> {
       return;
     }
 
+    if (acao == 'editar') {
+      if (!mounted) return;
+      final novo = await showModalBottomSheet<bool>(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (_) {
+          return NovoAgendamentoSheet(
+            dataBase: _dataSelecionada,
+            profissionais: _profissionais,
+            agendamentoInicial: agendamento,
+          );
+        },
+      );
+      if (novo == true) {
+        setState(() => _carregando = true);
+        await _carregarTudo();
+      }
+      return;
+    }
+
     if (acao == 'concluir') {
       await _concluirAgendamento(agendamento);
       return;
@@ -1433,19 +1454,39 @@ class OpcoesAgendamentoSheet extends StatelessWidget {
                     },
                   ),
                 _OpcaoAgendamento(
-                  titulo: 'Reagendar este serviço',
-                  icone: Icons.edit_calendar_outlined,
+                  titulo: 'Editar agendamento',
+                  icone: Icons.edit_note,
                   cor: Theme.of(context).colorScheme.primary,
+                  onTap: () {
+                    Navigator.pop(context, 'editar');
+                  },
+                ),
+                SizedBox(height: 12),
+                Padding(
+                  padding: const EdgeInsets.only(left: 4, bottom: 8),
+                  child: Text(
+                    'MAIS AÇÕES',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      letterSpacing: 1.2,
+                    ),
+                  ),
+                ),
+                _OpcaoAgendamento(
+                  titulo: 'Reagendar horário do serviço',
+                  icone: Icons.edit_calendar_outlined,
+                  cor: Theme.of(context).colorScheme.onSurface,
                   onTap: () {
                     Navigator.pop(context, 'reagendar');
                   },
                 ),
                 if (agendamento.grupoAgendamentoId != null)
                   _OpcaoAgendamento(
-                    titulo:
-                        'Reagendar o atendimento completo (todos os serviços)',
+                    titulo: 'Reagendar grupo completo',
                     icone: Icons.calendar_month,
-                    cor: const Color(0xFF5D408B),
+                    cor: Theme.of(context).colorScheme.onSurface,
                     onTap: () {
                       Navigator.pop(context, 'reagendar_grupo');
                     },
@@ -1461,7 +1502,7 @@ class OpcoesAgendamentoSheet extends StatelessWidget {
                 _OpcaoAgendamento(
                   titulo: 'Histórico',
                   icone: Icons.history,
-                  cor: const Color(0xFF546E7A),
+                  cor: Theme.of(context).colorScheme.onSurface,
                   onTap: () {
                     Navigator.pop(context, 'historico');
                   },

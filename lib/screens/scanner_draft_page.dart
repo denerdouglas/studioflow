@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 import '../models/domain/scanner_product_draft.dart';
+import '../repositories/loja_repository.dart';
+import '../models/domain/loja.dart';
+import '../services/session_controller.dart';
+import '../core/utils/id_generator.dart';
 
 class ScannerDraftPage extends StatefulWidget {
   final ScannerProductDraft draft;
@@ -25,6 +29,7 @@ class _ScannerDraftPageState extends State<ScannerDraftPage> {
 
   String _finalidadeSelecionada =
       'venda'; // venda, uso_interno, ambos, ativo_imobilizado
+  bool _salvando = false;
 
   @override
   void initState() {
@@ -130,10 +135,64 @@ class _ScannerDraftPageState extends State<ScannerDraftPage> {
       rawSignals: widget.draft.rawSignals,
     );
 
-    Navigator.pop(context, {
-      'draft': confirmedDraft,
-      'finalidade': _finalidadeSelecionada,
-    });
+    setState(() => _salvando = true);
+
+    try {
+      final u = SessionController.instance.usuario;
+      if (u == null) throw StateError('Usuário não autenticado.');
+
+      final agora = DateTime.now();
+      final produto = ProdutoLoja(
+        id: IdGenerator.temporal(),
+        comercioId: u.comercioId,
+        nome: confirmedDraft.nome?.value ?? '',
+        tipoProduto: _finalidadeSelecionada,
+        descricao: confirmedDraft.descricao?.value,
+        categoria: confirmedDraft.categoriaSugerida?.value ?? 'Geral',
+        marca: confirmedDraft.marca?.value,
+        codigoInterno:
+            confirmedDraft.referenciaComercial?.value ??
+            confirmedDraft.referenciaInterna?.value ??
+            '',
+        codigoBarras: confirmedDraft.gtin?.value,
+        tipo: 'produto',
+        modalidade: ModalidadeProduto.proprio,
+        custo: 0.0,
+        precoVenda: confirmedDraft.preco?.value ?? 0.0,
+        margem: 0.0,
+        quantidadeAtual: confirmedDraft.quantidade?.value ?? 0.0,
+        estoqueMinimo: 0.0,
+        quantidadeSugerida: 0.0,
+        unidade: confirmedDraft.unidade?.value ?? 'un',
+        conteudoPorUnidade: 0.0,
+        unidadeConteudo: '',
+        revisaoModelagemEstoque: false,
+        quantidadeEmbalagem: confirmedDraft.quantidadeEmbalagem?.value ?? 1.0,
+        lote: confirmedDraft.lote?.value ?? '',
+        dataEntrada: agora,
+        validade: confirmedDraft.validade?.value,
+        imagem: confirmedDraft.imagemFrente ?? '',
+        observacoes: '',
+        origemCatalogo: 'scanner_ocr',
+        ativo: true,
+        criadoEm: agora,
+        atualizadoEm: agora,
+      );
+
+      await LojaRepository().salvarProduto(produto);
+
+      if (mounted) {
+        Navigator.pop(context, ScannerResult.novo(produto));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Falha ao salvar produto: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _salvando = false);
+    }
   }
 
   @override
@@ -193,14 +252,18 @@ class _ScannerDraftPageState extends State<ScannerDraftPage> {
               onChanged: (v) => setState(() => _finalidadeSelecionada = v!),
             ),
             const SizedBox(height: 32),
-            FilledButton(
-              onPressed: _confirmar,
-              child: const Text('Confirmar e Salvar'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancelar (Nenhum dado salvo)'),
-            ),
+            _salvando
+                ? const Center(child: CircularProgressIndicator())
+                : FilledButton(
+                    onPressed: _confirmar,
+                    child: const Text('Confirmar e Salvar'),
+                  ),
+            if (!_salvando)
+              TextButton(
+                onPressed: () =>
+                    Navigator.pop(context, ScannerResult.cancelado()),
+                child: const Text('Cancelar (Nenhum dado salvo)'),
+              ),
           ],
         ),
       ),

@@ -77,7 +77,7 @@ void main() {
       expect(colNames, contains('quantidade_anterior'));
       expect(colNames, contains('quantidade_posterior'));
       expect(colNames, contains('finalidade'));
-      expect(colNames, contains('business_id')); 
+      expect(colNames, contains('business_id'));
       expect(colNames, contains('data'));
       expect(colNames, contains('motivo'));
       expect(colNames, contains('origem'));

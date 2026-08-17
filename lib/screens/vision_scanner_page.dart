@@ -135,11 +135,60 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
   }
 
   Future<void> _acceptResult(dynamic result) async {
-    if (!continuous) {
-      if (mounted) Navigator.pop(context, result);
+    if (result is! ScannerResult) {
+      if (!continuous) {
+        if (mounted) Navigator.pop(context, result);
+        return;
+      }
       return;
     }
-    final draft = result['draft'] as ScannerProductDraft;
+
+    final sResult = result;
+
+    if (!continuous) {
+      if (mounted) Navigator.pop(context, sResult);
+      return;
+    }
+
+    // Se continuous, lidar com a adição contínua
+    if (sResult.tipo == ScannerResultType.cancelado) {
+      setState(() => _processando = false);
+      _controller.start();
+      _startOcrTimer();
+      return;
+    }
+
+    final draft = sResult.draft ?? ScannerProductDraft();
+    dynamic resolvedItem = sResult.produto;
+
+    if (resolvedItem != null && mounted) {
+      final action = await Navigator.push<Object?>(
+        context,
+        MaterialPageRoute(
+          builder: (_) => BipContextCardPage(
+            item: BipResolvedItem(
+              kind: BipItemKind.produtoProprio,
+              draft: draft,
+              product: resolvedItem,
+            ),
+          ),
+        ),
+      );
+      if (!mounted) return;
+      if (action == ReaderAction.vender) {
+        await Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const VendasLojaPage()),
+        );
+        if (!mounted) return;
+      }
+      if (action == null) {
+        setState(() => _processando = false);
+        await _controller.start();
+        _startOcrTimer();
+        return;
+      }
+    }
     final resolved = await BipContextService().resolve(draft);
     if (resolved.kind != BipItemKind.desconhecido && mounted) {
       final action = await Navigator.push<Object?>(
@@ -183,8 +232,20 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
     _startOcrTimer();
   }
 
+  String? _ultimoCodigoLido;
+  DateTime? _ultimoTempoLeitura;
+
   Future<void> _processarCodigo(String codigo, {bool isQr = false}) async {
     if (_processando) return;
+
+    final agora = DateTime.now();
+    if (_ultimoCodigoLido == codigo && _ultimoTempoLeitura != null) {
+      if (agora.difference(_ultimoTempoLeitura!).inMilliseconds < 1500) {
+        return; // Debounce de 1.5s
+      }
+    }
+    _ultimoCodigoLido = codigo;
+    _ultimoTempoLeitura = agora;
 
     setState(() {
       _processando = true;
@@ -250,17 +311,80 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
     if (!mounted) return;
 
     final resolved = await BipContextService().resolve(draft);
-    if (resolved.kind != BipItemKind.desconhecido) {
+    if (resolved.kind != BipItemKind.desconhecido && resolved.product != null) {
       HapticFeedback.heavyImpact();
-      await _acceptResult({'draft': draft});
+      SystemSound.play(SystemSoundType.click);
+      await _acceptResult(ScannerResult.existente(resolved.product!.codigoBarras ?? resolved.product!.codigoInterno ?? draft.gtin?.value ?? ''));
+      await _acceptResult(ScannerResult.existente(resolved.product!));
       return;
     }
 
     if (!mounted) return;
 
-    final result = await Navigator.push(
+    // Tentativa rápida de OCR complementar (Etiqueta de joia/lingerie com barcode mas sem estar no BD)
+    ScannerProductDraft draftFinal = draft;
+    try {
+      final boundary =
+          _scannerKey.currentContext?.findRenderObject()
+              as RenderRepaintBoundary?;
+      if (boundary != null && !boundary.debugNeedsPaint) {
+        final image = await boundary.toImage(pixelRatio: 1.0);
+        final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+        if (byteData != null) {
+          final tempDir = await getTemporaryDirectory();
+          final file = File(
+            '${tempDir.path}/ocr_complemento_${DateTime.now().millisecondsSinceEpoch}.png',
+          );
+          await file.writeAsBytes(byteData.buffer.asUint8List());
+
+          final coordinator = ScannerCoordinator(
+            externalProviders: [MlKitVisionProvider()],
+          );
+          final draftOcr = await coordinator.analyzeImages(file.path);
+          if (true) {
+            draftFinal = ScannerProductDraft(
+              gtin: draft.gtin ?? draftOcr.gtin,
+              qr: draft.qr ?? draftOcr.qr,
+              referenciaComercial:
+                  draft.referenciaComercial ?? draftOcr.referenciaComercial,
+              referenciaInterna:
+                  draft.referenciaInterna ?? draftOcr.referenciaInterna,
+              nome: draft.nome ?? draftOcr.nome,
+              marca: draft.marca ?? draftOcr.marca,
+              descricao: draft.descricao ?? draftOcr.descricao,
+              quantidadeEmbalagem:
+                  draft.quantidadeEmbalagem ?? draftOcr.quantidadeEmbalagem,
+              unidade: draft.unidade ?? draftOcr.unidade,
+              validade: draft.validade ?? draftOcr.validade,
+              lote: draft.lote ?? draftOcr.lote,
+              categoriaSugerida:
+                  draft.categoriaSugerida ?? draftOcr.categoriaSugerida,
+              preco: draft.preco ?? draftOcr.preco,
+              material: draft.material ?? draftOcr.material,
+              tamanhoVariacao:
+                  draft.tamanhoVariacao ?? draftOcr.tamanhoVariacao,
+              quantidade: draft.quantidade ?? draftOcr.quantidade,
+              imagemFrente: draft.imagemFrente ?? draftOcr.imagemFrente,
+              imagemVerso: draft.imagemVerso ?? draftOcr.imagemVerso,
+              reviewReasons: [
+                ...draft.reviewReasons,
+                ...draftOcr.reviewReasons,
+              ],
+              rawSignals: [...draft.rawSignals, ...draftOcr.rawSignals],
+            );
+          }
+        }
+      }
+    } catch (_) {}
+
+    if (!mounted) return;
+
+    HapticFeedback.heavyImpact(); // Bipa para barcode novo
+    SystemSound.play(SystemSoundType.click);
+
+    final result = await Navigator.push<ScannerResult?>(
       context,
-      MaterialPageRoute(builder: (_) => ScannerDraftPage(draft: draft)),
+      MaterialPageRoute(builder: (_) => ScannerDraftPage(draft: draftFinal)),
     );
 
     if (!mounted) return;

@@ -18,6 +18,7 @@ class NovoAgendamentoSheet extends StatefulWidget {
   final ClienteRegistro? clienteInicial;
   final ResumoVendaPacote? pacoteInicial;
   final SessaoPacoteDetalheRegistro? sessaoInicial;
+  final AgendamentoRegistro? agendamentoInicial;
 
   const NovoAgendamentoSheet({
     super.key,
@@ -26,6 +27,7 @@ class NovoAgendamentoSheet extends StatefulWidget {
     this.clienteInicial,
     this.pacoteInicial,
     this.sessaoInicial,
+    this.agendamentoInicial,
   });
 
   @override
@@ -77,12 +79,28 @@ class _NovoAgendamentoSheetState extends State<NovoAgendamentoSheet> {
   @override
   void initState() {
     super.initState();
-    _dataSelecionada = DateTime(
-      widget.dataBase.year,
-      widget.dataBase.month,
-      widget.dataBase.day,
-    );
-    _clienteSelecionado = widget.clienteInicial;
+    _dataSelecionada =
+        widget.agendamentoInicial?.inicio ??
+        DateTime(
+          widget.dataBase.year,
+          widget.dataBase.month,
+          widget.dataBase.day,
+        );
+    _horarioSelecionado = widget.agendamentoInicial != null
+        ? TimeOfDay(
+            hour: widget.agendamentoInicial!.inicio.hour,
+            minute: widget.agendamentoInicial!.inicio.minute,
+          )
+        : const TimeOfDay(hour: 9, minute: 0);
+    _clienteSelecionado = widget.clienteInicial ?? (widget.agendamentoInicial != null ? ClienteRegistro(
+        id: widget.agendamentoInicial!.clienteId,
+        nome: widget.agendamentoInicial!.clienteNome,
+        telefone: widget.agendamentoInicial!.clienteTelefone,
+        dataCadastro: DateTime.now(),
+        observacoes: '', totalAtendimentos: 0, totalGasto: 0, ultimoServico: '', profissional: '', whatsapp: '') : null);
+    if (widget.agendamentoInicial != null) {
+      _observacoesController.text = widget.agendamentoInicial!.observacoes;
+    }
     _profissionalBloqueio = widget.profissionais.isNotEmpty
         ? widget.profissionais.first
         : null;
@@ -103,10 +121,36 @@ class _NovoAgendamentoSheetState extends State<NovoAgendamentoSheet> {
         }
       });
     } else {
-      _adicionarItem();
+      if (widget.agendamentoInicial != null) {
+        _carregarEdicao(widget.agendamentoInicial!);
+      } else {
+        _adicionarItem();
+      }
       if (_clienteSelecionado != null && _modoPacote) {
         _carregarPacotesAtivos();
       }
+    }
+  }
+
+  Future<void> _carregarEdicao(AgendamentoRegistro ag) async {
+    final srvRepo = ServicosRepository();
+    try {
+      final srv = await srvRepo.listar().then((l) => l.firstWhere((s) => s.id == ag.servicoId));
+      setState(() {
+        _itens.add(
+          _ItemServico(
+              profissional: widget.profissionais.firstWhere(
+                (p) => p.id == ag.profissionalId,
+                orElse: () => widget.profissionais.first,
+              ),
+            )
+            ..servico = srv
+            ..inicioPrevisto = ag.inicio
+            ..fimPrevisto = ag.fim,
+        );
+      });
+    } catch (e) {
+      _adicionarItem();
     }
   }
 
@@ -305,6 +349,41 @@ class _NovoAgendamentoSheetState extends State<NovoAgendamentoSheet> {
         }).toList();
 
         await _pacotesRepository.agendarSessoesLote(drafts);
+      } else if (widget.agendamentoInicial != null) {
+        // EDICAO DE UM AGENDAMENTO
+        final item = _itens.first;
+        final ag = AgendamentoRegistro(
+          id: widget.agendamentoInicial!.id,
+          clienteId: _clienteSelecionado!.id,
+          clienteNome: _clienteSelecionado!.nome,
+          profissionalId: item.profissional!.id,
+          profissionalNome: item.profissional!.nome,
+          servicoId: item.servico!.id,
+          servicoNome: item.servico!.nome,
+          inicio: item.inicioPrevisto!,
+          fim: item.fimPrevisto!,
+          status: widget.agendamentoInicial!.status,
+          valorServico: item.servico!.preco,
+          desconto: widget.agendamentoInicial!.desconto,
+          valorRecebido: widget.agendamentoInicial!.valorRecebido,
+          confirmado: widget.agendamentoInicial!.confirmado,
+          compareceu: widget.agendamentoInicial!.compareceu,
+          dataCriacao: widget.agendamentoInicial!.dataCriacao,
+          grupoAgendamentoId: widget.agendamentoInicial!.grupoAgendamentoId,
+          ordemNoGrupo: widget.agendamentoInicial!.ordemNoGrupo,
+          observacoes: _observacoesController.text.trim(),
+        );
+        await _agendaCompletaRepository.reagendar(
+          agendamentoId: ag.id,
+          novoInicio: ag.inicio,
+          novoFim: ag.fim,
+          motivo: 'Edição de agendamento',
+        );
+        await AgendaCompletaRepository().registrarStatus(
+          agendamentoId: ag.id,
+          status: 'agendado',
+          detalhes: 'Agendamento editado.',
+        );
       } else {
         final grupoId = agora.microsecondsSinceEpoch.toString();
 
@@ -589,18 +668,21 @@ class _NovoAgendamentoSheetState extends State<NovoAgendamentoSheet> {
               ),
             ),
             const SizedBox(height: 20),
-            Wrap(
-              alignment: WrapAlignment.spaceBetween,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              spacing: 8,
-              runSpacing: 8,
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
-                  'Novo Agendamento',
-                  style: TextStyle(
-                    fontSize: 25,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF2D2140),
+                Expanded(
+                  child: Text(
+                    widget.agendamentoInicial != null
+                        ? 'Editar Agendamento'
+                        : (_modoBloqueio
+                              ? 'Novo Bloqueio'
+                              : 'Novo Agendamento'),
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
                   ),
                 ),
                 SegmentedButton<bool>(

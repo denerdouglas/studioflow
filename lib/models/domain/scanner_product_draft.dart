@@ -84,3 +84,39 @@ class ScannerProductDraft {
 
   String? get codigoComercial => referenciaComercial?.value;
 }
+
+enum ScannerResultType { produtoExistente, produtoNovo, draft, cancelado }
+
+class ScannerResult {
+  final ScannerResultType tipo;
+  final dynamic produto; // ProdutoLoja
+  final ScannerProductDraft? draft;
+  final String? finalidade;
+
+  const ScannerResult._({
+    required this.tipo,
+    this.produto,
+    this.draft,
+    this.finalidade,
+  });
+
+  factory ScannerResult.existente(dynamic produto) => ScannerResult._(
+    tipo: ScannerResultType.produtoExistente,
+    produto: produto,
+  );
+
+  factory ScannerResult.novo(dynamic produto) =>
+      ScannerResult._(tipo: ScannerResultType.produtoNovo, produto: produto);
+
+  factory ScannerResult.draft(
+    ScannerProductDraft draft, {
+    String? finalidade,
+  }) => ScannerResult._(
+    tipo: ScannerResultType.draft,
+    draft: draft,
+    finalidade: finalidade,
+  );
+
+  factory ScannerResult.cancelado() =>
+      const ScannerResult._(tipo: ScannerResultType.cancelado);
+}

@@ -75,21 +75,42 @@ class _ProdutosLojaPageState extends State<ProdutosLojaPage> {
   }
 
   Future<void> _lerCodigo() async {
-    final codigo = await Navigator.push<String>(
+    final result = await Navigator.push<dynamic>(
       context,
       MaterialPageRoute(builder: (_) => const VisionScannerPage()),
     );
-    if (!mounted || codigo == null) return;
+    if (!mounted || result == null) return;
+
+    if (result is ScannerResult) {
+      if (result.tipo == ScannerResultType.cancelado) return;
+      if (result.tipo == ScannerResultType.produtoExistente ||
+          result.tipo == ScannerResultType.produtoNovo) {
+        if (result.produto != null) {
+          await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => ProdutoDetalhePage(produtoId: result.produto!.id),
+            ),
+          );
+          setState(_carregar);
+          return;
+        }
+      }
+    }
+
+    final codigo = result is String ? result : null;
+    if (codigo == null) return;
+
     try {
       final produto = await _repo.buscarCodigo(codigo);
       if (!mounted) return;
       if (produto == null) {
-        final result = await _lookup.lookup(
+        final resLookup = await _lookup.lookup(
           codigo,
           commerceId: SessionController.instance.usuario!.comercioId,
         );
         if (!mounted) return;
-        final found = result.product;
+        final found = resLookup.product;
         if (found?.localProductId != null &&
             found?.localDestination == 'salao') {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -102,7 +123,7 @@ class _ProdutosLojaPageState extends State<ProdutosLojaPage> {
             MaterialPageRoute(builder: (_) => const EstoquePage()),
           );
         } else {
-          await _abrir(null, result.normalizedGtin, found, found == null);
+          await _abrir(null, resLookup.normalizedGtin, found, found == null);
         }
       } else {
         await Navigator.push(

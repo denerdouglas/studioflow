@@ -6,6 +6,7 @@ import '../models/domain/loja.dart';
 import '../repositories/cliente_repository.dart';
 import '../repositories/loja_repository.dart';
 import '../services/session_controller.dart';
+import '../models/domain/scanner_product_draft.dart';
 import '../widgets/cliente_search_selector.dart';
 import '../widgets/produto_search_selector.dart';
 import 'vision_scanner_page.dart';
@@ -147,11 +148,27 @@ class _VendasLojaPageState extends State<VendasLojaPage> {
   double _valorPagamento(String valor) =>
       double.tryParse(valor.replaceAll(',', '.')) ?? 0;
   Future<void> ler() async {
-    final codigo = await Navigator.push<String>(
+    final result = await Navigator.push<dynamic>(
       context,
       MaterialPageRoute(builder: (_) => const VisionScannerPage()),
     );
+    if (result == null) return;
+
+    if (result is ScannerResult) {
+      if (result.tipo == ScannerResultType.cancelado) return;
+      if (result.tipo == ScannerResultType.produtoExistente ||
+          result.tipo == ScannerResultType.produtoNovo) {
+        if (result.produto != null) {
+          adicionar(result.produto);
+          return;
+        }
+      }
+    }
+
+    // Compatibilidade com código em String
+    final codigo = result is String ? result : null;
     if (codigo == null) return;
+
     try {
       final p = await repo.buscarCodigo(codigo);
       if (p == null) throw StateError('Produto não encontrado para venda.');
