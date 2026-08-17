@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/domain/universal_reader.dart';
 import '../repositories/consignacao_conferencia_repository.dart';
+import '../models/domain/scanner_product_draft.dart';
 import 'vision_scanner_page.dart';
 
 class ConsignacaoConferenciaPage extends StatefulWidget {
@@ -47,48 +48,52 @@ class _ConsignacaoConferenciaPageState
   }
 
   Future<void> _scan() async {
-    final readings = await Navigator.push<List<BipSessionItem>>(
+    if (id == null) return;
+    await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => VisionScannerPage(
           policy: ReaderContextPolicy.forContext(
             ReaderContext.conferenciaRemessa,
           ),
+          onContinuousItem: (result) async {
+            final draft = result.draft ?? ScannerProductDraft();
+            final code = draft.referenciaComercial?.value ?? draft.gtin?.value;
+            if (code == null) return false;
+            
+            final choices = await repository.resolverCodigo(id!, code);
+            if (choices.isEmpty || !mounted) return false;
+            
+            var piece = choices.first;
+            if (choices.length > 1) {
+              final selected = await showDialog<Map<String, Object?>>(
+                context: context,
+                builder: (dialogContext) => SimpleDialog(
+                  title: Text('Escolha uma ocorrência de $code'),
+                  children: choices
+                      .map(
+                        (item) => SimpleDialogOption(
+                          onPressed: () => Navigator.pop(dialogContext, item),
+                          child: Text('${item['nome']} • ID ${item['id']}'),
+                        ),
+                      )
+                      .toList(),
+                ),
+              );
+              if (selected == null) return false;
+              piece = selected;
+            }
+            
+            await repository.conferirPeca(
+              conferenciaId: id!,
+              pecaId: piece['id'] as String,
+              leituraOriginal: code,
+            );
+            return true;
+          },
         ),
       ),
     );
-    if (readings == null || id == null) return;
-    for (final reading in readings) {
-      final code =
-          reading.draft.referenciaComercial?.value ?? reading.draft.gtin?.value;
-      if (code == null) continue;
-      final choices = await repository.resolverCodigo(id!, code);
-      if (choices.isEmpty || !mounted) continue;
-      var piece = choices.first;
-      if (choices.length > 1) {
-        final selected = await showDialog<Map<String, Object?>>(
-          context: context,
-          builder: (context) => SimpleDialog(
-            title: Text('Escolha uma ocorrência de $code'),
-            children: choices
-                .map(
-                  (item) => SimpleDialogOption(
-                    onPressed: () => Navigator.pop(context, item),
-                    child: Text('${item['nome']} • ID ${item['id']}'),
-                  ),
-                )
-                .toList(),
-          ),
-        );
-        if (selected == null) continue;
-        piece = selected;
-      }
-      await repository.conferirPeca(
-        conferenciaId: id!,
-        pecaId: piece['id'] as String,
-        leituraOriginal: code,
-      );
-    }
     await _load();
   }
 

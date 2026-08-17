@@ -47,9 +47,8 @@ class MlKitVisionProvider implements ScannerProvider {
     String? unidade;
     String? tamanho;
 
-    // Uma referência comercial precisa conter ao menos um dígito. Isso evita
-    // classificar palavras em caixa alta (marca/material) como código.
-    final referencePattern = RegExp(r'^(?=.*\d)[A-Z][A-Z0-9]{2,19}$');
+    // Uma referência comercial precisa conter ao menos um dígito e ter tamanho razoável.
+    final referencePattern = RegExp(r'^(?=.*\d)[A-Z0-9]{3,20}$');
 
     for (final line in lines) {
       if (RegExp(r'(?:R\$|RS|\$)\s*\d', caseSensitive: false).hasMatch(line)) {

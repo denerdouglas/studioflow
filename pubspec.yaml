@@ -1,4 +1,4 @@
-﻿name: studioflow
+name: studioflow
 description: "A new Flutter project."
 publish_to: 'none'
 
@@ -42,6 +42,7 @@ dependencies:
 
   sqflite_common: any
   intl: any
+  audioplayers: ^6.8.1
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -54,6 +55,8 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/sounds/
 
 flutter_launcher_icons:
   android: "ic_launcher"

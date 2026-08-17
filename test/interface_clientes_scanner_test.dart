@@ -8,7 +8,14 @@ import 'package:studioflow/screens/loja_salao_page.dart';
 import 'package:studioflow/services/session_controller.dart';
 import 'package:studioflow/services/vision_ocr_service.dart';
 
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+
 void main() {
+  setUpAll(() {
+    sqfliteFfiInit();
+    databaseFactory = databaseFactoryFfi;
+  });
+
   group('Instagram', () {
     test('normaliza arroba e URLs aceitas para o perfil exato', () {
       expect(

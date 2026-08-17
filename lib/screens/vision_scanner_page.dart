@@ -1,27 +1,41 @@
 import 'dart:async';
-import 'dart:ui' as ui;
 import 'dart:io';
 import 'package:flutter/services.dart';
-import 'package:flutter/rendering.dart';
+import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:image/image.dart' as img;
+import 'package:audioplayers/audioplayers.dart';
+
 import '../services/scanner/scanner_coordinator.dart';
 import '../services/scanner/mlkit_vision_provider.dart';
 import '../models/domain/scanner_product_draft.dart';
 import 'scanner_draft_page.dart';
-import 'vision_ocr_capture_page.dart';
 import '../services/session_controller.dart';
 import '../core/validation/gtin_validator.dart';
 import '../models/domain/universal_reader.dart';
 import '../services/bip_context_service.dart';
-import 'bip_context_card_page.dart';
-import 'vendas_loja_page.dart';
+
+Future<Uint8List?> _cropImage(Uint8List jpegBytes) async {
+  return compute((bytes) {
+    final original = img.decodeImage(bytes);
+    if (original == null) return null;
+    final cropW = (original.width * 0.8).toInt();
+    final cropH = (cropW * (150 / 290)).toInt();
+    final cropX = (original.width - cropW) ~/ 2;
+    final cropY = (original.height - cropH) ~/ 2;
+    final cropped = img.copyCrop(original, x: cropX, y: cropY, width: cropW, height: cropH);
+    return Uint8List.fromList(img.encodeJpg(cropped));
+  }, jpegBytes);
+}
 
 class VisionScannerPage extends StatefulWidget {
   final ReaderContextPolicy? policy;
+  final bool returnList;
+  final Future<bool> Function(ScannerResult)? onContinuousItem;
 
-  const VisionScannerPage({super.key, this.policy});
+  const VisionScannerPage({super.key, this.policy, this.returnList = false, this.onContinuousItem});
 
   @override
   State<VisionScannerPage> createState() => _VisionScannerPageState();
@@ -30,108 +44,68 @@ class VisionScannerPage extends StatefulWidget {
 class _VisionScannerPageState extends State<VisionScannerPage> {
   final MobileScannerController _controller = MobileScannerController(
     detectionSpeed: DetectionSpeed.normal,
+    returnImage: true,
   );
+  final AudioPlayer _audioPlayer = AudioPlayer();
 
   bool _processando = false;
   String? _erro;
   final BipSessionController bipSession = BipSessionController();
 
-  final GlobalKey _scannerKey = GlobalKey();
-  Timer? _ocrFallbackTimer;
+  DateTime _ultimoTempoOcr = DateTime.fromMillisecondsSinceEpoch(0);
+  bool _ocrEmExecucao = false;
 
-  bool get continuous => widget.policy?.continuous ?? false;
+  bool get continuous => widget.policy?.continuous ?? widget.returnList;
 
   @override
   void initState() {
     super.initState();
-    _startOcrTimer();
+    _audioPlayer.setSource(AssetSource('sounds/beep.ogg'));
   }
 
-  void _startOcrTimer() {
-    _ocrFallbackTimer?.cancel();
-    _ocrFallbackTimer = Timer(
-      const Duration(seconds: 4),
-      _executarOcrAutomatico,
-    );
+  void _tocarBip() {
+    HapticFeedback.heavyImpact();
+    _audioPlayer.resume();
   }
 
-  Future<void> _executarOcrAutomatico() async {
-    if (_processando) return;
+  @override
+  void dispose() {
+    _controller.dispose();
+    _audioPlayer.dispose();
+    super.dispose();
+  }
 
+  Future<void> _executarOcrFrame(Uint8List jpegBytes) async {
+    if (_ocrEmExecucao || _processando) return;
     try {
-      final boundary =
-          _scannerKey.currentContext?.findRenderObject()
-              as RenderRepaintBoundary?;
-      if (boundary == null || boundary.debugNeedsPaint) {
-        _startOcrTimer();
-        return;
-      }
-
-      final image = await boundary.toImage(pixelRatio: 1.0);
-      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
-      if (byteData == null) {
-        _startOcrTimer();
-        return;
-      }
-
-      setState(() {
-        _processando = true;
-        _erro = 'Nenhum código encontrado. Tentando OCR automático...';
-      });
-      await _controller.stop();
+      _ocrEmExecucao = true;
+      final cropped = await _cropImage(jpegBytes);
+      if (cropped == null) return;
+      if (!mounted) return;
 
       final tempDir = await getTemporaryDirectory();
-      final file = File(
-        '${tempDir.path}/ocr_frame_${DateTime.now().millisecondsSinceEpoch}.png',
-      );
-      await file.writeAsBytes(byteData.buffer.asUint8List());
+      final file = File('${tempDir.path}/ocr_frame_${DateTime.now().millisecondsSinceEpoch}.jpg');
+      await file.writeAsBytes(cropped);
 
       final coordinator = ScannerCoordinator(
         externalProviders: [MlKitVisionProvider()],
       );
       final draft = await coordinator.analyzeImages(file.path);
-
+      
       if (!mounted) return;
       final resolved = await BipContextService().resolve(draft);
       if (resolved.kind != BipItemKind.desconhecido) {
-        HapticFeedback.heavyImpact();
-        await _acceptResult({'draft': draft});
+        await _processarCodigo(draft.referenciaComercial?.value ?? draft.gtin?.value ?? '', isOcrResult: true, draftOcr: draft);
         return;
       }
-
-      if (!mounted) return;
-      final accepted = await Navigator.push<Map<String, dynamic>?>(
-        context,
-        MaterialPageRoute(builder: (_) => ScannerDraftPage(draft: draft)),
-      );
-      if (accepted != null && mounted) {
-        await _acceptResult(accepted);
-      } else {
-        if (mounted) {
-          setState(() {
-            _processando = false;
-            _erro = null;
-          });
-          await _controller.start();
-          _startOcrTimer();
-        }
+      
+      if (draft.referenciaComercial != null || draft.gtin != null) {
+          await _processarCodigo(draft.referenciaComercial?.value ?? draft.gtin?.value ?? '', isOcrResult: true, draftOcr: draft);
       }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _processando = false;
-        });
-        await _controller.start();
-        _startOcrTimer();
-      }
+    } catch (_) {
+    } finally {
+      _ocrEmExecucao = false;
     }
-  }
-
-  @override
-  void dispose() {
-    _ocrFallbackTimer?.cancel();
-    _controller.dispose();
-    super.dispose();
   }
 
   Future<void> _acceptResult(dynamic result) async {
@@ -150,66 +124,42 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
       return;
     }
 
-    // Se continuous, lidar com a adição contínua
     if (sResult.tipo == ScannerResultType.cancelado) {
       setState(() => _processando = false);
       _controller.start();
-      _startOcrTimer();
       return;
     }
 
     final draft = sResult.draft ?? ScannerProductDraft();
     dynamic resolvedItem = sResult.produto;
 
-    if (resolvedItem != null && mounted) {
-      final action = await Navigator.push<Object?>(
-        context,
-        MaterialPageRoute(
-          builder: (_) => BipContextCardPage(
-            item: BipResolvedItem(
-              kind: BipItemKind.produtoProprio,
-              draft: draft,
-              product: resolvedItem,
-            ),
-          ),
-        ),
-      );
-      if (!mounted) return;
-      if (action == ReaderAction.vender) {
-        await Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const VendasLojaPage()),
-        );
-        if (!mounted) return;
-      }
-      if (action == null) {
-        setState(() => _processando = false);
-        await _controller.start();
-        _startOcrTimer();
-        return;
-      }
+    // Em modo contínuo, resolvemos e adicionamos à sessão.
+    if (widget.onContinuousItem != null) {
+       final success = await widget.onContinuousItem!(sResult);
+       if (success && mounted) {
+           _adicionarASessao(draft, resolvedItem);
+       } else if (mounted) {
+           setState(() => _processando = false);
+           _controller.start();
+       }
+       return;
     }
+
+    if (resolvedItem != null && mounted) {
+       _adicionarASessao(draft, resolvedItem);
+       return;
+    }
+    
     final resolved = await BipContextService().resolve(draft);
     if (resolved.kind != BipItemKind.desconhecido && mounted) {
-      final action = await Navigator.push<Object?>(
-        context,
-        MaterialPageRoute(builder: (_) => BipContextCardPage(item: resolved)),
-      );
-      if (!mounted) return;
-      if (action == ReaderAction.vender) {
-        await Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const VendasLojaPage()),
-        );
-        if (!mounted) return;
-      }
-      if (action == null) {
-        setState(() => _processando = false);
-        await _controller.start();
-        _startOcrTimer();
-        return;
-      }
+       _adicionarASessao(draft, resolved.product);
+       return;
     }
+    
+    if (mounted) _adicionarASessao(draft, null);
+  }
+
+  void _adicionarASessao(ScannerProductDraft draft, dynamic produto) {
     final key =
         draft.gtin?.value ??
         draft.qr?.value ??
@@ -223,25 +173,25 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
         confirmed: true,
       ),
     );
-    if (!mounted) return;
-    setState(() {
-      _processando = false;
-      _erro = added ? 'Leitura adicionada.' : 'Leitura duplicada ignorada.';
-    });
-    await _controller.start();
-    _startOcrTimer();
+    if (mounted) {
+      setState(() {
+        _processando = false;
+        _erro = added ? 'Item adicionado: ${produto?.nome ?? draft.nome?.value ?? key}' : 'Item já lido.';
+      });
+      _controller.start();
+    }
   }
 
   String? _ultimoCodigoLido;
   DateTime? _ultimoTempoLeitura;
 
-  Future<void> _processarCodigo(String codigo, {bool isQr = false}) async {
+  Future<void> _processarCodigo(String codigo, {bool isQr = false, bool isOcrResult = false, ScannerProductDraft? draftOcr, Uint8List? rawImage}) async {
     if (_processando) return;
 
     final agora = DateTime.now();
     if (_ultimoCodigoLido == codigo && _ultimoTempoLeitura != null) {
-      if (agora.difference(_ultimoTempoLeitura!).inMilliseconds < 1500) {
-        return; // Debounce de 1.5s
+      if (agora.difference(_ultimoTempoLeitura!).inMilliseconds < 2000) {
+        return; // Debounce de 2s
       }
     }
     _ultimoCodigoLido = codigo;
@@ -253,19 +203,18 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
     });
 
     await _controller.stop();
-    _ocrFallbackTimer?.cancel();
     if (!mounted) return;
 
     final normalized = GtinValidator.normalize(codigo);
     if (codigo.trim().isEmpty) {
       setState(() {
         _processando = false;
-        _erro = 'GTIN inválido. Confira o código ou preencha manualmente.';
+        _erro = 'Código inválido. Confira a etiqueta ou preencha manualmente.';
       });
       await _controller.start();
-      _startOcrTimer();
       return;
     }
+
     final commerceId = SessionController.instance.usuario?.comercioId;
     final coordinator = ScannerCoordinator(
       externalProviders: [
@@ -273,121 +222,70 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
           ProductLookupScannerProvider(commerceId: commerceId),
       ],
     );
-    final draft =
-        (isQr
-            ? ScannerProductDraft(
-                qr: ScannerField(
-                  codigo,
-                  source: 'qr',
-                  confidence: ScannerConfidence.alta,
-                ),
-                rawSignals: [codigo],
-              )
-            : GtinValidator.isValid(normalized)
-            ? await coordinator.searchExternalBarcode(normalized)
-            : ScannerProductDraft(
-                referenciaComercial: ScannerField(
-                  codigo.trim(),
-                  source: 'barcode',
-                  confidence: ScannerConfidence.baixa,
-                  reviewReason: 'Código comercial; não é um GTIN válido.',
-                ),
-                reviewReasons: const ['Confirme o código comercial.'],
-                rawSignals: [codigo],
-              )) ??
-        ScannerProductDraft(
-          gtin: ScannerField(
-            normalized,
-            source: 'barcode',
-            confidence: ScannerConfidence.baixa,
-            reviewReason:
-                'GTIN válido, mas sem correspondência exata no catálogo.',
-          ),
-          reviewReasons: const [
-            'Produto não encontrado; revise ou cadastre manualmente.',
-          ],
-        );
+
+    ScannerProductDraft draft = draftOcr ?? (isQr
+        ? ScannerProductDraft(
+            qr: ScannerField(
+              codigo,
+              source: 'qr',
+              confidence: ScannerConfidence.alta,
+            ),
+            rawSignals: [codigo],
+          )
+        : GtinValidator.isValid(normalized)
+        ? (await coordinator.searchExternalBarcode(normalized)) ?? ScannerProductDraft(
+            gtin: ScannerField(
+              normalized,
+              source: 'barcode',
+              confidence: ScannerConfidence.baixa,
+              reviewReason: 'GTIN válido, mas sem correspondência exata.',
+            ),
+          )
+        : ScannerProductDraft(
+            referenciaComercial: ScannerField(
+              codigo.trim(),
+              source: 'barcode',
+              confidence: ScannerConfidence.alta,
+            ),
+            reviewReasons: const ['Confirme o código comercial.'],
+            rawSignals: [codigo],
+          ));
 
     if (!mounted) return;
 
     final resolved = await BipContextService().resolve(draft);
     if (resolved.kind != BipItemKind.desconhecido && resolved.product != null) {
-      HapticFeedback.heavyImpact();
-      SystemSound.play(SystemSoundType.click);
-      await _acceptResult(
-        ScannerResult.existente(
-          resolved.product!.codigoBarras ??
-              resolved.product!.codigoInterno ??
-              draft.gtin?.value ??
-              '',
-        ),
-      );
+      _tocarBip();
       await _acceptResult(ScannerResult.existente(resolved.product!));
       return;
     }
 
     if (!mounted) return;
 
-    // Tentativa rápida de OCR complementar (Etiqueta de joia/lingerie com barcode mas sem estar no BD)
+    // Tentativa rápida de OCR complementar se for barcode novo e temos a imagem
     ScannerProductDraft draftFinal = draft;
-    try {
-      final boundary =
-          _scannerKey.currentContext?.findRenderObject()
-              as RenderRepaintBoundary?;
-      if (boundary != null && !boundary.debugNeedsPaint) {
-        final image = await boundary.toImage(pixelRatio: 1.0);
-        final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
-        if (byteData != null) {
+    if (rawImage != null && !isOcrResult && !isQr) {
+      try {
+        final cropped = await _cropImage(rawImage);
+        if (cropped != null) {
           final tempDir = await getTemporaryDirectory();
-          final file = File(
-            '${tempDir.path}/ocr_complemento_${DateTime.now().millisecondsSinceEpoch}.png',
-          );
-          await file.writeAsBytes(byteData.buffer.asUint8List());
-
-          final coordinator = ScannerCoordinator(
-            externalProviders: [MlKitVisionProvider()],
-          );
-          final draftOcr = await coordinator.analyzeImages(file.path);
-          if (true) {
-            draftFinal = ScannerProductDraft(
-              gtin: draft.gtin ?? draftOcr.gtin,
-              qr: draft.qr ?? draftOcr.qr,
-              referenciaComercial:
-                  draft.referenciaComercial ?? draftOcr.referenciaComercial,
-              referenciaInterna:
-                  draft.referenciaInterna ?? draftOcr.referenciaInterna,
-              nome: draft.nome ?? draftOcr.nome,
-              marca: draft.marca ?? draftOcr.marca,
-              descricao: draft.descricao ?? draftOcr.descricao,
-              quantidadeEmbalagem:
-                  draft.quantidadeEmbalagem ?? draftOcr.quantidadeEmbalagem,
-              unidade: draft.unidade ?? draftOcr.unidade,
-              validade: draft.validade ?? draftOcr.validade,
-              lote: draft.lote ?? draftOcr.lote,
-              categoriaSugerida:
-                  draft.categoriaSugerida ?? draftOcr.categoriaSugerida,
-              preco: draft.preco ?? draftOcr.preco,
-              material: draft.material ?? draftOcr.material,
-              tamanhoVariacao:
-                  draft.tamanhoVariacao ?? draftOcr.tamanhoVariacao,
-              quantidade: draft.quantidade ?? draftOcr.quantidade,
-              imagemFrente: draft.imagemFrente ?? draftOcr.imagemFrente,
-              imagemVerso: draft.imagemVerso ?? draftOcr.imagemVerso,
-              reviewReasons: [
-                ...draft.reviewReasons,
-                ...draftOcr.reviewReasons,
-              ],
-              rawSignals: [...draft.rawSignals, ...draftOcr.rawSignals],
-            );
-          }
+          final file = File('${tempDir.path}/ocr_complemento_${DateTime.now().millisecondsSinceEpoch}.jpg');
+          await file.writeAsBytes(cropped);
+          final draftOcrComp = await ScannerCoordinator(externalProviders: [MlKitVisionProvider()]).analyzeImages(file.path);
+          draftFinal = ScannerCoordinator.mergeDrafts(draftFinal, draftOcrComp);
         }
-      }
-    } catch (_) {}
+      } catch (_) {}
+    }
 
     if (!mounted) return;
 
-    HapticFeedback.heavyImpact(); // Bipa para barcode novo
-    SystemSound.play(SystemSoundType.click);
+    _tocarBip(); // Bipa para produto novo/rascunho
+
+    if (continuous) {
+       // Em inventario, podemos apenas aceitar o rascunho
+       await _acceptResult(ScannerResult.draft(draftFinal));
+       return;
+    }
 
     final result = await Navigator.push<ScannerResult?>(
       context,
@@ -401,22 +299,28 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
     } else {
       setState(() => _processando = false);
       _controller.start();
-      _startOcrTimer();
     }
   }
 
   Future<void> _detectar(BarcodeCapture captura) async {
+    final image = captura.image;
+    if (image != null && !_ocrEmExecucao && !_processando) {
+       final agora = DateTime.now();
+       if (agora.difference(_ultimoTempoOcr).inMilliseconds > 1500) {
+           _ultimoTempoOcr = agora;
+           _executarOcrFrame(image);
+       }
+    }
+
     if (_processando || captura.barcodes.isEmpty) return;
-    _ocrFallbackTimer?.cancel();
+    
     final raw = captura.barcodes
         .map((barcode) => barcode.rawValue)
         .whereType<String>()
         .firstOrNull;
 
-    if (raw == null) {
-      _startOcrTimer();
-      return;
-    }
+    if (raw == null) return;
+    
     final detected = captura.barcodes.firstWhere(
       (barcode) => barcode.rawValue == raw,
       orElse: () => captura.barcodes.first,
@@ -424,26 +328,29 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
     await _processarCodigo(
       raw.trim(),
       isQr: detected.format == BarcodeFormat.qrCode,
+      rawImage: image,
     );
   }
 
   Future<void> _digitarCodigo() async {
-    _ocrFallbackTimer?.cancel();
-    final controller = TextEditingController();
+    String localCodigo = '';
     final codigo = await showDialog<String>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: Text('Digitar código'),
         content: TextField(
-          controller: controller,
           autofocus: true,
+          onChanged: (val) => localCodigo = val,
           decoration: const InputDecoration(labelText: 'Código ou referência'),
         ),
         actions: [
           if (continuous)
             TextButton(
-              onPressed: () => Navigator.pop(context, bipSession.items),
-              child: Text('Conferir'),
+              onPressed: () {
+                Navigator.pop(dialogContext);
+                Navigator.pop(context, bipSession.items); // Retorna a lista e fecha o scanner!
+              },
+              child: Text('Conferir tudo e Sair'),
             ),
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
@@ -451,88 +358,14 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
           ),
           FilledButton(
             onPressed: () =>
-                Navigator.pop(dialogContext, controller.text.trim()),
-            child: Text('Revisar'),
+                Navigator.pop(dialogContext, localCodigo.trim()),
+            child: Text('Aplicar código'),
           ),
         ],
       ),
     );
-    controller.dispose();
-    if (codigo != null && codigo.trim().isNotEmpty) {
+    if (codigo != null && codigo.trim().isNotEmpty && mounted) {
       await _processarCodigo(codigo.trim());
-    } else {
-      _startOcrTimer();
-    }
-  }
-
-  Future<void> _usarOcr() async {
-    _ocrFallbackTimer?.cancel();
-    final resultPaths = await Navigator.push<Map<String, String?>>(
-      context,
-      MaterialPageRoute(builder: (_) => const VisionOcrCapturePage()),
-    );
-
-    if (resultPaths == null || resultPaths['front'] == null) {
-      _startOcrTimer();
-      return;
-    }
-
-    final frontPath = resultPaths['front']!;
-    final backPath = resultPaths['back'];
-
-    setState(() {
-      _processando = true;
-      _erro = null;
-    });
-
-    try {
-      final coordinator = ScannerCoordinator(
-        externalProviders: [MlKitVisionProvider()],
-      );
-      final draft = await coordinator.analyzeImages(
-        frontPath,
-        backPath: backPath,
-      );
-
-      if (!mounted) return;
-
-      final resolved = await BipContextService().resolve(draft);
-      if (resolved.kind != BipItemKind.desconhecido) {
-        HapticFeedback.heavyImpact();
-        await _acceptResult({'draft': draft});
-        return;
-      }
-
-      if (!mounted) return;
-
-      final result = await Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => ScannerDraftPage(
-            draft: draft,
-            frontImagePath: frontPath,
-            backImagePath: backPath,
-          ),
-        ),
-      );
-
-      if (!mounted) return;
-
-      if (result != null) {
-        await _acceptResult(result);
-      } else {
-        setState(() => _processando = false);
-        _controller.start();
-        _startOcrTimer();
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _erro = 'Falha ao processar imagem: $e';
-          _processando = false;
-        });
-        _startOcrTimer();
-      }
     }
   }
 
@@ -541,43 +374,35 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
-        title: Text('Ler Etiqueta / Código'),
+        title: Text(continuous ? 'Lendo lote (${bipSession.items.length})' : 'Ler Etiqueta / Código'),
         actions: [
-          IconButton(
-            icon: Icon(Icons.document_scanner),
-            tooltip: 'Usar OCR na imagem',
-            onPressed: _processando ? null : _usarOcr,
-          ),
+          if (continuous)
+             FilledButton(
+                onPressed: () => Navigator.pop(context, bipSession.items),
+                child: Text('Finalizar (${bipSession.items.length})'),
+             )
         ],
       ),
       body: Stack(
         fit: StackFit.expand,
         children: [
-          RepaintBoundary(
-            key: _scannerKey,
-            child: MobileScanner(
-              controller: _controller,
-              onDetect: _detectar,
-              errorBuilder: (context, error) => Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.no_photography, color: Colors.white, size: 56),
-                      SizedBox(height: 16),
-                      Text(
-                        'Não foi possível acessar a câmera para o código de barras.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: Colors.white),
-                      ),
-                      SizedBox(height: 16),
-                      FilledButton(
-                        onPressed: _usarOcr,
-                        child: Text('Usar Leitura de Texto (OCR)'),
-                      ),
-                    ],
-                  ),
+          MobileScanner(
+            controller: _controller,
+            onDetect: _detectar,
+            errorBuilder: (context, error) => Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.no_photography, color: Colors.white, size: 56),
+                    SizedBox(height: 16),
+                    Text(
+                      'Não foi possível acessar a câmera para o código de barras.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.white),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -625,21 +450,15 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      _erro ?? 'Centralize o código na moldura ou use o OCR.',
+                      _erro ?? 'Centralize o código ou texto na moldura.',
                       textAlign: TextAlign.center,
                       style: TextStyle(color: Colors.white),
                     ),
                     SizedBox(height: 16),
-                    FilledButton.icon(
-                      onPressed: _processando ? null : _usarOcr,
-                      icon: Icon(Icons.text_fields),
-                      label: Text('Ler Textos / Extrair Etiqueta (OCR)'),
-                    ),
-                    SizedBox(height: 8),
                     TextButton.icon(
                       onPressed: _processando ? null : _digitarCodigo,
                       icon: Icon(Icons.keyboard),
-                      label: Text('Digitar manualmente'),
+                      label: Text('Digitar código manualmente'),
                     ),
                   ],
                 ),
