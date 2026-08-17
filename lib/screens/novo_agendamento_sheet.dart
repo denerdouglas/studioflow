@@ -92,12 +92,22 @@ class _NovoAgendamentoSheetState extends State<NovoAgendamentoSheet> {
             minute: widget.agendamentoInicial!.inicio.minute,
           )
         : const TimeOfDay(hour: 9, minute: 0);
-    _clienteSelecionado = widget.clienteInicial ?? (widget.agendamentoInicial != null ? ClienteRegistro(
-        id: widget.agendamentoInicial!.clienteId,
-        nome: widget.agendamentoInicial!.clienteNome,
-        telefone: widget.agendamentoInicial!.clienteTelefone,
-        dataCadastro: DateTime.now(),
-        observacoes: '', totalAtendimentos: 0, totalGasto: 0, ultimoServico: '', profissional: '', whatsapp: '') : null);
+    _clienteSelecionado =
+        widget.clienteInicial ??
+        (widget.agendamentoInicial != null
+            ? ClienteRegistro(
+                id: widget.agendamentoInicial!.clienteId,
+                nome: widget.agendamentoInicial!.clienteNome,
+                telefone: '',
+                dataCadastro: DateTime.now(),
+                observacoes: '',
+                totalAtendimentos: 0,
+                totalGasto: 0,
+                ultimoServico: '',
+                profissional: '',
+                whatsapp: '',
+              )
+            : null);
     if (widget.agendamentoInicial != null) {
       _observacoesController.text = widget.agendamentoInicial!.observacoes;
     }
@@ -134,9 +144,18 @@ class _NovoAgendamentoSheetState extends State<NovoAgendamentoSheet> {
 
   Future<void> _carregarEdicao(AgendamentoRegistro ag) async {
     final srvRepo = ServicosRepository();
+    final cliRepo = ClienteRepository();
     try {
-      final srv = await srvRepo.listar().then((l) => l.firstWhere((s) => s.id == ag.servicoId));
+      final srv = await srvRepo.listar().then(
+        (l) => l.firstWhere((s) => s.id == ag.servicoId),
+      );
+      final cli = await cliRepo.buscarPorId(ag.clienteId);
+
+      if (!mounted) return;
       setState(() {
+        if (cli != null) {
+          _clienteSelecionado = cli;
+        }
         _itens.add(
           _ItemServico(
               profissional: widget.profissionais.firstWhere(

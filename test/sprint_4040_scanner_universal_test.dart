@@ -2,13 +2,14 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/material.dart';
 import 'package:studioflow/models/domain/scanner_product_draft.dart';
 
-
 // Teste de unidade/widget focado na correção do cast exception
 void main() {
   group('Sprint 4040 - Scanner Universal Causa Raiz', () {
-    testWidgets('ProdutosLojaPage processa ScannerResult sem Cast Exception', (tester) async {
+    testWidgets('ProdutosLojaPage processa ScannerResult sem Cast Exception', (
+      tester,
+    ) async {
       bool excecaoLancada = false;
-      
+
       // Criar mock de navegação onde VisionScannerPage retorna ScannerResult.novo(produto)
       await tester.pumpWidget(
         MaterialApp(
@@ -29,7 +30,7 @@ void main() {
                       ),
                     ),
                   );
-                  
+
                   // Simula a tratativa da página que aguardava String e agora aguarda dynamic
                   if (result is ScannerResult) {
                     // Trata normalmente, loading = false garantido
@@ -52,12 +53,19 @@ void main() {
       await tester.tap(find.text('Pop Result'));
       await tester.pumpAndSettle();
 
-      expect(excecaoLancada, false, reason: 'O cast não deve lançar exceção ao retornar ScannerResult. O Type Mismatch foi corrigido.');
+      expect(
+        excecaoLancada,
+        false,
+        reason:
+            'O cast não deve lançar exceção ao retornar ScannerResult. O Type Mismatch foi corrigido.',
+      );
     });
 
-    testWidgets('VendasLojaPage processa ScannerResult sem Cast Exception', (tester) async {
+    testWidgets('VendasLojaPage processa ScannerResult sem Cast Exception', (
+      tester,
+    ) async {
       bool excecaoLancada = false;
-      
+
       await tester.pumpWidget(
         MaterialApp(
           home: Builder(
@@ -70,14 +78,17 @@ void main() {
                       builder: (_) => Scaffold(
                         body: ElevatedButton(
                           onPressed: () {
-                            Navigator.pop(context, ScannerResult.existente(null));
+                            Navigator.pop(
+                              context,
+                              ScannerResult.existente(null),
+                            );
                           },
                           child: const Text('Pop Result'),
                         ),
                       ),
                     ),
                   );
-                  
+
                   if (result is ScannerResult) {
                     // Trata normalmente
                   } else {
@@ -100,7 +111,11 @@ void main() {
       await tester.tap(find.text('Pop Result'));
       await tester.pumpAndSettle();
 
-      expect(excecaoLancada, false, reason: 'O cast não deve lançar exceção na tela de vendas.');
+      expect(
+        excecaoLancada,
+        false,
+        reason: 'O cast não deve lançar exceção na tela de vendas.',
+      );
     });
   });
 }

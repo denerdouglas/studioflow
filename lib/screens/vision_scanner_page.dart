@@ -314,7 +314,14 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
     if (resolved.kind != BipItemKind.desconhecido && resolved.product != null) {
       HapticFeedback.heavyImpact();
       SystemSound.play(SystemSoundType.click);
-      await _acceptResult(ScannerResult.existente(resolved.product!.codigoBarras ?? resolved.product!.codigoInterno ?? draft.gtin?.value ?? ''));
+      await _acceptResult(
+        ScannerResult.existente(
+          resolved.product!.codigoBarras ??
+              resolved.product!.codigoInterno ??
+              draft.gtin?.value ??
+              '',
+        ),
+      );
       await _acceptResult(ScannerResult.existente(resolved.product!));
       return;
     }
