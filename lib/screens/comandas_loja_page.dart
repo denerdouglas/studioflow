@@ -5,7 +5,9 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../repositories/comanda_loja_repository.dart';
+import '../repositories/central_comandas_repository.dart';
 import '../repositories/contas_receber_repository.dart';
+import '../repositories/loja_repository.dart';
 import '../services/external_action_service.dart';
 import '../services/purchase_receipt_service.dart';
 import 'clientes_page.dart';
@@ -20,9 +22,13 @@ class ComandasLojaPage extends StatefulWidget {
 
 class _ComandasLojaPageState extends State<ComandasLojaPage> {
   final repo = ComandaLojaRepository();
+  final central = CentralComandasRepository();
   final pesquisa = TextEditingController();
-  late Future<List<Map<String, Object?>>> future = repo.listar();
-  void reload() => setState(() => future = repo.listar());
+  String filtro = 'todas';
+  late Future<List<Map<String, Object?>>> future = _load();
+  Future<List<Map<String, Object?>>> _load() =>
+      central.listar(filtro: filtro, pesquisa: pesquisa.text);
+  void reload() => setState(() => future = _load());
 
   @override
   void dispose() {
@@ -160,7 +166,7 @@ class _ComandasLojaPageState extends State<ComandasLojaPage> {
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
-      title: const Text('Comandas da Loja'),
+      title: const Text('Comandas'),
       actions: [
         IconButton(
           tooltip: 'Cadastrar cliente',
@@ -186,17 +192,8 @@ class _ComandasLojaPageState extends State<ComandasLojaPage> {
         if (!snapshot.hasData) {
           return const Center(child: CircularProgressIndicator());
         }
-        final query = pesquisa.text.trim().toLowerCase();
-        final commands = snapshot.data!
-            .where(
-              (command) =>
-                  query.isEmpty ||
-                  '${command['numero']} ${command['cliente_nome']} ${command['status']}'
-                      .toLowerCase()
-                      .contains(query),
-            )
-            .toList();
-        if (commands.isEmpty && query.isEmpty) {
+        final commands = snapshot.data!;
+        if (commands.isEmpty && pesquisa.text.trim().isEmpty) {
           return const Center(child: Text('Nenhuma comanda cadastrada.'));
         }
         return Column(
@@ -205,11 +202,35 @@ class _ComandasLojaPageState extends State<ComandasLojaPage> {
               padding: const EdgeInsets.all(12),
               child: TextField(
                 controller: pesquisa,
-                onChanged: (_) => setState(() {}),
+                onChanged: (_) => reload(),
                 decoration: const InputDecoration(
                   prefixIcon: Icon(Icons.search),
-                  labelText: 'Pesquisar cliente, status ou identificador',
+                  labelText:
+                      'Cliente, telefone, ID, produto, código, data ou pagamento',
                 ),
+              ),
+            ),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: SegmentedButton<String>(
+                showSelectedIcon: false,
+                segments: const [
+                  ButtonSegment(value: 'todas', label: Text('Todas')),
+                  ButtonSegment(value: 'abertas', label: Text('Abertas')),
+                  ButtonSegment(value: 'pendentes', label: Text('Pendentes')),
+                  ButtonSegment(value: 'parciais', label: Text('Parciais')),
+                  ButtonSegment(value: 'pagas', label: Text('Pagas')),
+                  ButtonSegment(
+                    value: 'canceladas',
+                    label: Text('Canceladas/Estornadas'),
+                  ),
+                ],
+                selected: {filtro},
+                onSelectionChanged: (value) {
+                  filtro = value.single;
+                  reload();
+                },
               ),
             ),
             Expanded(
@@ -224,20 +245,36 @@ class _ComandasLojaPageState extends State<ComandasLojaPage> {
                               '${command['numero']} • ${command['cliente_nome']}',
                             ),
                             subtitle: Text(
-                              '${command['status']} • R\$ ${(command['total'] as num).toStringAsFixed(2)}',
+                              '${command['status_central']} • ${command['data_venda']}\n'
+                              'Total R\$ ${(command['total'] as num).toStringAsFixed(2)} • '
+                              'pago R\$ ${(command['valor_pago'] as num).toStringAsFixed(2)} • '
+                              'saldo R\$ ${(command['saldo_restante'] as num).toStringAsFixed(2)}',
                             ),
+                            isThreeLine: true,
                             onTap: () async {
                               await Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                  builder: (_) => ComandaDetalhePage(
-                                    comandaId: command['id'] as String,
-                                  ),
+                                  builder: (_) =>
+                                      command['origem_registro'] == 'venda'
+                                      ? VendaCentralDetalhePage(
+                                          vendaId: command['id'] as String,
+                                        )
+                                      : command['status'] == 'aberta'
+                                      ? ComandaDetalhePage(
+                                          comandaId: command['id'] as String,
+                                        )
+                                      : VendaCentralDetalhePage(
+                                          vendaId: command['id'] as String,
+                                          origem: 'comanda',
+                                        ),
                                 ),
                               );
                               reload();
                             },
-                            trailing: command['status'] == 'aberta'
+                            trailing:
+                                command['origem_registro'] == 'comanda' &&
+                                    command['status'] == 'aberta'
                                 ? IconButton(
                                     icon: const Icon(Icons.delete_outline),
                                     onPressed: () => cancel(command),
@@ -249,6 +286,192 @@ class _ComandasLojaPageState extends State<ComandasLojaPage> {
                       .toList(),
                 ),
               ),
+            ),
+          ],
+        );
+      },
+    ),
+  );
+}
+
+class VendaCentralDetalhePage extends StatefulWidget {
+  final String vendaId;
+  final String origem;
+  const VendaCentralDetalhePage({
+    super.key,
+    required this.vendaId,
+    this.origem = 'venda',
+  });
+
+  @override
+  State<VendaCentralDetalhePage> createState() =>
+      _VendaCentralDetalhePageState();
+}
+
+class _VendaCentralDetalhePageState extends State<VendaCentralDetalhePage> {
+  final central = CentralComandasRepository();
+  final loja = LojaRepository();
+  final commands = ComandaLojaRepository();
+  late Future<Map<String, Object?>> future = central.detalhe(
+    widget.vendaId,
+    origem: widget.origem,
+  );
+
+  Future<void> payment() async {
+    final value = TextEditingController();
+    final method = TextEditingController(text: 'pix');
+    final accepted = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Registrar pagamento'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: value,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(labelText: 'Valor'),
+            ),
+            TextField(
+              controller: method,
+              decoration: const InputDecoration(labelText: 'Forma'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Registrar'),
+          ),
+        ],
+      ),
+    );
+    if (accepted != true) return;
+    await commands.registrarPagamento(
+      widget.vendaId,
+      double.parse(value.text.replaceAll(',', '.')),
+      method.text,
+    );
+    setState(
+      () => future = central.detalhe(widget.vendaId, origem: widget.origem),
+    );
+  }
+
+  Future<void> cancel() async {
+    final reason = TextEditingController();
+    final accepted = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Excluir/Cancelar venda?'),
+        content: TextField(
+          controller: reason,
+          decoration: const InputDecoration(labelText: 'Motivo obrigatório'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Voltar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Confirmar cancelamento'),
+          ),
+        ],
+      ),
+    );
+    if (accepted != true) return;
+    if (widget.origem == 'comanda') {
+      await commands.estornar(widget.vendaId, reason.text);
+    } else {
+      await loja.cancelarVenda(widget.vendaId, reason.text);
+    }
+    setState(
+      () => future = central.detalhe(widget.vendaId, origem: widget.origem),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('Detalhe da comanda')),
+    body: FutureBuilder<Map<String, Object?>>(
+      future: future,
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        final data = snapshot.data!;
+        final items = data['itens'] as List<Map<String, Object?>>;
+        final payments = data['pagamentos'] as List<Map<String, Object?>>;
+        return ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            Text(
+              'Comanda ${data['numero']}',
+              style: Theme.of(context).textTheme.headlineSmall,
+            ),
+            Text('Cliente: ${data['cliente_nome']}'),
+            Text('Data da venda: ${data['data_venda']}'),
+            Text('Status: ${data['status_central']}'),
+            Text('Total: R\$ ${(data['total'] as num).toStringAsFixed(2)}'),
+            Text(
+              'Valor pago: R\$ ${(data['valor_pago'] as num).toStringAsFixed(2)}',
+            ),
+            Text(
+              'Saldo restante: R\$ ${(data['saldo_restante'] as num).toStringAsFixed(2)}',
+            ),
+            Text('Forma de pagamento: ${data['forma_pagamento']}'),
+            Text('Data de pagamento: ${data['data_pagamento']}'),
+            Text('Vencimento: ${data['vencimento'] ?? 'Não informado'}'),
+            Text('Observações: ${data['observacoes'] ?? ''}'),
+            Text('Responsável: ${data['profissional_id'] ?? 'Não informado'}'),
+            const Divider(),
+            Text('Itens', style: Theme.of(context).textTheme.titleMedium),
+            ...items.map(
+              (item) => ListTile(
+                title: Text('${item['nome']}'),
+                subtitle: Text(
+                  '${item['quantidade']} × R\$ ${(item['valor_unitario'] as num).toStringAsFixed(2)}'
+                  '${item['codigo'] == null ? '' : ' • ${item['codigo']}'}',
+                ),
+              ),
+            ),
+            const Divider(),
+            Text('Pagamentos', style: Theme.of(context).textTheme.titleMedium),
+            ...payments.map(
+              (payment) => ListTile(
+                title: Text(
+                  '${payment['forma']} • R\$ ${(payment['valor'] as num).abs().toStringAsFixed(2)}',
+                ),
+                subtitle: Text('${payment['registrado_em']}'),
+              ),
+            ),
+            const SizedBox(height: 16),
+            if (widget.origem == 'comanda' &&
+                !const {
+                  'cancelada',
+                  'estornada',
+                }.contains(data['status_central']) &&
+                (data['saldo_restante'] as num).toDouble() > 0)
+              FilledButton.icon(
+                onPressed: payment,
+                icon: const Icon(Icons.payments_outlined),
+                label: const Text('Registrar pagamento'),
+              ),
+            const SizedBox(height: 8),
+            FilledButton.tonalIcon(
+              onPressed:
+                  const {
+                    'cancelada',
+                    'estornada',
+                  }.contains(data['status_central'])
+                  ? null
+                  : cancel,
+              icon: const Icon(Icons.cancel_outlined),
+              label: const Text('Excluir / Cancelar'),
             ),
           ],
         );
@@ -362,7 +585,8 @@ class _ComandaDetalhePageState extends State<ComandaDetalhePage> {
       MaterialPageRoute(builder: (_) => const VisionScannerPage()),
     );
     if (result != null && mounted) {
-      final code = result.draft?.referenciaComercial?.value ?? result.draft?.gtin?.value;
+      final code =
+          result.draft?.referenciaComercial?.value ?? result.draft?.gtin?.value;
       if (code != null) await addCode(code);
     }
   }
@@ -724,8 +948,13 @@ class _ContasReceberPageState extends State<ContasReceberPage> {
                 (account) => ListTile(
                   title: Text(account['cliente_nome'] as String),
                   subtitle: Text(
-                    '${account['status']} • saldo R\$ ${(account['saldo'] as num).toStringAsFixed(2)} • vence ${account['vencimento']}',
+                    'Comanda ${account['comanda_numero'] ?? account['comanda_id']} • ${account['status']}\n'
+                    'Total R\$ ${(account['valor_total'] as num).toStringAsFixed(2)} • '
+                    'pago R\$ ${(account['valor_recebido'] as num).toStringAsFixed(2)} • '
+                    'restante R\$ ${(account['saldo'] as num).toStringAsFixed(2)} • '
+                    'vence ${account['vencimento']}',
                   ),
+                  isThreeLine: true,
                   trailing: account['status'] == 'paga'
                       ? const Icon(Icons.check_circle)
                       : FilledButton(

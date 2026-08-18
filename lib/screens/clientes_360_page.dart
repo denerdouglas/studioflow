@@ -5,6 +5,7 @@ import '../models/domain/atendimento.dart';
 import '../repositories/cliente_360_repository.dart';
 import '../repositories/pacotes_repository.dart';
 import '../models/domain/pacote_servico.dart';
+import 'comandas_loja_page.dart';
 
 class Clientes360Page extends StatefulWidget {
   const Clientes360Page({super.key});
@@ -214,6 +215,15 @@ class _Cliente360DetalhePageState extends State<Cliente360DetalhePage> {
                       AppFormatters.moeda(r.recebidoServicos),
                     ),
                     _numero('Produtos', AppFormatters.moeda(r.comprasProdutos)),
+                    _numero('Compras', '${r.quantidadeCompras}'),
+                    _numero(
+                      'Ticket médio',
+                      AppFormatters.moeda(r.ticketMedioCompras),
+                    ),
+                    _numero(
+                      'Em aberto',
+                      AppFormatters.moeda(r.totalComprasEmAberto),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 16),
@@ -285,7 +295,7 @@ class _Cliente360DetalhePageState extends State<Cliente360DetalhePage> {
                 }),
                 const SizedBox(height: 12),
                 const Text(
-                  'Compras na Loja do Salão',
+                  'Comandas / Compras',
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
                 if (r.historicoCompras.isEmpty)
@@ -293,18 +303,38 @@ class _Cliente360DetalhePageState extends State<Cliente360DetalhePage> {
                     child: ListTile(title: Text('Nenhuma compra vinculada.')),
                   ),
                 ...r.historicoCompras.take(20).map((v) {
-                  final data = DateTime.parse(v['criada_em'] as String);
+                  final data = DateTime.parse(v['data_venda'] as String);
+                  final legado = v['origem_registro'] == 'legado';
                   return Card(
                     child: ListTile(
                       leading: const Icon(Icons.shopping_bag_outlined),
                       title: Text(
-                        'Venda ${v['numero']} • ${AppFormatters.moeda((v['total'] as num).toDouble())}',
+                        'Comanda ${v['numero']} • ${AppFormatters.moeda((v['total'] as num).toDouble())}',
                       ),
                       subtitle: Text(
-                        '${data.day}/${data.month}/${data.year}\n${v['itens'] ?? ''}',
+                        '${data.day}/${data.month}/${data.year}\n${v['itens_busca'] ?? ''}',
                       ),
-                      trailing: Text(v['status'] as String),
+                      trailing: Text(v['status_central'] as String),
                       isThreeLine: true,
+                      onTap: legado
+                          ? null
+                          : () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => v['origem_registro'] == 'venda'
+                                    ? VendaCentralDetalhePage(
+                                        vendaId: v['id'] as String,
+                                      )
+                                    : v['status'] == 'aberta'
+                                    ? ComandaDetalhePage(
+                                        comandaId: v['id'] as String,
+                                      )
+                                    : VendaCentralDetalhePage(
+                                        vendaId: v['id'] as String,
+                                        origem: 'comanda',
+                                      ),
+                              ),
+                            ),
                     ),
                   );
                 }),

@@ -6,7 +6,6 @@ import 'estoque_page.dart';
 import 'joias_consignadas_page.dart';
 import 'produtos_loja_page.dart';
 import 'suprimentos_page.dart';
-import 'vendas_loja_page.dart';
 
 abstract class _AreaPage extends StatelessWidget {
   const _AreaPage({super.key});
@@ -122,8 +121,8 @@ class VendasRecebimentosAreaPage extends _AreaPage {
   List<Widget> destinations(BuildContext context) => [
     destination(
       context,
-      title: 'Comandas abertas',
-      subtitle: 'Criar, editar itens e finalizar',
+      title: 'Comandas',
+      subtitle: 'Todas as vendas, abertas, pagas e canceladas',
       icon: Icons.receipt_long,
       page: const ComandasLojaPage(),
     ),
@@ -133,20 +132,6 @@ class VendasRecebimentosAreaPage extends _AreaPage {
       subtitle: 'Pendentes, vencidas e recebimentos',
       icon: Icons.account_balance_wallet_outlined,
       page: const ContasReceberPage(),
-    ),
-    destination(
-      context,
-      title: 'Histórico de vendas',
-      subtitle: 'Consultar detalhes e pagamentos',
-      icon: Icons.history,
-      page: const HistoricoVendasPage(),
-    ),
-    destination(
-      context,
-      title: 'Estornos',
-      subtitle: 'Vendas canceladas e histórico preservado',
-      icon: Icons.assignment_return_outlined,
-      page: const HistoricoVendasPage(somenteEstornos: true),
     ),
   ];
 }

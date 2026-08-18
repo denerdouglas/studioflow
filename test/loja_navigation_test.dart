@@ -35,10 +35,10 @@ void main() {
     await tester.pumpWidget(
       const MaterialApp(home: VendasRecebimentosAreaPage()),
     );
-    expect(find.text('Comandas abertas'), findsOneWidget);
+    expect(find.text('Comandas'), findsOneWidget);
     expect(find.text('Contas a receber'), findsOneWidget);
-    expect(find.text('Histórico de vendas'), findsOneWidget);
-    expect(find.text('Estornos'), findsOneWidget);
+    expect(find.text('Histórico de vendas'), findsNothing);
+    expect(find.text('Estornos'), findsNothing);
 
     await tester.pumpWidget(
       const MaterialApp(home: EstoqueReposicaoAreaPage()),

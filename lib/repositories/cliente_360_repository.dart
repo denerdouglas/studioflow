@@ -3,6 +3,7 @@ import 'package:sqflite/sqflite.dart';
 import '../database/database_service.dart';
 import '../models/domain/atendimento.dart';
 import '../services/session_controller.dart';
+import 'central_comandas_repository.dart';
 
 class Cliente360Repository {
   final Future<Database> Function() _databaseProvider;
@@ -50,7 +51,13 @@ class Cliente360Repository {
          ORDER BY a.inicio DESC''',
       [_comercioId, clienteId],
     );
-    final compras = await db.rawQuery(
+    final central = CentralComandasRepository(
+      databaseProvider: _databaseProvider,
+      comercioId: _comercioId,
+    );
+    final comprasAtuais = await central.listar(clienteId: clienteId);
+    final resumoCompras = await central.resumoCliente(clienteId);
+    final comprasLegadas = await db.rawQuery(
       '''SELECT v.id, v.numero, v.total, v.status, v.criada_em,
                 GROUP_CONCAT(i.nome_produto || ' x' || i.quantidade) AS itens
          FROM vendas v
@@ -59,6 +66,23 @@ class Cliente360Repository {
          GROUP BY v.id ORDER BY v.criada_em DESC''',
       [_comercioId, clienteId],
     );
+    final compras =
+        <Map<String, Object?>>[
+          ...comprasAtuais,
+          ...comprasLegadas.map(
+            (row) => {
+              ...row,
+              'data_venda': row['criada_em'],
+              'status_central': row['status'],
+              'origem_registro': 'legado',
+              'itens_busca': row['itens'],
+            },
+          ),
+        ]..sort(
+          (a, b) => '${b['data_venda'] ?? b['criada_em']}'.compareTo(
+            '${a['data_venda'] ?? a['criada_em']}',
+          ),
+        );
     final c = clientes.first;
     double recebido = 0;
     var faltas = 0;
@@ -68,9 +92,18 @@ class Cliente360Repository {
       if (item['status'] == 'faltou') faltas++;
       if (item['status'] == 'cancelado') cancelamentos++;
     }
-    final comprasTotal = compras
-        .where((item) => item['status'] != 'cancelada')
-        .fold<double>(0, (soma, item) => soma + (item['total'] as num? ?? 0));
+    final comprasLegadasValidas = comprasLegadas
+        .where((row) => row['status'] != 'cancelada')
+        .toList();
+    final totalLegado = comprasLegadasValidas.fold<double>(
+      0,
+      (sum, row) => sum + (row['total'] as num? ?? 0).toDouble(),
+    );
+    final comprasTotal =
+        (resumoCompras['total_comprado'] as num? ?? 0).toDouble() + totalLegado;
+    final quantidadeCompras =
+        (resumoCompras['quantidade_compras'] as num? ?? 0).toInt() +
+        comprasLegadasValidas.length;
     return ResumoCliente360(
       clienteId: clienteId,
       nome: c['nome'] as String,
@@ -87,6 +120,15 @@ class Cliente360Repository {
       cancelamentos: cancelamentos,
       recebidoServicos: recebido,
       comprasProdutos: comprasTotal,
+      quantidadeCompras: quantidadeCompras,
+      ticketMedioCompras: quantidadeCompras == 0
+          ? 0
+          : comprasTotal / quantidadeCompras,
+      totalComprasEmAberto: (resumoCompras['total_em_aberto'] as num? ?? 0)
+          .toDouble(),
+      ultimaCompra: DateTime.tryParse(
+        '${resumoCompras['ultima_compra'] ?? ''}',
+      ),
       historicoAgenda: agenda,
       historicoCompras: compras,
     );

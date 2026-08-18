@@ -198,6 +198,10 @@ class ResumoCliente360 {
   final int cancelamentos;
   final double recebidoServicos;
   final double comprasProdutos;
+  final int quantidadeCompras;
+  final double ticketMedioCompras;
+  final double totalComprasEmAberto;
+  final DateTime? ultimaCompra;
   final List<Map<String, Object?>> historicoAgenda;
   final List<Map<String, Object?>> historicoCompras;
 
@@ -215,6 +219,10 @@ class ResumoCliente360 {
     required this.cancelamentos,
     required this.recebidoServicos,
     required this.comprasProdutos,
+    this.quantidadeCompras = 0,
+    this.ticketMedioCompras = 0,
+    this.totalComprasEmAberto = 0,
+    this.ultimaCompra,
     required this.historicoAgenda,
     required this.historicoCompras,
   });

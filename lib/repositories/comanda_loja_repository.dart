@@ -421,17 +421,28 @@ class ComandaLojaRepository {
     if (command['venda_id'] != null) {
       throw StateError('Comanda com venda deve ser estornada pelo histórico.');
     }
+    final now = DateTime.now().toUtc().toIso8601String();
     await db.transaction((tx) async {
-      await tx.delete(
-        'comanda_loja_itens',
-        where: 'comanda_id = ? AND comercio_id = ?',
-        whereArgs: [comandaId, user.comercioId],
-      );
-      await tx.delete(
+      await tx.update(
         'comandas_loja',
+        {
+          'status': 'cancelada',
+          'cancelada_em': now,
+          'motivo_cancelamento': reason.trim(),
+          'atualizado_em': now,
+        },
         where: 'id = ? AND comercio_id = ?',
         whereArgs: [comandaId, user.comercioId],
       );
+      await tx.insert('comanda_auditoria', {
+        'id': IdGenerator.temporal(),
+        'comercio_id': user.comercioId,
+        'comanda_id': comandaId,
+        'usuario_id': user.id,
+        'acao': 'cancelamento',
+        'detalhes': reason.trim(),
+        'criado_em': now,
+      });
     });
   }
 

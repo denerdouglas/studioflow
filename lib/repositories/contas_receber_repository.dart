@@ -59,8 +59,13 @@ class ContasReceberRepository {
       args.add(ate.toIso8601String());
     }
     return db.rawQuery(
-      '''SELECT r.*, c.nome cliente_nome, (r.valor_total-r.valor_recebido) saldo
+      '''SELECT r.*, c.nome cliente_nome, c.whatsapp cliente_telefone,
+         co.numero comanda_numero,
+         (r.valor_total-r.valor_recebido) saldo,
+         (SELECT MAX(p.registrado_em) FROM contas_receber_pagamentos p
+           WHERE p.conta_id=r.id AND p.estornado=0) data_pagamento
          FROM contas_receber_loja r JOIN clientes c ON c.id=r.cliente_id
+         LEFT JOIN comandas_loja co ON co.id=r.comanda_id
          WHERE ${where.join(' AND ')} ORDER BY r.vencimento, c.nome''',
       args,
     );
