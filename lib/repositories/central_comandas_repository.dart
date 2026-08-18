@@ -30,6 +30,7 @@ class CentralComandasRepository {
       '''SELECT c.*, 'comanda' origem_registro,
         COALESCE(cl.nome, 'Cliente não vinculado') cliente_nome,
         COALESCE(cl.whatsapp, cl.telefone, '') cliente_telefone,
+        p.nome responsavel_nome,
         COALESCE(c.finalizada_em, c.criado_em) data_venda,
         COALESCE((SELECT MAX(dt) FROM (
           SELECT p.registrado_em dt FROM comanda_loja_pagamentos p
@@ -39,7 +40,8 @@ class CentralComandasRepository {
             JOIN contas_receber_loja r ON r.id=rp.conta_id
             WHERE r.comanda_id=c.id AND rp.estornado=0)), '') data_pagamento,
         TRIM(COALESCE((SELECT GROUP_CONCAT(DISTINCT p.forma)
-          FROM comanda_loja_pagamentos p WHERE p.comanda_id=c.id), '') || ',' ||
+          FROM comanda_loja_pagamentos p
+          WHERE p.comanda_id=c.id AND p.status='pago'), '') || ',' ||
           COALESCE((SELECT GROUP_CONCAT(DISTINCT rp.forma)
             FROM contas_receber_pagamentos rp
             JOIN contas_receber_loja r ON r.id=rp.conta_id
@@ -48,6 +50,7 @@ class CentralComandasRepository {
           FROM comanda_loja_itens i WHERE i.comanda_id=c.id), '') itens_busca
         FROM comandas_loja c
         LEFT JOIN clientes cl ON cl.id=c.cliente_id AND cl.comercio_id=c.comercio_id
+        LEFT JOIN profissionais p ON p.id=c.profissional_id
         WHERE c.comercio_id=?''',
       [_comercio],
     );
@@ -61,6 +64,7 @@ class CentralComandasRepository {
         'venda' origem_registro,
         COALESCE(cl.nome, 'Cliente não vinculado') cliente_nome,
         COALESCE(cl.whatsapp, cl.telefone, '') cliente_telefone,
+        p.nome responsavel_nome,
         v.data_venda data_venda,
         COALESCE((SELECT MAX(m.data) FROM movimentacoes_financeiras m
           WHERE m.entidade_origem='pdv_venda' AND m.entidade_origem_id=v.id
@@ -77,6 +81,7 @@ class CentralComandasRepository {
           WHERE vi.pdv_venda_id=v.id), '') itens_busca
         FROM pdv_vendas v
         LEFT JOIN clientes cl ON cl.id=v.cliente_id AND cl.comercio_id=v.comercio_id
+        LEFT JOIN profissionais p ON p.id=v.profissional_id
         WHERE v.comercio_id=? AND NOT EXISTS (
           SELECT 1 FROM comandas_loja c
           WHERE c.comercio_id=v.comercio_id AND c.venda_id=v.id)''',
@@ -155,14 +160,17 @@ class CentralComandasRepository {
         where: 'comanda_id=? AND comercio_id=?',
         whereArgs: [id, _comercio],
       );
-      final payments = await db.query(
+      final directPayments = await db.query(
         'comanda_loja_pagamentos',
         where: 'comanda_id=? AND comercio_id=?',
         whereArgs: [id, _comercio],
         orderBy: 'registrado_em',
       );
+      final payments = directPayments
+          .map((payment) => {...payment, 'origem_pagamento': 'comanda'})
+          .toList();
       final receivables = await db.rawQuery(
-        '''SELECT rp.id, rp.forma, rp.valor,
+        '''SELECT rp.id, rp.forma, rp.valor, 'conta_receber' origem_pagamento,
           CASE WHEN rp.estornado=1 THEN 'estornado' ELSE 'pago' END status,
           rp.registrado_em
           FROM contas_receber_pagamentos rp

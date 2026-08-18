@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -13,6 +14,24 @@ import '../services/purchase_receipt_service.dart';
 import 'clientes_page.dart';
 import 'vision_scanner_page.dart';
 import '../models/domain/scanner_product_draft.dart';
+
+String _dataHoraBr(Object? value) {
+  final parsed = DateTime.tryParse('${value ?? ''}');
+  if (parsed == null) return 'Não informado';
+  return DateFormat("dd/MM/yyyy 'às' HH:mm").format(parsed.toLocal());
+}
+
+String _dataBr(Object? value) {
+  final parsed = DateTime.tryParse('${value ?? ''}');
+  if (parsed == null) return 'Não informado';
+  return DateFormat('dd/MM/yyyy').format(parsed.toLocal());
+}
+
+String _dataCardBr(Object? value) {
+  final parsed = DateTime.tryParse('${value ?? ''}');
+  if (parsed == null) return 'Data não informada';
+  return DateFormat('dd/MM/yyyy • HH:mm').format(parsed.toLocal());
+}
 
 class ComandasLojaPage extends StatefulWidget {
   const ComandasLojaPage({super.key});
@@ -245,7 +264,7 @@ class _ComandasLojaPageState extends State<ComandasLojaPage> {
                               '${command['numero']} • ${command['cliente_nome']}',
                             ),
                             subtitle: Text(
-                              '${command['status_central']} • ${command['data_venda']}\n'
+                              '${command['status_central']} • ${_dataCardBr(command['data_venda'])}\n'
                               'Total R\$ ${(command['total'] as num).toStringAsFixed(2)} • '
                               'pago R\$ ${(command['valor_pago'] as num).toStringAsFixed(2)} • '
                               'saldo R\$ ${(command['saldo_restante'] as num).toStringAsFixed(2)}',
@@ -259,10 +278,6 @@ class _ComandasLojaPageState extends State<ComandasLojaPage> {
                                       command['origem_registro'] == 'venda'
                                       ? VendaCentralDetalhePage(
                                           vendaId: command['id'] as String,
-                                        )
-                                      : command['status'] == 'aberta'
-                                      ? ComandaDetalhePage(
-                                          comandaId: command['id'] as String,
                                         )
                                       : VendaCentralDetalhePage(
                                           vendaId: command['id'] as String,
@@ -320,34 +335,66 @@ class _VendaCentralDetalhePageState extends State<VendaCentralDetalhePage> {
   Future<void> payment() async {
     final value = TextEditingController();
     final method = TextEditingController(text: 'pix');
+    var paymentDate = DateTime.now();
     final accepted = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Registrar pagamento'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: value,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Valor'),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Registrar pagamento'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: value,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'Valor'),
+              ),
+              TextField(
+                controller: method,
+                decoration: const InputDecoration(labelText: 'Forma'),
+              ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Data do pagamento'),
+                subtitle: Text(_dataHoraBr(paymentDate)),
+                onTap: () async {
+                  final date = await showDatePicker(
+                    context: context,
+                    initialDate: paymentDate,
+                    firstDate: DateTime(2000),
+                    lastDate: DateTime.now().add(const Duration(days: 730)),
+                  );
+                  if (date == null || !context.mounted) return;
+                  final time = await showTimePicker(
+                    context: context,
+                    initialTime: TimeOfDay.fromDateTime(paymentDate),
+                  );
+                  if (time != null) {
+                    setDialogState(
+                      () => paymentDate = DateTime(
+                        date.year,
+                        date.month,
+                        date.day,
+                        time.hour,
+                        time.minute,
+                      ),
+                    );
+                  }
+                },
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancelar'),
             ),
-            TextField(
-              controller: method,
-              decoration: const InputDecoration(labelText: 'Forma'),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Registrar'),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Registrar'),
-          ),
-        ],
       ),
     );
     if (accepted != true) return;
@@ -355,13 +402,14 @@ class _VendaCentralDetalhePageState extends State<VendaCentralDetalhePage> {
       widget.vendaId,
       double.parse(value.text.replaceAll(',', '.')),
       method.text,
+      dataPagamento: paymentDate,
     );
     setState(
       () => future = central.detalhe(widget.vendaId, origem: widget.origem),
     );
   }
 
-  Future<void> cancel() async {
+  Future<void> cancel({required bool open}) async {
     final reason = TextEditingController();
     final accepted = await showDialog<bool>(
       context: context,
@@ -385,10 +433,94 @@ class _VendaCentralDetalhePageState extends State<VendaCentralDetalhePage> {
     );
     if (accepted != true) return;
     if (widget.origem == 'comanda') {
-      await commands.estornar(widget.vendaId, reason.text);
+      if (open) {
+        await commands.cancelar(widget.vendaId, reason.text);
+      } else {
+        await commands.estornar(widget.vendaId, reason.text);
+      }
     } else {
       await loja.cancelarVenda(widget.vendaId, reason.text);
     }
+    setState(
+      () => future = central.detalhe(widget.vendaId, origem: widget.origem),
+    );
+  }
+
+  Future<void> correctPayment(Map<String, Object?> payment) async {
+    if (payment['id'] == null ||
+        payment['status'] != 'pago' ||
+        payment['origem_pagamento'] != 'comanda') {
+      return;
+    }
+    final method = TextEditingController(text: '${payment['forma']}');
+    var date =
+        DateTime.tryParse('${payment['registrado_em']}')?.toLocal() ??
+        DateTime.now();
+    final accepted = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Corrigir pagamento'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: method,
+                decoration: const InputDecoration(labelText: 'Forma correta'),
+              ),
+              ListTile(
+                title: const Text('Data correta'),
+                subtitle: Text(_dataHoraBr(date)),
+                onTap: () async {
+                  final day = await showDatePicker(
+                    context: context,
+                    initialDate: date,
+                    firstDate: DateTime(2000),
+                    lastDate: DateTime.now().add(const Duration(days: 730)),
+                  );
+                  if (day == null || !context.mounted) return;
+                  final time = await showTimePicker(
+                    context: context,
+                    initialTime: TimeOfDay.fromDateTime(date),
+                  );
+                  if (time != null) {
+                    setDialogState(
+                      () => date = DateTime(
+                        day.year,
+                        day.month,
+                        day.day,
+                        time.hour,
+                        time.minute,
+                      ),
+                    );
+                  }
+                },
+              ),
+              const Text(
+                'O lançamento anterior será estornado e um novo será criado.',
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Voltar'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Confirmar correção'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (accepted != true) return;
+    await commands.corrigirPagamento(
+      widget.vendaId,
+      payment['id'] as String,
+      novaForma: method.text,
+      novaData: date,
+    );
     setState(
       () => future = central.detalhe(widget.vendaId, origem: widget.origem),
     );
@@ -414,7 +546,7 @@ class _VendaCentralDetalhePageState extends State<VendaCentralDetalhePage> {
               style: Theme.of(context).textTheme.headlineSmall,
             ),
             Text('Cliente: ${data['cliente_nome']}'),
-            Text('Data da venda: ${data['data_venda']}'),
+            Text('Data da venda: ${_dataHoraBr(data['data_venda'])}'),
             Text('Status: ${data['status_central']}'),
             Text('Total: R\$ ${(data['total'] as num).toStringAsFixed(2)}'),
             Text(
@@ -424,10 +556,11 @@ class _VendaCentralDetalhePageState extends State<VendaCentralDetalhePage> {
               'Saldo restante: R\$ ${(data['saldo_restante'] as num).toStringAsFixed(2)}',
             ),
             Text('Forma de pagamento: ${data['forma_pagamento']}'),
-            Text('Data de pagamento: ${data['data_pagamento']}'),
-            Text('Vencimento: ${data['vencimento'] ?? 'Não informado'}'),
+            Text('Data de pagamento: ${_dataHoraBr(data['data_pagamento'])}'),
+            Text('Vencimento: ${_dataBr(data['vencimento'])}'),
             Text('Observações: ${data['observacoes'] ?? ''}'),
-            Text('Responsável: ${data['profissional_id'] ?? 'Não informado'}'),
+            if (data['responsavel_nome'] != null)
+              Text('Responsável: ${data['responsavel_nome']}'),
             const Divider(),
             Text('Itens', style: Theme.of(context).textTheme.titleMedium),
             ...items.map(
@@ -446,12 +579,72 @@ class _VendaCentralDetalhePageState extends State<VendaCentralDetalhePage> {
                 title: Text(
                   '${payment['forma']} • R\$ ${(payment['valor'] as num).abs().toStringAsFixed(2)}',
                 ),
-                subtitle: Text('${payment['registrado_em']}'),
+                subtitle: Text(_dataHoraBr(payment['registrado_em'])),
+                trailing:
+                    widget.origem == 'comanda' &&
+                        payment['status'] == 'pago' &&
+                        payment['origem_pagamento'] == 'comanda'
+                    ? const Icon(Icons.edit_outlined)
+                    : null,
+                onTap: widget.origem == 'comanda'
+                    ? () => correctPayment(payment)
+                    : null,
               ),
             ),
             const SizedBox(height: 16),
             if (widget.origem == 'comanda' &&
                 !const {
+                  'cancelada',
+                  'estornada',
+                }.contains(data['status_central']))
+              OutlinedButton.icon(
+                onPressed: () async {
+                  await Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) =>
+                          EditarComandaPage(comandaId: widget.vendaId),
+                    ),
+                  );
+                  setState(
+                    () => future = central.detalhe(
+                      widget.vendaId,
+                      origem: widget.origem,
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.edit_outlined),
+                label: const Text('Editar comanda'),
+              ),
+            const SizedBox(height: 8),
+            if (widget.origem == 'comanda' &&
+                !const {
+                  'cancelada',
+                  'estornada',
+                }.contains(data['status_central']) &&
+                data['status_central'] == 'aberta')
+              FilledButton.icon(
+                onPressed: () async {
+                  await Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) =>
+                          ComandaDetalhePage(comandaId: widget.vendaId),
+                    ),
+                  );
+                  setState(
+                    () => future = central.detalhe(
+                      widget.vendaId,
+                      origem: widget.origem,
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.payments_outlined),
+                label: const Text('Registrar pagamento / Finalizar'),
+              ),
+            if (widget.origem == 'comanda' &&
+                !const {
+                  'aberta',
                   'cancelada',
                   'estornada',
                 }.contains(data['status_central']) &&
@@ -469,10 +662,274 @@ class _VendaCentralDetalhePageState extends State<VendaCentralDetalhePage> {
                     'estornada',
                   }.contains(data['status_central'])
                   ? null
-                  : cancel,
+                  : () => cancel(open: data['status_central'] == 'aberta'),
               icon: const Icon(Icons.cancel_outlined),
               label: const Text('Excluir / Cancelar'),
             ),
+          ],
+        );
+      },
+    ),
+  );
+}
+
+class EditarComandaPage extends StatefulWidget {
+  final String comandaId;
+  const EditarComandaPage({super.key, required this.comandaId});
+
+  @override
+  State<EditarComandaPage> createState() => _EditarComandaPageState();
+}
+
+class _EditarComandaPageState extends State<EditarComandaPage> {
+  final repo = ComandaLojaRepository();
+  final central = CentralComandasRepository();
+  final discount = TextEditingController();
+  final notes = TextEditingController();
+  late Future<void> loading = _load();
+  final items = <Map<String, Object?>>[];
+  String? clientId;
+  String clientName = '';
+  DateTime? due;
+
+  Future<void> _load() async {
+    final data = await central.detalhe(widget.comandaId, origem: 'comanda');
+    clientId = data['cliente_id'] as String?;
+    clientName = '${data['cliente_nome']}';
+    discount.text = '${data['desconto'] ?? 0}';
+    notes.text = '${data['observacoes'] ?? ''}';
+    due = DateTime.tryParse('${data['vencimento'] ?? ''}')?.toLocal();
+    items
+      ..clear()
+      ..addAll(
+        (data['itens'] as List<Map<String, Object?>>).map(
+          (item) => Map<String, Object?>.from(item),
+        ),
+      );
+  }
+
+  @override
+  void dispose() {
+    discount.dispose();
+    notes.dispose();
+    super.dispose();
+  }
+
+  Future<void> _chooseClient() async {
+    final clients = await repo.clientesDisponiveis();
+    if (!mounted) return;
+    final selected = await showDialog<Map<String, Object?>>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Vincular cliente'),
+        content: SizedBox(
+          width: 420,
+          child: ListView(
+            shrinkWrap: true,
+            children: clients
+                .map(
+                  (client) => ListTile(
+                    title: Text('${client['nome']}'),
+                    subtitle: Text('${client['whatsapp'] ?? ''}'),
+                    onTap: () => Navigator.pop(context, client),
+                  ),
+                )
+                .toList(),
+          ),
+        ),
+      ),
+    );
+    if (selected != null) {
+      setState(() {
+        clientId = selected['id'] as String;
+        clientName = '${selected['nome']}';
+      });
+    }
+  }
+
+  Future<void> _addProduct() async {
+    final search = TextEditingController();
+    var products = await repo.produtosDisponiveis();
+    if (!mounted) return;
+    final selected = await showDialog<Map<String, Object?>>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Adicionar produto'),
+          content: SizedBox(
+            width: 520,
+            height: 420,
+            child: Column(
+              children: [
+                TextField(
+                  controller: search,
+                  decoration: const InputDecoration(
+                    prefixIcon: Icon(Icons.search),
+                    labelText: 'Produto ou código',
+                  ),
+                  onChanged: (value) async {
+                    final result = await repo.produtosDisponiveis(value);
+                    setDialogState(() => products = result);
+                  },
+                ),
+                Expanded(
+                  child: ListView(
+                    children: products
+                        .map(
+                          (product) => ListTile(
+                            title: Text('${product['nome']}'),
+                            subtitle: Text(
+                              '${product['codigo_barras'] ?? product['codigo_interno'] ?? ''} • '
+                              'R\$ ${(product['preco_venda'] as num? ?? 0).toStringAsFixed(2)}',
+                            ),
+                            onTap: () => Navigator.pop(context, product),
+                          ),
+                        )
+                        .toList(),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    search.dispose();
+    if (selected == null) return;
+    final existing = items.indexWhere(
+      (item) => item['produto_id'] == selected['id'],
+    );
+    setState(() {
+      if (existing >= 0) {
+        if (selected['origem_produto'] == 'peca_unica') return;
+        final current = (items[existing]['quantidade'] as num).toDouble();
+        items[existing]['quantidade'] = current + 1;
+      } else {
+        final price = (selected['preco_venda'] as num? ?? 0).toDouble();
+        items.add({
+          'produto_id': selected['id'],
+          'nome': selected['nome'],
+          'codigo': selected['codigo_barras'] ?? selected['codigo_interno'],
+          'quantidade': 1.0,
+          'valor_unitario': price,
+          'desconto': 0.0,
+          'subtotal': price,
+        });
+      }
+    });
+  }
+
+  Future<void> _save() async {
+    await repo.reconciliarItens(
+      widget.comandaId,
+      items,
+      desconto: double.tryParse(discount.text.replaceAll(',', '.')) ?? 0,
+      clienteId: clientId,
+      vencimento: due,
+      observacoes: notes.text,
+    );
+    if (mounted) Navigator.pop(context, true);
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('Editar comanda')),
+    floatingActionButton: FloatingActionButton.extended(
+      onPressed: _addProduct,
+      icon: const Icon(Icons.add),
+      label: const Text('Adicionar item'),
+    ),
+    bottomNavigationBar: SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: FilledButton.icon(
+          onPressed: _save,
+          icon: const Icon(Icons.save_outlined),
+          label: const Text('Salvar alterações'),
+        ),
+      ),
+    ),
+    body: FutureBuilder<void>(
+      future: loading,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError) return Center(child: Text('${snapshot.error}'));
+        return ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            Text('CLIENTE', style: Theme.of(context).textTheme.titleMedium),
+            ListTile(
+              title: Text(clientName),
+              trailing: const Icon(Icons.edit_outlined),
+              onTap: _chooseClient,
+            ),
+            const Divider(),
+            Text('ITENS', style: Theme.of(context).textTheme.titleMedium),
+            ...items.asMap().entries.map((entry) {
+              final index = entry.key;
+              final item = entry.value;
+              final quantity = (item['quantidade'] as num).toDouble();
+              return ListTile(
+                title: Text('${item['nome']}'),
+                subtitle: Text(
+                  '${item['codigo'] ?? ''} • ${quantity.toStringAsFixed(quantity % 1 == 0 ? 0 : 2)} × '
+                  'R\$ ${(item['valor_unitario'] as num).toStringAsFixed(2)}',
+                ),
+                leading: IconButton(
+                  tooltip: 'Diminuir quantidade',
+                  onPressed: () => setState(() {
+                    if (quantity <= 1) {
+                      items.removeAt(index);
+                    } else {
+                      item['quantidade'] = quantity - 1;
+                    }
+                  }),
+                  icon: const Icon(Icons.remove_circle_outline),
+                ),
+                trailing: Wrap(
+                  children: [
+                    IconButton(
+                      tooltip: 'Aumentar quantidade',
+                      onPressed: () =>
+                          setState(() => item['quantidade'] = quantity + 1),
+                      icon: const Icon(Icons.add_circle_outline),
+                    ),
+                    IconButton(
+                      tooltip: 'Remover item',
+                      onPressed: () => setState(() => items.removeAt(index)),
+                      icon: const Icon(Icons.delete_outline),
+                    ),
+                  ],
+                ),
+              );
+            }),
+            TextField(
+              controller: discount,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(labelText: 'Desconto total'),
+            ),
+            TextField(
+              controller: notes,
+              maxLines: 3,
+              decoration: const InputDecoration(labelText: 'Observações'),
+            ),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Vencimento'),
+              subtitle: Text(_dataBr(due)),
+              onTap: () async {
+                final selected = await showDatePicker(
+                  context: context,
+                  initialDate: due ?? DateTime.now(),
+                  firstDate: DateTime(2000),
+                  lastDate: DateTime.now().add(const Duration(days: 730)),
+                );
+                if (selected != null) setState(() => due = selected);
+              },
+            ),
+            const SizedBox(height: 80),
           ],
         );
       },
@@ -627,6 +1084,7 @@ class _ComandaDetalhePageState extends State<ComandaDetalhePage> {
     final paid = TextEditingController(text: '0');
     final method = TextEditingController(text: 'pix');
     DateTime? due;
+    var paymentDate = DateTime.now();
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => StatefulBuilder(
@@ -647,6 +1105,34 @@ class _ComandaDetalhePageState extends State<ComandaDetalhePage> {
                 decoration: const InputDecoration(
                   labelText: 'Forma de pagamento',
                 ),
+              ),
+              ListTile(
+                title: const Text('Data do pagamento inicial'),
+                subtitle: Text(_dataHoraBr(paymentDate)),
+                onTap: () async {
+                  final date = await showDatePicker(
+                    context: context,
+                    initialDate: paymentDate,
+                    firstDate: DateTime(2000),
+                    lastDate: DateTime.now().add(const Duration(days: 730)),
+                  );
+                  if (date == null || !context.mounted) return;
+                  final time = await showTimePicker(
+                    context: context,
+                    initialTime: TimeOfDay.fromDateTime(paymentDate),
+                  );
+                  if (time != null) {
+                    setD(
+                      () => paymentDate = DateTime(
+                        date.year,
+                        date.month,
+                        date.day,
+                        time.hour,
+                        time.minute,
+                      ),
+                    );
+                  }
+                },
               ),
               ListTile(
                 title: Text(
@@ -688,6 +1174,7 @@ class _ComandaDetalhePageState extends State<ComandaDetalhePage> {
         pagamentoInicial: double.parse(paid.text.replaceAll(',', '.')),
         formaPagamento: method.text,
         vencimento: due,
+        dataPagamento: paymentDate,
       );
       if (!mounted) return;
       final action = await showDialog<String>(
@@ -873,34 +1360,60 @@ class _ContasReceberPageState extends State<ContasReceberPage> {
       text: (account['saldo'] as num).toStringAsFixed(2),
     );
     final method = TextEditingController(text: 'pix');
+    var paymentDate = DateTime.now();
     final ok = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Registrar recebimento'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: value,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Valor'),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Registrar recebimento'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: value,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'Valor'),
+              ),
+              TextField(
+                controller: method,
+                decoration: const InputDecoration(labelText: 'Forma'),
+              ),
+              ListTile(
+                title: const Text('Data do pagamento'),
+                subtitle: Text(_dataHoraBr(paymentDate)),
+                onTap: () async {
+                  final date = await showDatePicker(
+                    context: context,
+                    initialDate: paymentDate,
+                    firstDate: DateTime(2000),
+                    lastDate: DateTime.now().add(const Duration(days: 730)),
+                  );
+                  if (date != null) {
+                    setDialogState(
+                      () => paymentDate = DateTime(
+                        date.year,
+                        date.month,
+                        date.day,
+                        paymentDate.hour,
+                        paymentDate.minute,
+                      ),
+                    );
+                  }
+                },
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancelar'),
             ),
-            TextField(
-              controller: method,
-              decoration: const InputDecoration(labelText: 'Forma'),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Confirmar'),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Confirmar'),
-          ),
-        ],
       ),
     );
     if (ok == true) {
@@ -908,6 +1421,7 @@ class _ContasReceberPageState extends State<ContasReceberPage> {
         account['id'] as String,
         double.parse(value.text.replaceAll(',', '.')),
         method.text,
+        dataPagamento: paymentDate,
       );
       setState(() => future = load());
     }

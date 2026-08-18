@@ -76,6 +76,7 @@ class ContasReceberRepository {
     double valor,
     String forma, {
     String? observacoes,
+    DateTime? dataPagamento,
   }) async {
     final user = _user;
     if (valor <= 0 || forma.trim().isEmpty) {
@@ -98,7 +99,7 @@ class ContasReceberRepository {
       if (received + valor > total + 0.001) {
         throw StateError('Pagamento maior que o saldo.');
       }
-      final now = DateTime.now().toUtc().toIso8601String();
+      final now = (dataPagamento ?? DateTime.now()).toUtc().toIso8601String();
       final paymentId = IdGenerator.temporal();
       await tx.insert('contas_receber_pagamentos', {
         'id': paymentId,
