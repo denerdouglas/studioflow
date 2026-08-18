@@ -12,6 +12,7 @@ import 'comandas_loja_page.dart';
 import 'estoque_page.dart';
 import 'produtos_loja_page.dart';
 import 'vision_scanner_page.dart';
+import '../models/domain/scanner_product_draft.dart';
 
 class CatalogosLojaPage extends StatefulWidget {
   final bool abrirCriacao;
@@ -449,11 +450,14 @@ class _CatalogoProdutosPageState extends State<CatalogoProdutosPage> {
     if (choice == null || !mounted) return;
     if (choice == 'bulk') return importBulk();
     if (choice == 'manual') return editProduct();
-    final code = await Navigator.push<String>(
+    final result = await Navigator.push<ScannerResult?>(
       context,
       MaterialPageRoute(builder: (_) => const VisionScannerPage()),
     );
-    if (mounted && code != null) await editProduct(initialCode: code);
+    if (mounted && result != null) {
+      final code = result.draft?.referenciaComercial?.value ?? result.draft?.gtin?.value;
+      if (code != null) await editProduct(initialCode: code);
+    }
   }
 
   Future<void> editProduct({

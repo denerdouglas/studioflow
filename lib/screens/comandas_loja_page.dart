@@ -10,6 +10,7 @@ import '../services/external_action_service.dart';
 import '../services/purchase_receipt_service.dart';
 import 'clientes_page.dart';
 import 'vision_scanner_page.dart';
+import '../models/domain/scanner_product_draft.dart';
 
 class ComandasLojaPage extends StatefulWidget {
   const ComandasLojaPage({super.key});
@@ -356,11 +357,14 @@ class _ComandaDetalhePageState extends State<ComandaDetalhePage> {
   }
 
   Future<void> scan() async {
-    final code = await Navigator.push<String>(
+    final result = await Navigator.push<ScannerResult?>(
       context,
       MaterialPageRoute(builder: (_) => const VisionScannerPage()),
     );
-    if (code != null && mounted) await addCode(code);
+    if (result != null && mounted) {
+      final code = result.draft?.referenciaComercial?.value ?? result.draft?.gtin?.value;
+      if (code != null) await addCode(code);
+    }
   }
 
   Future<void> discount() async {

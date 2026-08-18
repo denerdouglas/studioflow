@@ -58,7 +58,7 @@ class _ConsignacaoConferenciaPageState
           ),
           onContinuousItem: (result) async {
             final draft = result.draft ?? ScannerProductDraft();
-            final code = draft.referenciaComercial?.value ?? draft.gtin?.value;
+            final code = draft.referenciaComercial?.value ?? draft.gtin?.value ?? draft.qr?.value;
             if (code == null) return false;
 
             final choices = await repository.resolverCodigo(id!, code);
@@ -84,12 +84,16 @@ class _ConsignacaoConferenciaPageState
               piece = selected;
             }
 
-            await repository.conferirPeca(
-              conferenciaId: id!,
-              pecaId: piece['id'] as String,
-              leituraOriginal: code,
-            );
-            return true;
+            try {
+              await repository.conferirPeca(
+                conferenciaId: id!,
+                pecaId: piece['id'] as String,
+                leituraOriginal: code,
+              );
+              return true;
+            } catch (e) {
+              return false;
+            }
           },
         ),
       ),

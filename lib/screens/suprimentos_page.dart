@@ -8,6 +8,7 @@ import '../repositories/compras_repository.dart';
 import '../repositories/loja_repository.dart';
 import '../services/session_controller.dart';
 import 'vision_scanner_page.dart';
+import '../models/domain/scanner_product_draft.dart';
 
 double _numero(String valor) =>
     double.tryParse(valor.replaceAll(',', '.')) ?? 0;
@@ -767,10 +768,12 @@ class _OrdensCompraPageState extends State<OrdensCompraPage> {
       if (a == 'aprovar') await repo.aprovar(o['id'] as String);
       if (a == 'codigo') {
         if (!mounted) return;
-        final codigo = await Navigator.push<String>(
+        final result = await Navigator.push<ScannerResult?>(
           context,
           MaterialPageRoute(builder: (_) => const VisionScannerPage()),
         );
+        if (result == null) return;
+        final codigo = result.draft?.referenciaComercial?.value ?? result.draft?.gtin?.value;
         if (codigo == null) return;
         final produto = await LojaRepository().buscarCodigo(codigo);
         if (produto == null) {

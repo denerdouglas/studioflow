@@ -28,37 +28,37 @@ void main() {
     );
 
     await tester.tap(find.text('Open'));
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    debugDumpApp();
 
     // Tocar em 'Digitar código manualmente'
     final digitarBtn = find.text('Digitar código manualmente');
     expect(digitarBtn, findsOneWidget);
     await tester.tap(digitarBtn);
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(seconds: 1));
 
     // Modal abriu?
     expect(find.text('Digitar código'), findsOneWidget);
 
     // Cancelar
     await tester.tap(find.text('Cancelar'));
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(seconds: 1));
 
     // Modal fechou
     expect(find.text('Digitar código'), findsNothing);
 
-    debugDumpApp();
-
     // Tocar novamente
     await tester.tap(digitarBtn);
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(seconds: 1));
 
     // Digitar algo
     await tester.enterText(find.byType(TextField), '123456');
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(seconds: 1));
 
     // Conferir tudo e Sair
     await tester.tap(find.text('Conferir tudo e Sair'));
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(seconds: 1));
 
     // Deve ter fechado o modal E a pagina
     expect(find.text('Ler Etiqueta / Código'), findsNothing);

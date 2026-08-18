@@ -75,30 +75,28 @@ class _ProdutosLojaPageState extends State<ProdutosLojaPage> {
   }
 
   Future<void> _lerCodigo() async {
-    final result = await Navigator.push<dynamic>(
+    final result = await Navigator.push<ScannerResult?>(
       context,
       MaterialPageRoute(builder: (_) => const VisionScannerPage()),
     );
     if (!mounted || result == null) return;
 
-    if (result is ScannerResult) {
-      if (result.tipo == ScannerResultType.cancelado) return;
-      if (result.tipo == ScannerResultType.produtoExistente ||
-          result.tipo == ScannerResultType.produtoNovo) {
-        if (result.produto != null) {
-          await Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => ProdutoDetalhePage(produtoId: result.produto!.id),
-            ),
-          );
-          setState(_carregar);
-          return;
-        }
+    if (result.tipo == ScannerResultType.cancelado) return;
+    if (result.tipo == ScannerResultType.produtoExistente ||
+        result.tipo == ScannerResultType.produtoNovo) {
+      if (result.produto != null) {
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ProdutoDetalhePage(produtoId: result.produto!.id),
+          ),
+        );
+        setState(_carregar);
+        return;
       }
     }
-
-    final codigo = result is String ? result : null;
+    
+    final codigo = result.draft?.referenciaComercial?.value ?? result.draft?.gtin?.value;
     if (codigo == null) return;
 
     try {
@@ -416,11 +414,13 @@ class _ProdutoFormPageState extends State<ProdutoFormPage> {
   }
 
   Future<void> _scan() async {
-    final codigo = await Navigator.push<String>(
+    final result = await Navigator.push<ScannerResult?>(
       context,
       MaterialPageRoute(builder: (_) => const VisionScannerPage()),
     );
-    if (!mounted || codigo == null) return;
+    if (!mounted || result == null) return;
+    final codigo = result.draft?.referenciaComercial?.value ?? result.draft?.gtin?.value;
+    if (codigo == null) return;
     setState(() => consultandoCodigo = true);
     try {
       final existente = await LojaRepository().buscarCodigo(codigo);

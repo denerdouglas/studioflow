@@ -148,25 +148,22 @@ class _VendasLojaPageState extends State<VendasLojaPage> {
   double _valorPagamento(String valor) =>
       double.tryParse(valor.replaceAll(',', '.')) ?? 0;
   Future<void> ler() async {
-    final result = await Navigator.push<dynamic>(
+    final result = await Navigator.push<ScannerResult?>(
       context,
       MaterialPageRoute(builder: (_) => const VisionScannerPage()),
     );
     if (result == null) return;
 
-    if (result is ScannerResult) {
-      if (result.tipo == ScannerResultType.cancelado) return;
-      if (result.tipo == ScannerResultType.produtoExistente ||
-          result.tipo == ScannerResultType.produtoNovo) {
-        if (result.produto != null) {
-          adicionar(result.produto);
-          return;
-        }
+    if (result.tipo == ScannerResultType.cancelado) return;
+    if (result.tipo == ScannerResultType.produtoExistente ||
+        result.tipo == ScannerResultType.produtoNovo) {
+      if (result.produto != null) {
+        adicionar(result.produto);
+        return;
       }
     }
 
-    // Compatibilidade com código em String
-    final codigo = result is String ? result : null;
+    final codigo = result.draft?.referenciaComercial?.value ?? result.draft?.gtin?.value;
     if (codigo == null) return;
 
     try {

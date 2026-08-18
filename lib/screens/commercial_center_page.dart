@@ -4,6 +4,7 @@ import '../core/helpers/app_formatters.dart';
 
 import '../repositories/commercial_repository.dart';
 import 'vision_scanner_page.dart';
+import '../models/domain/scanner_product_draft.dart';
 import 'catalog_registration_page.dart';
 import 'estoque_page.dart';
 import 'produtos_loja_page.dart';
@@ -66,11 +67,13 @@ class _CommercialCenterPageState extends State<CommercialCenterPage> {
   }
 
   Future<void> _scan() async {
-    final code = await Navigator.push<String>(
+    final scannerResult = await Navigator.push<ScannerResult?>(
       context,
       MaterialPageRoute(builder: (_) => const VisionScannerPage()),
     );
-    if (!mounted || code == null) return;
+    if (!mounted || scannerResult == null) return;
+    final code = scannerResult.draft?.referenciaComercial?.value ?? scannerResult.draft?.gtin?.value;
+    if (code == null) return;
     _code.text = code;
     final result = await _search();
     if (!mounted || result == null) return;

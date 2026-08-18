@@ -1,40 +1,21 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/services.dart';
-import 'package:flutter/foundation.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:flutter/material.dart';
-import 'package:mobile_scanner/mobile_scanner.dart';
-import 'package:image/image.dart' as img;
+import 'package:camera/camera.dart';
+import 'package:google_mlkit_barcode_scanning/google_mlkit_barcode_scanning.dart';
+import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:audioplayers/audioplayers.dart';
 
 import '../services/scanner/scanner_coordinator.dart';
-import '../services/scanner/mlkit_vision_provider.dart';
 import '../models/domain/scanner_product_draft.dart';
 import 'scanner_draft_page.dart';
 import '../services/session_controller.dart';
 import '../core/validation/gtin_validator.dart';
 import '../models/domain/universal_reader.dart';
 import '../services/bip_context_service.dart';
-
-Future<Uint8List?> _cropImage(Uint8List jpegBytes) async {
-  return compute((bytes) {
-    final original = img.decodeImage(bytes);
-    if (original == null) return null;
-    final cropW = (original.width * 0.8).toInt();
-    final cropH = (cropW * (150 / 290)).toInt();
-    final cropX = (original.width - cropW) ~/ 2;
-    final cropY = (original.height - cropH) ~/ 2;
-    final cropped = img.copyCrop(
-      original,
-      x: cropX,
-      y: cropY,
-      width: cropW,
-      height: cropH,
-    );
-    return Uint8List.fromList(img.encodeJpg(cropped));
-  }, jpegBytes);
-}
+import '../services/vision_ocr_service.dart';
+import '../services/scanner/mlkit_utils.dart';
 
 class VisionScannerPage extends StatefulWidget {
   final ReaderContextPolicy? policy;
@@ -52,26 +33,68 @@ class VisionScannerPage extends StatefulWidget {
   State<VisionScannerPage> createState() => _VisionScannerPageState();
 }
 
-class _VisionScannerPageState extends State<VisionScannerPage> {
-  final MobileScannerController _controller = MobileScannerController(
-    detectionSpeed: DetectionSpeed.normal,
-    returnImage: true,
-  );
+class _VisionScannerPageState extends State<VisionScannerPage> with WidgetsBindingObserver {
+  CameraController? _cameraController;
   final AudioPlayer _audioPlayer = AudioPlayer();
 
-  bool _processando = false;
+  final BarcodeScanner _barcodeScanner = BarcodeScanner(formats: [BarcodeFormat.all]);
+  final TextRecognizer _textRecognizer = TextRecognizer(script: TextRecognitionScript.latin);
+
+  bool _isCameraInitialized = false;
+  bool _processandoFrame = false;
+  bool _processandoAtividade = false;
   String? _erro;
+  
   final BipSessionController bipSession = BipSessionController();
 
   DateTime _ultimoTempoOcr = DateTime.fromMillisecondsSinceEpoch(0);
-  bool _ocrEmExecucao = false;
+  DateTime _ultimoTempoBarcode = DateTime.fromMillisecondsSinceEpoch(0);
+  
+  String? _ultimoCodigoLido;
+  DateTime? _ultimoTempoLeitura;
 
   bool get continuous => widget.policy?.continuous ?? widget.returnList;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _audioPlayer.setSource(AssetSource('sounds/beep.ogg'));
+    _initializeCamera();
+  }
+
+  Future<void> _initializeCamera() async {
+    try {
+      final cameras = await availableCameras();
+      if (cameras.isEmpty) {
+        if (mounted) setState(() => _erro = 'Nenhuma câmera encontrada.');
+        return;
+      }
+      final backCamera = cameras.firstWhere(
+        (c) => c.lensDirection == CameraLensDirection.back,
+        orElse: () => cameras.first,
+      );
+
+      _cameraController = CameraController(
+        backCamera,
+        ResolutionPreset.medium,
+        enableAudio: false,
+        imageFormatGroup: Platform.isAndroid 
+            ? ImageFormatGroup.nv21 
+            : ImageFormatGroup.bgra8888,
+      );
+
+      await _cameraController!.initialize();
+      if (!mounted) return;
+
+      setState(() {
+        _isCameraInitialized = true;
+      });
+
+      _cameraController!.startImageStream(_processarFrameCamera);
+    } catch (e) {
+      if (mounted) setState(() => _erro = 'Erro ao iniciar câmera: $e');
+    }
   }
 
   void _tocarBip() {
@@ -81,91 +104,159 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
 
   @override
   void dispose() {
-    _controller.dispose();
+    WidgetsBinding.instance.removeObserver(this);
+    _cameraController?.stopImageStream();
+    _cameraController?.dispose();
+    _barcodeScanner.close();
+    _textRecognizer.close();
     _audioPlayer.dispose();
     super.dispose();
   }
 
-  Future<void> _executarOcrFrame(Uint8List jpegBytes) async {
-    if (_ocrEmExecucao || _processando) return;
-    try {
-      _ocrEmExecucao = true;
-      final cropped = await _cropImage(jpegBytes);
-      if (cropped == null) return;
-      if (!mounted) return;
-
-      final tempDir = await getTemporaryDirectory();
-      final file = File(
-        '${tempDir.path}/ocr_frame_${DateTime.now().millisecondsSinceEpoch}.jpg',
-      );
-      await file.writeAsBytes(cropped);
-
-      final coordinator = ScannerCoordinator(
-        externalProviders: [MlKitVisionProvider()],
-      );
-      final draft = await coordinator.analyzeImages(file.path);
-
-      if (!mounted) return;
-      final resolved = await BipContextService().resolve(draft);
-      if (resolved.kind != BipItemKind.desconhecido) {
-        await _processarCodigo(
-          draft.referenciaComercial?.value ?? draft.gtin?.value ?? '',
-          isOcrResult: true,
-          draftOcr: draft,
-        );
-        return;
-      }
-
-      if (draft.referenciaComercial != null || draft.gtin != null) {
-        await _processarCodigo(
-          draft.referenciaComercial?.value ?? draft.gtin?.value ?? '',
-          isOcrResult: true,
-          draftOcr: draft,
-        );
-      }
-    } catch (_) {
-    } finally {
-      _ocrEmExecucao = false;
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    final CameraController? cameraController = _cameraController;
+    if (cameraController == null || !cameraController.value.isInitialized) {
+      return;
+    }
+    if (state == AppLifecycleState.inactive) {
+      cameraController.stopImageStream();
+      cameraController.dispose();
+      _cameraController = null;
+      if (mounted) setState(() => _isCameraInitialized = false);
+    } else if (state == AppLifecycleState.resumed) {
+      _initializeCamera();
     }
   }
 
-  Future<void> _acceptResult(dynamic result) async {
-    if (result is! ScannerResult) {
-      if (!continuous) {
-        if (mounted) Navigator.pop(context, result);
-        return;
+  Future<void> _processarFrameCamera(CameraImage image) async {
+    if (_processandoFrame || _processandoAtividade || !mounted) return;
+
+    final agora = DateTime.now();
+    final podeBarcode = agora.difference(_ultimoTempoBarcode).inMilliseconds > 400;
+    final podeOcr = agora.difference(_ultimoTempoOcr).inMilliseconds > 1500;
+
+    if (!podeBarcode && !podeOcr) return;
+
+    final inputImage = convertCameraImageToInputImage(image, _cameraController!);
+    if (inputImage == null) return;
+
+    _processandoFrame = true;
+
+    try {
+      ScannerProductDraft draftFinal = ScannerProductDraft();
+
+      // 1. Barcode
+      if (podeBarcode) {
+        _ultimoTempoBarcode = agora;
+        final barcodes = await _barcodeScanner.processImage(inputImage);
+        
+        if (barcodes.isNotEmpty) {
+          final barcode = barcodes.first.displayValue ?? barcodes.first.rawValue;
+          if (barcode != null && barcode.trim().isNotEmpty) {
+            final format = barcodes.first.format;
+            final isQr = format == BarcodeFormat.qrCode;
+            
+            final normalized = GtinValidator.normalize(barcode);
+            
+            draftFinal = isQr
+                ? ScannerProductDraft(
+                    qr: ScannerField(
+                      barcode,
+                      source: 'qr',
+                      confidence: ScannerConfidence.alta,
+                    ),
+                    rawSignals: [barcode],
+                  )
+                : ScannerProductDraft(
+                    referenciaComercial: ScannerField(
+                      barcode.trim(),
+                      source: 'barcode',
+                      confidence: ScannerConfidence.alta,
+                    ),
+                    gtin: GtinValidator.isValid(normalized) 
+                        ? ScannerField(normalized, source: 'barcode', confidence: ScannerConfidence.baixa) 
+                        : null,
+                    rawSignals: [barcode],
+                  );
+          }
+        }
       }
-      return;
+
+      if (podeOcr) {
+        _ultimoTempoOcr = DateTime.now();
+        final recognizedText = await _textRecognizer.processImage(inputImage);
+        final draftOcrData = VisionOcrService.parseText(recognizedText.text);
+        final draftOcr = ScannerProductDraft(
+          referenciaComercial: draftOcrData.codigo != null ? ScannerField(draftOcrData.codigo!, source: 'ocr', confidence: ScannerConfidence.baixa) : null,
+          nome: draftOcrData.nome != null ? ScannerField(draftOcrData.nome!, source: 'ocr', confidence: ScannerConfidence.baixa) : null,
+          descricao: draftOcrData.descricao != null ? ScannerField(draftOcrData.descricao!, source: 'ocr', confidence: ScannerConfidence.baixa) : null,
+          preco: draftOcrData.preco != null ? ScannerField(draftOcrData.preco!, source: 'ocr', confidence: ScannerConfidence.baixa) : null,
+          material: draftOcrData.material != null ? ScannerField(draftOcrData.material!, source: 'ocr', confidence: ScannerConfidence.baixa) : null,
+        );
+        
+        if (draftOcrData.codigo != null || draftOcrData.nome != null) {
+          draftFinal = ScannerCoordinator.mergeDrafts(draftFinal, draftOcr);
+        }
+      }
+
+      // 3. Processar resultado combinado
+      final rawCode = draftFinal.referenciaComercial?.value ?? draftFinal.gtin?.value;
+      if (rawCode != null && rawCode.isNotEmpty) {
+        if (!mounted) return;
+        await _processarCodigo(
+          rawCode,
+          isQr: draftFinal.qr != null,
+          draftMontado: draftFinal,
+        );
+      }
+    } catch (e) {
+      debugPrint('Erro processando frame: $e');
+    } finally {
+      if (mounted) {
+        _processandoFrame = false;
+      }
     }
+  }
 
-    final sResult = result;
-
+  Future<void> _acceptResult(ScannerResult sResult) async {
     if (!continuous) {
       if (mounted) Navigator.pop(context, sResult);
       return;
     }
 
     if (sResult.tipo == ScannerResultType.cancelado) {
-      setState(() => _processando = false);
-      _controller.start();
+      if (mounted) setState(() => _processandoAtividade = false);
       return;
     }
 
     final draft = sResult.draft ?? ScannerProductDraft();
     dynamic resolvedItem = sResult.produto;
 
-    // Em modo contínuo, resolvemos e adicionamos à sessão.
+    // Em modo contínuo, enviamos ao chamador para validação de negócio
     if (widget.onContinuousItem != null) {
-      final success = await widget.onContinuousItem!(sResult);
-      if (success && mounted) {
-        _adicionarASessao(draft, resolvedItem);
-      } else if (mounted) {
-        setState(() => _processando = false);
-        _controller.start();
+      try {
+        final success = await widget.onContinuousItem!(sResult);
+        if (success && mounted) {
+          _adicionarASessao(draft, resolvedItem);
+        } else if (mounted) {
+          setState(() {
+            _processandoAtividade = false;
+            _erro = 'Falha ao registrar item.';
+          });
+        }
+      } catch (e) {
+        if (mounted) {
+          setState(() {
+            _processandoAtividade = false;
+            _erro = 'Erro: $e';
+          });
+        }
       }
       return;
     }
 
+    // Se não há callback customizado, apenas adiciona local
     if (resolvedItem != null && mounted) {
       _adicionarASessao(draft, resolvedItem);
       return;
@@ -186,6 +277,7 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
         draft.qr?.value ??
         draft.referenciaComercial?.value ??
         '${draft.nome?.value}_${bipSession.items.length}';
+        
     final added = bipSession.add(
       BipSessionItem(
         id: DateTime.now().microsecondsSinceEpoch.toString(),
@@ -194,28 +286,24 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
         confirmed: true,
       ),
     );
+    
     if (mounted) {
       setState(() {
-        _processando = false;
+        _processandoAtividade = false;
         _erro = added
             ? 'Item adicionado: ${produto?.nome ?? draft.nome?.value ?? key}'
             : 'Item já lido.';
       });
-      _controller.start();
     }
   }
-
-  String? _ultimoCodigoLido;
-  DateTime? _ultimoTempoLeitura;
 
   Future<void> _processarCodigo(
     String codigo, {
     bool isQr = false,
-    bool isOcrResult = false,
-    ScannerProductDraft? draftOcr,
-    Uint8List? rawImage,
+    bool isManual = false,
+    ScannerProductDraft? draftMontado,
   }) async {
-    if (_processando) return;
+    if (_processandoAtividade) return;
 
     final agora = DateTime.now();
     if (_ultimoCodigoLido == codigo && _ultimoTempoLeitura != null) {
@@ -227,20 +315,16 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
     _ultimoTempoLeitura = agora;
 
     setState(() {
-      _processando = true;
+      _processandoAtividade = true;
       _erro = null;
     });
-
-    await _controller.stop();
-    if (!mounted) return;
 
     final normalized = GtinValidator.normalize(codigo);
     if (codigo.trim().isEmpty) {
       setState(() {
-        _processando = false;
+        _processandoAtividade = false;
         _erro = 'Código inválido. Confira a etiqueta ou preencha manualmente.';
       });
-      await _controller.start();
       return;
     }
 
@@ -252,37 +336,32 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
       ],
     );
 
-    ScannerProductDraft draft =
-        draftOcr ??
-        (isQr
-            ? ScannerProductDraft(
-                qr: ScannerField(
-                  codigo,
-                  source: 'qr',
-                  confidence: ScannerConfidence.alta,
-                ),
-                rawSignals: [codigo],
-              )
-            : GtinValidator.isValid(normalized)
-            ? (await coordinator.searchExternalBarcode(normalized)) ??
-                  ScannerProductDraft(
-                    gtin: ScannerField(
-                      normalized,
-                      source: 'barcode',
-                      confidence: ScannerConfidence.baixa,
-                      reviewReason:
-                          'GTIN válido, mas sem correspondência exata.',
-                    ),
-                  )
-            : ScannerProductDraft(
-                referenciaComercial: ScannerField(
-                  codigo.trim(),
-                  source: 'barcode',
-                  confidence: ScannerConfidence.alta,
-                ),
-                reviewReasons: const ['Confirme o código comercial.'],
-                rawSignals: [codigo],
-              ));
+    ScannerProductDraft draft = draftMontado ?? ScannerProductDraft();
+    
+    if (isManual || draftMontado == null) {
+      draft = ScannerProductDraft(
+        referenciaComercial: ScannerField(
+          codigo.trim(),
+          source: isManual ? 'manual' : 'barcode',
+          confidence: ScannerConfidence.alta,
+        ),
+        gtin: GtinValidator.isValid(normalized) 
+            ? ScannerField(normalized, source: isManual ? 'manual' : 'barcode', confidence: ScannerConfidence.baixa)
+            : null,
+        rawSignals: [codigo],
+      );
+      if (draft.gtin != null) {
+        final prod = await coordinator.searchExternalBarcode(normalized);
+        if (prod != null) {
+           draft = ScannerCoordinator.mergeDrafts(draft, prod);
+        }
+      }
+    } else if (!isQr && GtinValidator.isValid(normalized)) {
+      final prod = await coordinator.searchExternalBarcode(normalized);
+      if (prod != null) {
+         draft = ScannerCoordinator.mergeDrafts(draft, prod);
+      }
+    }
 
     if (!mounted) return;
 
@@ -295,38 +374,16 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
 
     if (!mounted) return;
 
-    // Tentativa rápida de OCR complementar se for barcode novo e temos a imagem
-    ScannerProductDraft draftFinal = draft;
-    if (rawImage != null && !isOcrResult && !isQr) {
-      try {
-        final cropped = await _cropImage(rawImage);
-        if (cropped != null) {
-          final tempDir = await getTemporaryDirectory();
-          final file = File(
-            '${tempDir.path}/ocr_complemento_${DateTime.now().millisecondsSinceEpoch}.jpg',
-          );
-          await file.writeAsBytes(cropped);
-          final draftOcrComp = await ScannerCoordinator(
-            externalProviders: [MlKitVisionProvider()],
-          ).analyzeImages(file.path);
-          draftFinal = ScannerCoordinator.mergeDrafts(draftFinal, draftOcrComp);
-        }
-      } catch (_) {}
-    }
-
-    if (!mounted) return;
-
     _tocarBip(); // Bipa para produto novo/rascunho
 
     if (continuous) {
-      // Em inventario, podemos apenas aceitar o rascunho
-      await _acceptResult(ScannerResult.draft(draftFinal));
+      await _acceptResult(ScannerResult.draft(draft));
       return;
     }
 
     final result = await Navigator.push<ScannerResult?>(
       context,
-      MaterialPageRoute(builder: (_) => ScannerDraftPage(draft: draftFinal)),
+      MaterialPageRoute(builder: (_) => ScannerDraftPage(draft: draft)),
     );
 
     if (!mounted) return;
@@ -334,39 +391,8 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
     if (result != null) {
       await _acceptResult(result);
     } else {
-      setState(() => _processando = false);
-      _controller.start();
+      setState(() => _processandoAtividade = false);
     }
-  }
-
-  Future<void> _detectar(BarcodeCapture captura) async {
-    final image = captura.image;
-    if (image != null && !_ocrEmExecucao && !_processando) {
-      final agora = DateTime.now();
-      if (agora.difference(_ultimoTempoOcr).inMilliseconds > 1500) {
-        _ultimoTempoOcr = agora;
-        _executarOcrFrame(image);
-      }
-    }
-
-    if (_processando || captura.barcodes.isEmpty) return;
-
-    final raw = captura.barcodes
-        .map((barcode) => barcode.rawValue)
-        .whereType<String>()
-        .firstOrNull;
-
-    if (raw == null) return;
-
-    final detected = captura.barcodes.firstWhere(
-      (barcode) => barcode.rawValue == raw,
-      orElse: () => captura.barcodes.first,
-    );
-    await _processarCodigo(
-      raw.trim(),
-      isQr: detected.format == BarcodeFormat.qrCode,
-      rawImage: image,
-    );
   }
 
   Future<void> _digitarCodigo() async {
@@ -385,10 +411,7 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
             TextButton(
               onPressed: () {
                 Navigator.pop(dialogContext);
-                Navigator.pop(
-                  context,
-                  bipSession.items,
-                ); // Retorna a lista e fecha o scanner!
+                Navigator.pop(context, bipSession.items); // Retorna a lista e fecha
               },
               child: Text('Conferir tudo e Sair'),
             ),
@@ -404,7 +427,7 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
       ),
     );
     if (codigo != null && codigo.trim().isNotEmpty && mounted) {
-      await _processarCodigo(codigo.trim());
+      await _processarCodigo(codigo.trim(), isManual: true);
     }
   }
 
@@ -429,28 +452,30 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
       body: Stack(
         fit: StackFit.expand,
         children: [
-          MobileScanner(
-            controller: _controller,
-            onDetect: _detectar,
-            errorBuilder: (context, error) => Center(
+          if (_isCameraInitialized && _cameraController != null)
+            CameraPreview(_cameraController!)
+          else if (_erro != null && _cameraController == null)
+            Center(
               child: Padding(
                 padding: const EdgeInsets.all(24),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.no_photography, color: Colors.white, size: 56),
-                    SizedBox(height: 16),
+                    const Icon(Icons.no_photography, color: Colors.white, size: 56),
+                    const SizedBox(height: 16),
                     Text(
-                      'Não foi possível acessar a câmera para o código de barras.',
+                      _erro ?? 'Erro na câmera.',
                       textAlign: TextAlign.center,
-                      style: TextStyle(color: Colors.white),
+                      style: const TextStyle(color: Colors.white),
                     ),
                   ],
                 ),
               ),
-            ),
-          ),
-          if (!_processando)
+            )
+          else
+            const Center(child: CircularProgressIndicator()),
+            
+          if (!_processandoAtividade)
             Center(
               child: Container(
                 width: 290,
@@ -461,7 +486,8 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
                 ),
               ),
             ),
-          if (_processando)
+            
+          if (_processandoAtividade)
             Container(
               color: const Color(0x99000000),
               child: Center(
@@ -479,6 +505,7 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
                 ),
               ),
             ),
+            
           Align(
             alignment: Alignment.bottomCenter,
             child: SafeArea(
@@ -499,7 +526,7 @@ class _VisionScannerPageState extends State<VisionScannerPage> {
                     ),
                     SizedBox(height: 16),
                     TextButton.icon(
-                      onPressed: _processando ? null : _digitarCodigo,
+                      onPressed: _processandoAtividade ? null : _digitarCodigo,
                       icon: Icon(Icons.keyboard),
                       label: Text('Digitar código manualmente'),
                     ),
