@@ -33,23 +33,28 @@ class VisionScannerPage extends StatefulWidget {
   State<VisionScannerPage> createState() => _VisionScannerPageState();
 }
 
-class _VisionScannerPageState extends State<VisionScannerPage> with WidgetsBindingObserver {
+class _VisionScannerPageState extends State<VisionScannerPage>
+    with WidgetsBindingObserver {
   CameraController? _cameraController;
   final AudioPlayer _audioPlayer = AudioPlayer();
 
-  final BarcodeScanner _barcodeScanner = BarcodeScanner(formats: [BarcodeFormat.all]);
-  final TextRecognizer _textRecognizer = TextRecognizer(script: TextRecognitionScript.latin);
+  final BarcodeScanner _barcodeScanner = BarcodeScanner(
+    formats: [BarcodeFormat.all],
+  );
+  final TextRecognizer _textRecognizer = TextRecognizer(
+    script: TextRecognitionScript.latin,
+  );
 
   bool _isCameraInitialized = false;
   bool _processandoFrame = false;
   bool _processandoAtividade = false;
   String? _erro;
-  
+
   final BipSessionController bipSession = BipSessionController();
 
   DateTime _ultimoTempoOcr = DateTime.fromMillisecondsSinceEpoch(0);
   DateTime _ultimoTempoBarcode = DateTime.fromMillisecondsSinceEpoch(0);
-  
+
   String? _ultimoCodigoLido;
   DateTime? _ultimoTempoLeitura;
 
@@ -79,8 +84,8 @@ class _VisionScannerPageState extends State<VisionScannerPage> with WidgetsBindi
         backCamera,
         ResolutionPreset.medium,
         enableAudio: false,
-        imageFormatGroup: Platform.isAndroid 
-            ? ImageFormatGroup.nv21 
+        imageFormatGroup: Platform.isAndroid
+            ? ImageFormatGroup.nv21
             : ImageFormatGroup.bgra8888,
       );
 
@@ -133,12 +138,16 @@ class _VisionScannerPageState extends State<VisionScannerPage> with WidgetsBindi
     if (_processandoFrame || _processandoAtividade || !mounted) return;
 
     final agora = DateTime.now();
-    final podeBarcode = agora.difference(_ultimoTempoBarcode).inMilliseconds > 400;
+    final podeBarcode =
+        agora.difference(_ultimoTempoBarcode).inMilliseconds > 400;
     final podeOcr = agora.difference(_ultimoTempoOcr).inMilliseconds > 1500;
 
     if (!podeBarcode && !podeOcr) return;
 
-    final inputImage = convertCameraImageToInputImage(image, _cameraController!);
+    final inputImage = convertCameraImageToInputImage(
+      image,
+      _cameraController!,
+    );
     if (inputImage == null) return;
 
     _processandoFrame = true;
@@ -150,15 +159,16 @@ class _VisionScannerPageState extends State<VisionScannerPage> with WidgetsBindi
       if (podeBarcode) {
         _ultimoTempoBarcode = agora;
         final barcodes = await _barcodeScanner.processImage(inputImage);
-        
+
         if (barcodes.isNotEmpty) {
-          final barcode = barcodes.first.displayValue ?? barcodes.first.rawValue;
+          final barcode =
+              barcodes.first.displayValue ?? barcodes.first.rawValue;
           if (barcode != null && barcode.trim().isNotEmpty) {
             final format = barcodes.first.format;
             final isQr = format == BarcodeFormat.qrCode;
-            
+
             final normalized = GtinValidator.normalize(barcode);
-            
+
             draftFinal = isQr
                 ? ScannerProductDraft(
                     qr: ScannerField(
@@ -174,8 +184,12 @@ class _VisionScannerPageState extends State<VisionScannerPage> with WidgetsBindi
                       source: 'barcode',
                       confidence: ScannerConfidence.alta,
                     ),
-                    gtin: GtinValidator.isValid(normalized) 
-                        ? ScannerField(normalized, source: 'barcode', confidence: ScannerConfidence.baixa) 
+                    gtin: GtinValidator.isValid(normalized)
+                        ? ScannerField(
+                            normalized,
+                            source: 'barcode',
+                            confidence: ScannerConfidence.baixa,
+                          )
                         : null,
                     rawSignals: [barcode],
                   );
@@ -188,20 +202,51 @@ class _VisionScannerPageState extends State<VisionScannerPage> with WidgetsBindi
         final recognizedText = await _textRecognizer.processImage(inputImage);
         final draftOcrData = VisionOcrService.parseText(recognizedText.text);
         final draftOcr = ScannerProductDraft(
-          referenciaComercial: draftOcrData.codigo != null ? ScannerField(draftOcrData.codigo!, source: 'ocr', confidence: ScannerConfidence.baixa) : null,
-          nome: draftOcrData.nome != null ? ScannerField(draftOcrData.nome!, source: 'ocr', confidence: ScannerConfidence.baixa) : null,
-          descricao: draftOcrData.descricao != null ? ScannerField(draftOcrData.descricao!, source: 'ocr', confidence: ScannerConfidence.baixa) : null,
-          preco: draftOcrData.preco != null ? ScannerField(draftOcrData.preco!, source: 'ocr', confidence: ScannerConfidence.baixa) : null,
-          material: draftOcrData.material != null ? ScannerField(draftOcrData.material!, source: 'ocr', confidence: ScannerConfidence.baixa) : null,
+          referenciaComercial: draftOcrData.codigo != null
+              ? ScannerField(
+                  draftOcrData.codigo!,
+                  source: 'ocr',
+                  confidence: ScannerConfidence.baixa,
+                )
+              : null,
+          nome: draftOcrData.nome != null
+              ? ScannerField(
+                  draftOcrData.nome!,
+                  source: 'ocr',
+                  confidence: ScannerConfidence.baixa,
+                )
+              : null,
+          descricao: draftOcrData.descricao != null
+              ? ScannerField(
+                  draftOcrData.descricao!,
+                  source: 'ocr',
+                  confidence: ScannerConfidence.baixa,
+                )
+              : null,
+          preco: draftOcrData.preco != null
+              ? ScannerField(
+                  draftOcrData.preco!,
+                  source: 'ocr',
+                  confidence: ScannerConfidence.baixa,
+                )
+              : null,
+          material: draftOcrData.material != null
+              ? ScannerField(
+                  draftOcrData.material!,
+                  source: 'ocr',
+                  confidence: ScannerConfidence.baixa,
+                )
+              : null,
         );
-        
+
         if (draftOcrData.codigo != null || draftOcrData.nome != null) {
           draftFinal = ScannerCoordinator.mergeDrafts(draftFinal, draftOcr);
         }
       }
 
       // 3. Processar resultado combinado
-      final rawCode = draftFinal.referenciaComercial?.value ?? draftFinal.gtin?.value;
+      final rawCode =
+          draftFinal.referenciaComercial?.value ?? draftFinal.gtin?.value;
       if (rawCode != null && rawCode.isNotEmpty) {
         if (!mounted) return;
         await _processarCodigo(
@@ -277,7 +322,7 @@ class _VisionScannerPageState extends State<VisionScannerPage> with WidgetsBindi
         draft.qr?.value ??
         draft.referenciaComercial?.value ??
         '${draft.nome?.value}_${bipSession.items.length}';
-        
+
     final added = bipSession.add(
       BipSessionItem(
         id: DateTime.now().microsecondsSinceEpoch.toString(),
@@ -286,7 +331,7 @@ class _VisionScannerPageState extends State<VisionScannerPage> with WidgetsBindi
         confirmed: true,
       ),
     );
-    
+
     if (mounted) {
       setState(() {
         _processandoAtividade = false;
@@ -337,7 +382,7 @@ class _VisionScannerPageState extends State<VisionScannerPage> with WidgetsBindi
     );
 
     ScannerProductDraft draft = draftMontado ?? ScannerProductDraft();
-    
+
     if (isManual || draftMontado == null) {
       draft = ScannerProductDraft(
         referenciaComercial: ScannerField(
@@ -345,21 +390,25 @@ class _VisionScannerPageState extends State<VisionScannerPage> with WidgetsBindi
           source: isManual ? 'manual' : 'barcode',
           confidence: ScannerConfidence.alta,
         ),
-        gtin: GtinValidator.isValid(normalized) 
-            ? ScannerField(normalized, source: isManual ? 'manual' : 'barcode', confidence: ScannerConfidence.baixa)
+        gtin: GtinValidator.isValid(normalized)
+            ? ScannerField(
+                normalized,
+                source: isManual ? 'manual' : 'barcode',
+                confidence: ScannerConfidence.baixa,
+              )
             : null,
         rawSignals: [codigo],
       );
       if (draft.gtin != null) {
         final prod = await coordinator.searchExternalBarcode(normalized);
         if (prod != null) {
-           draft = ScannerCoordinator.mergeDrafts(draft, prod);
+          draft = ScannerCoordinator.mergeDrafts(draft, prod);
         }
       }
     } else if (!isQr && GtinValidator.isValid(normalized)) {
       final prod = await coordinator.searchExternalBarcode(normalized);
       if (prod != null) {
-         draft = ScannerCoordinator.mergeDrafts(draft, prod);
+        draft = ScannerCoordinator.mergeDrafts(draft, prod);
       }
     }
 
@@ -368,7 +417,9 @@ class _VisionScannerPageState extends State<VisionScannerPage> with WidgetsBindi
     final resolved = await BipContextService().resolve(draft);
     if (resolved.kind != BipItemKind.desconhecido && resolved.product != null) {
       _tocarBip();
-      await _acceptResult(ScannerResult.existente(resolved.product!));
+      await _acceptResult(
+        ScannerResult.existente(resolved.product!, draft: draft),
+      );
       return;
     }
 
@@ -411,7 +462,10 @@ class _VisionScannerPageState extends State<VisionScannerPage> with WidgetsBindi
             TextButton(
               onPressed: () {
                 Navigator.pop(dialogContext);
-                Navigator.pop(context, bipSession.items); // Retorna a lista e fecha
+                Navigator.pop(
+                  context,
+                  bipSession.items,
+                ); // Retorna a lista e fecha
               },
               child: Text('Conferir tudo e Sair'),
             ),
@@ -461,7 +515,11 @@ class _VisionScannerPageState extends State<VisionScannerPage> with WidgetsBindi
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.no_photography, color: Colors.white, size: 56),
+                    const Icon(
+                      Icons.no_photography,
+                      color: Colors.white,
+                      size: 56,
+                    ),
                     const SizedBox(height: 16),
                     Text(
                       _erro ?? 'Erro na câmera.',
@@ -474,7 +532,7 @@ class _VisionScannerPageState extends State<VisionScannerPage> with WidgetsBindi
             )
           else
             const Center(child: CircularProgressIndicator()),
-            
+
           if (!_processandoAtividade)
             Center(
               child: Container(
@@ -486,7 +544,7 @@ class _VisionScannerPageState extends State<VisionScannerPage> with WidgetsBindi
                 ),
               ),
             ),
-            
+
           if (_processandoAtividade)
             Container(
               color: const Color(0x99000000),
@@ -505,7 +563,7 @@ class _VisionScannerPageState extends State<VisionScannerPage> with WidgetsBindi
                 ),
               ),
             ),
-            
+
           Align(
             alignment: Alignment.bottomCenter,
             child: SafeArea(

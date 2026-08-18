@@ -100,9 +100,13 @@ class ScannerResult {
     this.finalidade,
   });
 
-  factory ScannerResult.existente(dynamic produto) => ScannerResult._(
+  factory ScannerResult.existente(
+    dynamic produto, {
+    ScannerProductDraft? draft,
+  }) => ScannerResult._(
     tipo: ScannerResultType.produtoExistente,
     produto: produto,
+    draft: draft,
   );
 
   factory ScannerResult.novo(dynamic produto) =>
