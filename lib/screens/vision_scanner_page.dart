@@ -20,7 +20,7 @@ import '../services/scanner/mlkit_utils.dart';
 class VisionScannerPage extends StatefulWidget {
   final ReaderContextPolicy? policy;
   final bool returnList;
-  final Future<bool> Function(ScannerResult)? onContinuousItem;
+  final Future<String?> Function(ScannerResult)? onContinuousItem;
 
   const VisionScannerPage({
     super.key,
@@ -236,13 +236,13 @@ class _VisionScannerPageState extends State<VisionScannerPage> with WidgetsBindi
     // Em modo contínuo, enviamos ao chamador para validação de negócio
     if (widget.onContinuousItem != null) {
       try {
-        final success = await widget.onContinuousItem!(sResult);
-        if (success && mounted) {
+        final errorMessage = await widget.onContinuousItem!(sResult);
+        if (errorMessage == null && mounted) {
           _adicionarASessao(draft, resolvedItem);
         } else if (mounted) {
           setState(() {
             _processandoAtividade = false;
-            _erro = 'Falha ao registrar item.';
+            _erro = errorMessage ?? 'Falha ao registrar item.';
           });
         }
       } catch (e) {

@@ -121,9 +121,10 @@ void main() {
           remessaId: remessaId,
           finalidade: 'inventario',
         );
-        final choices = await conference.resolverCodigo(id, '527005');
-        expect(choices, hasLength(2));
-        final pieceId = choices.first['id'] as String;
+        final resolve = await conference.resolverCodigo(id, '527005');
+        expect(resolve.state, ConsignacaoResolveState.multiplas);
+        expect(resolve.multiplasOpcoes, hasLength(2));
+        final pieceId = resolve.multiplasOpcoes.first['id'] as String;
         expect(
           await conference.conferirPeca(
             conferenciaId: id,
@@ -149,7 +150,7 @@ void main() {
         final state = await conference.carregar(id);
         expect(state['conferido'], 1);
         expect(state['pendente'], 2);
-        expect(await conference.resolverCodigo(id, '527005'), hasLength(1));
+        expect((await conference.resolverCodigo(id, '527005')).state, ConsignacaoResolveState.encontrada);
       },
     );
 

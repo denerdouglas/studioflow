@@ -49,6 +49,7 @@ class VisionOcrService {
         .map((line) => line.trim())
         .where((line) => line.isNotEmpty)
         .toList();
+
     String? codigo;
     double? preco;
     String? nome;
@@ -63,12 +64,14 @@ class VisionOcrService {
       caseSensitive: false,
     );
     final plainMoneyPattern = RegExp(r'^([0-9]{1,3}(?:[.,][0-9]{3})*)[,.]([0-9]{2})$');
-    final codePattern = RegExp(r'^[A-Z0-9]{4,20}$', caseSensitive: false);
     final materialPattern = RegExp(
       r'\b(prata|ouro|aço|aco|folheado|banhado|algodão|algodao|couro|seda)\b',
       caseSensitive: false,
     );
 
+    final unassignedLines = <String>[];
+
+    // 1. Extrair Preço
     for (final line in lines) {
       final price = pricePattern.firstMatch(line);
       final plainPrice = plainMoneyPattern.firstMatch(line);
@@ -77,41 +80,69 @@ class VisionOcrService {
         rawVal = rawVal.replaceAll(',', '.');
         final lastDot = rawVal.lastIndexOf('.');
         if (lastDot != -1 && rawVal.length - lastDot <= 3) {
-           final whole = rawVal.substring(0, lastDot).replaceAll('.', '');
-           final decimal = rawVal.substring(lastDot + 1);
-           preco = double.tryParse('$whole.$decimal');
+          final whole = rawVal.substring(0, lastDot).replaceAll('.', '');
+          final decimal = rawVal.substring(lastDot + 1);
+          preco = double.tryParse('$whole.$decimal');
         } else {
-           preco = double.tryParse(rawVal.replaceAll('.', ''));
+          preco = double.tryParse(rawVal.replaceAll('.', ''));
         }
-        continue;
+      } else {
+        unassignedLines.add(line);
       }
-      final compact = line.replaceAll(RegExp(r'[\s-]'), '');
-      if (codigo == null && codePattern.hasMatch(compact)) {
-        codigo = compact;
-        codigoTipo = GtinValidator.isValid(compact)
-            ? ExtractedCodeKind.gtin
-            : ExtractedCodeKind.referenciaComercial;
-        precisaRevisao = codigoTipo != ExtractedCodeKind.gtin;
-        continue;
-      }
+    }
+
+    // 2. Extrair Código por Prioridade
+    // Prioridade A: Contextual (Ref:, Código:)
+    for (var i = 0; i < unassignedLines.length; i++) {
+      final line = unassignedLines[i];
       final lower = line.toLowerCase();
-      if ((lower.startsWith('código:') ||
-              lower.startsWith('codigo:') ||
-              lower.startsWith('ref:') ||
-              lower.startsWith('referência:')) &&
-          codigo == null) {
+      if (lower.startsWith('código:') ||
+          lower.startsWith('codigo:') ||
+          lower.startsWith('ref:') ||
+          lower.startsWith('referência:')) {
         final candidate = line.split(':').last.trim().replaceAll(' ', '');
-        if (codePattern.hasMatch(candidate)) {
+        if (candidate.isNotEmpty) {
           codigo = candidate;
           codigoTipo = GtinValidator.isValid(candidate)
               ? ExtractedCodeKind.gtin
               : ExtractedCodeKind.referenciaComercial;
-          precisaRevisao = codigoTipo != ExtractedCodeKind.gtin;
+          unassignedLines.removeAt(i);
+          break;
         }
-        continue;
       }
-      if ((lower.startsWith('marca:') || lower.startsWith('fornecedor:')) &&
-          fornecedor == null) {
+    }
+
+    // Prioridade B: GTIN
+    if (codigo == null) {
+      for (var i = 0; i < unassignedLines.length; i++) {
+        final compact = unassignedLines[i].replaceAll(RegExp(r'[\s-]'), '');
+        if (GtinValidator.isValid(compact)) {
+          codigo = compact;
+          codigoTipo = ExtractedCodeKind.gtin;
+          unassignedLines.removeAt(i);
+          break;
+        }
+      }
+    }
+
+    // Prioridade C: Numérico Puro (4 a 20 dígitos)
+    if (codigo == null) {
+      final numericPattern = RegExp(r'^[0-9]{4,20}$');
+      for (var i = 0; i < unassignedLines.length; i++) {
+        final compact = unassignedLines[i].replaceAll(RegExp(r'[\s-]'), '');
+        if (numericPattern.hasMatch(compact)) {
+          codigo = compact;
+          codigoTipo = ExtractedCodeKind.referenciaComercial;
+          unassignedLines.removeAt(i);
+          break;
+        }
+      }
+    }
+
+    // 3. Atribuir o resto (Nome, Descrição, etc)
+    for (final line in unassignedLines) {
+      final lower = line.toLowerCase();
+      if ((lower.startsWith('marca:') || lower.startsWith('fornecedor:')) && fornecedor == null) {
         fornecedor = line.split(':').last.trim();
         continue;
       }
@@ -136,6 +167,8 @@ class VisionOcrService {
         fornecedor ??= line;
       }
     }
+
+    precisaRevisao = codigoTipo != ExtractedCodeKind.gtin;
 
     return ExtractedTagData(
       codigo: codigo,

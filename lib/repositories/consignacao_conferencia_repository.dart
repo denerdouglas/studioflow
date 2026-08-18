@@ -4,6 +4,26 @@ import '../core/utils/id_generator.dart';
 import '../database/database_service.dart';
 import '../services/session_controller.dart';
 
+enum ConsignacaoResolveState {
+  encontrada,
+  jaConferida,
+  outraRemessa,
+  statusInvalido,
+  naoEncontrada,
+  multiplas
+}
+
+class ConsignacaoResolveResult {
+  final ConsignacaoResolveState state;
+  final Map<String, Object?>? peca;
+  final List<Map<String, Object?>> multiplasOpcoes;
+
+  const ConsignacaoResolveResult({
+    required this.state,
+    this.peca,
+    this.multiplasOpcoes = const [],
+  });
+}
 class ConsignacaoConferenciaRepository {
   final Future<Database> Function() _databaseProvider;
   final String? _commerceOverride;
@@ -84,20 +104,77 @@ class ConsignacaoConferenciaRepository {
     return rows.single;
   }
 
-  Future<List<Map<String, Object?>>> resolverCodigo(
+  Future<ConsignacaoResolveResult> resolverCodigo(
     String conferenciaId,
     String codigo,
   ) async {
     final db = await _databaseProvider();
-    return db.rawQuery(
+
+    final confRows = await db.query(
+      'consignacao_conferencias',
+      columns: ['consignacao_id'],
+      where: 'id=? AND comercio_id=?',
+      whereArgs: [conferenciaId, _commerce],
+      limit: 1,
+    );
+    if (confRows.isEmpty) throw StateError('Conferência não encontrada.');
+    final loteId = confRows.first['consignacao_id'] as String;
+
+    final pecas = await db.rawQuery(
       '''SELECT p.* FROM pecas_unicas p
-      JOIN consignacao_conferencias c ON c.consignacao_id=p.lote_id
-      WHERE c.id=? AND c.comercio_id=? AND p.comercio_id=c.comercio_id
-        AND p.codigo_exclusivo=?
-        AND NOT EXISTS (SELECT 1 FROM consignacao_conferencia_itens i
-          WHERE i.conferencia_id=c.id AND i.peca_unica_id=p.id)
+      WHERE p.comercio_id=? AND p.codigo_exclusivo=?
       ORDER BY p.id''',
-      [conferenciaId, _commerce, codigo.trim()],
+      [_commerce, codigo.trim()],
+    );
+
+    if (pecas.isEmpty) {
+      return const ConsignacaoResolveResult(state: ConsignacaoResolveState.naoEncontrada);
+    }
+
+    final matchLote = pecas.where((p) => p['lote_id'] == loteId).toList();
+
+    if (matchLote.isEmpty) {
+      return ConsignacaoResolveResult(
+        state: ConsignacaoResolveState.outraRemessa,
+        peca: pecas.first,
+      );
+    }
+
+    final conferredIdsResult = await db.query(
+      'consignacao_conferencia_itens',
+      columns: ['peca_unica_id'],
+      where: 'conferencia_id=?',
+      whereArgs: [conferenciaId],
+    );
+    final conferredIds = conferredIdsResult.map((e) => e['peca_unica_id'] as String).toSet();
+
+    final matchLoteNaoConferidas = matchLote.where((p) => !conferredIds.contains(p['id'])).toList();
+
+    if (matchLoteNaoConferidas.isEmpty) {
+      return ConsignacaoResolveResult(
+        state: ConsignacaoResolveState.jaConferida,
+        peca: matchLote.first,
+      );
+    }
+
+    final available = matchLoteNaoConferidas.where((p) => p['status'] == 'disponivel').toList();
+    if (available.isEmpty) {
+      return ConsignacaoResolveResult(
+        state: ConsignacaoResolveState.statusInvalido,
+        peca: matchLoteNaoConferidas.first,
+      );
+    }
+
+    if (available.length > 1) {
+      return ConsignacaoResolveResult(
+        state: ConsignacaoResolveState.multiplas,
+        multiplasOpcoes: available,
+      );
+    }
+
+    return ConsignacaoResolveResult(
+      state: ConsignacaoResolveState.encontrada,
+      peca: available.single,
     );
   }
 

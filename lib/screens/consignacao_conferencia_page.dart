@@ -59,40 +59,57 @@ class _ConsignacaoConferenciaPageState
           onContinuousItem: (result) async {
             final draft = result.draft ?? ScannerProductDraft();
             final code = draft.referenciaComercial?.value ?? draft.gtin?.value ?? draft.qr?.value;
-            if (code == null) return false;
+            if (code == null) return 'Código inválido.';
 
-            final choices = await repository.resolverCodigo(id!, code);
-            if (choices.isEmpty || !mounted) return false;
+            final resolve = await repository.resolverCodigo(id!, code);
+            if (!mounted) return null;
 
-            var piece = choices.first;
-            if (choices.length > 1) {
-              final selected = await showDialog<Map<String, Object?>>(
-                context: context,
-                builder: (dialogContext) => SimpleDialog(
-                  title: Text('Escolha uma ocorrência de $code'),
-                  children: choices
-                      .map(
-                        (item) => SimpleDialogOption(
-                          onPressed: () => Navigator.pop(dialogContext, item),
-                          child: Text('${item['nome']} • ID ${item['id']}'),
-                        ),
-                      )
-                      .toList(),
-                ),
-              );
-              if (selected == null) return false;
-              piece = selected;
-            }
-
-            try {
-              await repository.conferirPeca(
-                conferenciaId: id!,
-                pecaId: piece['id'] as String,
-                leituraOriginal: code,
-              );
-              return true;
-            } catch (e) {
-              return false;
+            switch (resolve.state) {
+              case ConsignacaoResolveState.naoEncontrada:
+                return 'Produto não encontrado.';
+              case ConsignacaoResolveState.outraRemessa:
+                return 'Item não pertence a esta remessa.';
+              case ConsignacaoResolveState.jaConferida:
+                return 'Item já conferido.';
+              case ConsignacaoResolveState.statusInvalido:
+                return 'Peça não está disponível (status: ${resolve.peca?['status']}).';
+              case ConsignacaoResolveState.multiplas:
+                final selected = await showDialog<Map<String, Object?>>(
+                  context: context,
+                  builder: (dialogContext) => SimpleDialog(
+                    title: Text('Escolha uma ocorrência de $code'),
+                    children: resolve.multiplasOpcoes
+                        .map(
+                          (item) => SimpleDialogOption(
+                            onPressed: () => Navigator.pop(dialogContext, item),
+                            child: Text('${item['nome']} • ID ${item['id']}'),
+                          ),
+                        )
+                        .toList(),
+                  ),
+                );
+                if (selected == null) return 'Seleção cancelada.';
+                try {
+                  await repository.conferirPeca(
+                    conferenciaId: id!,
+                    pecaId: selected['id'] as String,
+                    leituraOriginal: code,
+                  );
+                  return null;
+                } catch (e) {
+                  return 'Erro ao conferir item.';
+                }
+              case ConsignacaoResolveState.encontrada:
+                try {
+                  await repository.conferirPeca(
+                    conferenciaId: id!,
+                    pecaId: resolve.peca!['id'] as String,
+                    leituraOriginal: code,
+                  );
+                  return null;
+                } catch (e) {
+                  return 'Erro ao conferir item.';
+                }
             }
           },
         ),
