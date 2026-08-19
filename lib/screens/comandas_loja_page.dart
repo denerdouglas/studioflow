@@ -41,6 +41,7 @@ class ComandasLojaPage extends StatefulWidget {
 
 class _ComandasLojaPageState extends State<ComandasLojaPage> {
   final repo = ComandaLojaRepository();
+  final loja = LojaRepository();
   final central = CentralComandasRepository();
   final pesquisa = TextEditingController();
   String filtro = 'todas';
@@ -177,9 +178,34 @@ class _ComandasLojaPageState extends State<ComandasLojaPage> {
       ),
     );
     if (ok == true) {
-      await repo.cancelar(command['id'] as String, reason.text);
+      if (command['origem_registro'] == 'venda') {
+        await loja.cancelarVenda(command['id'] as String, reason.text);
+      } else if (command['status_central'] == 'aberta') {
+        await repo.cancelar(command['id'] as String, reason.text);
+      } else {
+        await repo.estornar(command['id'] as String, reason.text);
+      }
       reload();
     }
+  }
+
+  Widget _detail(Map<String, Object?> command, {String? initialAction}) =>
+      VendaCentralDetalhePage(
+        vendaId: command['id'] as String,
+        origem: command['origem_registro'] == 'venda' ? 'venda' : 'comanda',
+        acaoInicial: initialAction,
+      );
+
+  Future<void> _menuAction(String action, Map<String, Object?> command) async {
+    if (action == 'cancelar') return cancel(command);
+    final page = action == 'editar' && command['origem_registro'] == 'comanda'
+        ? EditarComandaPage(comandaId: command['id'] as String)
+        : _detail(
+            command,
+            initialAction: action == 'pagamento' ? 'pagamento' : null,
+          );
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => page));
+    reload();
   }
 
   @override
@@ -274,27 +300,43 @@ class _ComandasLojaPageState extends State<ComandasLojaPage> {
                               await Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                  builder: (_) =>
-                                      command['origem_registro'] == 'venda'
-                                      ? VendaCentralDetalhePage(
-                                          vendaId: command['id'] as String,
-                                        )
-                                      : VendaCentralDetalhePage(
-                                          vendaId: command['id'] as String,
-                                          origem: 'comanda',
-                                        ),
+                                  builder: (_) => _detail(command),
                                 ),
                               );
                               reload();
                             },
-                            trailing:
-                                command['origem_registro'] == 'comanda' &&
-                                    command['status'] == 'aberta'
-                                ? IconButton(
-                                    icon: const Icon(Icons.delete_outline),
-                                    onPressed: () => cancel(command),
-                                  )
-                                : const Icon(Icons.chevron_right),
+                            trailing: PopupMenuButton<String>(
+                              tooltip: 'Ações da comanda',
+                              onSelected: (action) =>
+                                  _menuAction(action, command),
+                              itemBuilder: (_) => [
+                                const PopupMenuItem(
+                                  value: 'abrir',
+                                  child: Text('Abrir'),
+                                ),
+                                if (command['origem_registro'] == 'comanda')
+                                  const PopupMenuItem(
+                                    value: 'editar',
+                                    child: Text('Editar'),
+                                  ),
+                                if (!const {
+                                  'cancelada',
+                                  'estornada',
+                                }.contains(command['status_central']))
+                                  const PopupMenuItem(
+                                    value: 'pagamento',
+                                    child: Text('Pagamento'),
+                                  ),
+                                if (!const {
+                                  'cancelada',
+                                  'estornada',
+                                }.contains(command['status_central']))
+                                  const PopupMenuItem(
+                                    value: 'cancelar',
+                                    child: Text('Cancelar'),
+                                  ),
+                              ],
+                            ),
                           ),
                         ),
                       )
@@ -312,10 +354,12 @@ class _ComandasLojaPageState extends State<ComandasLojaPage> {
 class VendaCentralDetalhePage extends StatefulWidget {
   final String vendaId;
   final String origem;
+  final String? acaoInicial;
   const VendaCentralDetalhePage({
     super.key,
     required this.vendaId,
     this.origem = 'venda',
+    this.acaoInicial,
   });
 
   @override
@@ -331,6 +375,7 @@ class _VendaCentralDetalhePageState extends State<VendaCentralDetalhePage> {
     widget.vendaId,
     origem: widget.origem,
   );
+  bool initialActionHandled = false;
 
   Future<void> payment() async {
     final value = TextEditingController();
@@ -453,6 +498,9 @@ class _VendaCentralDetalhePageState extends State<VendaCentralDetalhePage> {
       return;
     }
     final method = TextEditingController(text: '${payment['forma']}');
+    final value = TextEditingController(
+      text: (payment['valor'] as num).abs().toStringAsFixed(2),
+    );
     var date =
         DateTime.tryParse('${payment['registrado_em']}')?.toLocal() ??
         DateTime.now();
@@ -464,6 +512,11 @@ class _VendaCentralDetalhePageState extends State<VendaCentralDetalhePage> {
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              TextField(
+                controller: value,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'Valor correto'),
+              ),
               TextField(
                 controller: method,
                 decoration: const InputDecoration(labelText: 'Forma correta'),
@@ -520,7 +573,69 @@ class _VendaCentralDetalhePageState extends State<VendaCentralDetalhePage> {
       payment['id'] as String,
       novaForma: method.text,
       novaData: date,
+      novoValor: double.parse(value.text.replaceAll(',', '.')),
     );
+    setState(
+      () => future = central.detalhe(widget.vendaId, origem: widget.origem),
+    );
+  }
+
+  Future<void> editCommand() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => EditarComandaPage(comandaId: widget.vendaId),
+      ),
+    );
+    setState(
+      () => future = central.detalhe(widget.vendaId, origem: widget.origem),
+    );
+  }
+
+  Future<void> paymentAction(Map<String, Object?> data) async {
+    if (data['status_central'] == 'aberta') {
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ComandaDetalhePage(comandaId: widget.vendaId),
+        ),
+      );
+    } else if ((data['saldo_restante'] as num).toDouble() > 0) {
+      await payment();
+      return;
+    } else {
+      final active = (data['pagamentos'] as List<Map<String, Object?>>)
+          .where(
+            (item) =>
+                item['status'] == 'pago' &&
+                item['origem_pagamento'] == 'comanda',
+          )
+          .toList();
+      if (active.isEmpty || !mounted) return;
+      final selected = await showModalBottomSheet<Map<String, Object?>>(
+        context: context,
+        builder: (context) => SafeArea(
+          child: ListView(
+            shrinkWrap: true,
+            children: [
+              const ListTile(title: Text('Editar / corrigir pagamento')),
+              ...active.map(
+                (item) => ListTile(
+                  title: Text(
+                    '${item['forma']} • R\$ ${(item['valor'] as num).abs().toStringAsFixed(2)}',
+                  ),
+                  subtitle: Text(_dataHoraBr(item['registrado_em'])),
+                  trailing: const Icon(Icons.edit_outlined),
+                  onTap: () => Navigator.pop(context, item),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+      if (selected != null) await correctPayment(selected);
+      return;
+    }
     setState(
       () => future = central.detalhe(widget.vendaId, origem: widget.origem),
     );
@@ -538,6 +653,14 @@ class _VendaCentralDetalhePageState extends State<VendaCentralDetalhePage> {
         final data = snapshot.data!;
         final items = data['itens'] as List<Map<String, Object?>>;
         final payments = data['pagamentos'] as List<Map<String, Object?>>;
+        if (!initialActionHandled &&
+            widget.acaoInicial == 'pagamento' &&
+            widget.origem == 'comanda' &&
+            data['status_central'] != 'aberta' &&
+            (data['saldo_restante'] as num).toDouble() > 0) {
+          initialActionHandled = true;
+          WidgetsBinding.instance.addPostFrameCallback((_) => payment());
+        }
         return ListView(
           padding: const EdgeInsets.all(16),
           children: [
@@ -561,6 +684,61 @@ class _VendaCentralDetalhePageState extends State<VendaCentralDetalhePage> {
             Text('Observações: ${data['observacoes'] ?? ''}'),
             if (data['responsavel_nome'] != null)
               Text('Responsável: ${data['responsavel_nome']}'),
+            const SizedBox(height: 12),
+            Text('AÇÕES', style: Theme.of(context).textTheme.titleMedium),
+            if (widget.origem == 'comanda')
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  OutlinedButton.icon(
+                    onPressed:
+                        const {
+                          'cancelada',
+                          'estornada',
+                        }.contains(data['status_central'])
+                        ? null
+                        : editCommand,
+                    icon: const Icon(Icons.edit_outlined),
+                    label: const Text('Editar comanda'),
+                  ),
+                  FilledButton.icon(
+                    onPressed:
+                        const {
+                          'cancelada',
+                          'estornada',
+                        }.contains(data['status_central'])
+                        ? null
+                        : () => paymentAction(data),
+                    icon: const Icon(Icons.payments_outlined),
+                    label: const Text('Registrar / editar pagamento'),
+                  ),
+                  FilledButton.tonalIcon(
+                    onPressed:
+                        const {
+                          'cancelada',
+                          'estornada',
+                        }.contains(data['status_central'])
+                        ? null
+                        : () =>
+                              cancel(open: data['status_central'] == 'aberta'),
+                    icon: const Icon(Icons.cancel_outlined),
+                    label: const Text('Cancelar / excluir'),
+                  ),
+                ],
+              ),
+            if (widget.origem == 'venda')
+              FilledButton.tonalIcon(
+                onPressed:
+                    const {
+                      'cancelada',
+                      'estornada',
+                    }.contains(data['status_central'])
+                    ? null
+                    : () => cancel(open: false),
+                icon: const Icon(Icons.cancel_outlined),
+                label: const Text('Cancelar / excluir'),
+              ),
             const Divider(),
             Text('Itens', style: Theme.of(context).textTheme.titleMedium),
             ...items.map(
@@ -591,81 +769,7 @@ class _VendaCentralDetalhePageState extends State<VendaCentralDetalhePage> {
                     : null,
               ),
             ),
-            const SizedBox(height: 16),
-            if (widget.origem == 'comanda' &&
-                !const {
-                  'cancelada',
-                  'estornada',
-                }.contains(data['status_central']))
-              OutlinedButton.icon(
-                onPressed: () async {
-                  await Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) =>
-                          EditarComandaPage(comandaId: widget.vendaId),
-                    ),
-                  );
-                  setState(
-                    () => future = central.detalhe(
-                      widget.vendaId,
-                      origem: widget.origem,
-                    ),
-                  );
-                },
-                icon: const Icon(Icons.edit_outlined),
-                label: const Text('Editar comanda'),
-              ),
-            const SizedBox(height: 8),
-            if (widget.origem == 'comanda' &&
-                !const {
-                  'cancelada',
-                  'estornada',
-                }.contains(data['status_central']) &&
-                data['status_central'] == 'aberta')
-              FilledButton.icon(
-                onPressed: () async {
-                  await Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) =>
-                          ComandaDetalhePage(comandaId: widget.vendaId),
-                    ),
-                  );
-                  setState(
-                    () => future = central.detalhe(
-                      widget.vendaId,
-                      origem: widget.origem,
-                    ),
-                  );
-                },
-                icon: const Icon(Icons.payments_outlined),
-                label: const Text('Registrar pagamento / Finalizar'),
-              ),
-            if (widget.origem == 'comanda' &&
-                !const {
-                  'aberta',
-                  'cancelada',
-                  'estornada',
-                }.contains(data['status_central']) &&
-                (data['saldo_restante'] as num).toDouble() > 0)
-              FilledButton.icon(
-                onPressed: payment,
-                icon: const Icon(Icons.payments_outlined),
-                label: const Text('Registrar pagamento'),
-              ),
-            const SizedBox(height: 8),
-            FilledButton.tonalIcon(
-              onPressed:
-                  const {
-                    'cancelada',
-                    'estornada',
-                  }.contains(data['status_central'])
-                  ? null
-                  : () => cancel(open: data['status_central'] == 'aberta'),
-              icon: const Icon(Icons.cancel_outlined),
-              label: const Text('Excluir / Cancelar'),
-            ),
+            const SizedBox(height: 24),
           ],
         );
       },
@@ -814,6 +918,7 @@ class _EditarComandaPageState extends State<EditarComandaPage> {
           'valor_unitario': price,
           'desconto': 0.0,
           'subtotal': price,
+          'origem_produto': selected['origem_produto'],
         });
       }
     });
@@ -829,6 +934,27 @@ class _EditarComandaPageState extends State<EditarComandaPage> {
       observacoes: notes.text,
     );
     if (mounted) Navigator.pop(context, true);
+  }
+
+  Future<void> _removeItem(int index) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Remover item?'),
+        content: Text('O estoque será reconciliado ao salvar as alterações.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Voltar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Remover item'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) setState(() => items.removeAt(index));
   }
 
   @override
@@ -879,26 +1005,29 @@ class _EditarComandaPageState extends State<EditarComandaPage> {
                 ),
                 leading: IconButton(
                   tooltip: 'Diminuir quantidade',
-                  onPressed: () => setState(() {
+                  onPressed: () {
                     if (quantity <= 1) {
-                      items.removeAt(index);
-                    } else {
-                      item['quantidade'] = quantity - 1;
+                      _removeItem(index);
+                      return;
                     }
-                  }),
+                    setState(() => item['quantidade'] = quantity - 1);
+                  },
                   icon: const Icon(Icons.remove_circle_outline),
                 ),
                 trailing: Wrap(
                   children: [
                     IconButton(
                       tooltip: 'Aumentar quantidade',
-                      onPressed: () =>
-                          setState(() => item['quantidade'] = quantity + 1),
+                      onPressed: item['origem_produto'] == 'peca_unica'
+                          ? null
+                          : () => setState(
+                              () => item['quantidade'] = quantity + 1,
+                            ),
                       icon: const Icon(Icons.add_circle_outline),
                     ),
                     IconButton(
                       tooltip: 'Remover item',
-                      onPressed: () => setState(() => items.removeAt(index)),
+                      onPressed: () => _removeItem(index),
                       icon: const Icon(Icons.delete_outline),
                     ),
                   ],

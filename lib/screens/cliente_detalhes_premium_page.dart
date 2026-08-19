@@ -18,6 +18,7 @@ import '../widgets/shared/simple_bar_chart.dart';
 import 'agenda_page.dart';
 import 'anamnese_page.dart';
 import 'clientes_360_page.dart';
+import 'comandas_loja_page.dart';
 
 class ClienteDetalhesPremiumPage extends StatefulWidget {
   final ClienteRegistro cliente;
@@ -75,6 +76,20 @@ class _ClienteDetalhesPremiumPageState extends State<ClienteDetalhesPremiumPage>
       if (!mounted) return;
       setState(() => _carregando = false);
     }
+  }
+
+  Future<void> _abrirComandaOperacional(Map<String, Object?> venda) async {
+    if (venda['origem_registro'] == 'legado') return;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => VendaCentralDetalhePage(
+          vendaId: venda['id'] as String,
+          origem: venda['origem_registro'] == 'venda' ? 'venda' : 'comanda',
+        ),
+      ),
+    );
+    if (mounted) await _carregarDados();
   }
 
   Future<void> _alterarFoto() async {
@@ -428,7 +443,10 @@ class _ClienteDetalhesPremiumPageState extends State<ClienteDetalhesPremiumPage>
                   _ResumoTab(cliente: _cliente, resumo: _resumo360),
                   _HistoricoTab(historico: _resumo360?.historicoAgenda ?? []),
                   _FotosTab(fotos: _fotos, onAdicionar: _adicionarFoto),
-                  _ProdutosTab(compras: _resumo360?.historicoCompras ?? []),
+                  _ProdutosTab(
+                    compras: _resumo360?.historicoCompras ?? [],
+                    onAbrirComanda: _abrirComandaOperacional,
+                  ),
                   _AnotacoesTab(
                     cliente: _cliente,
                     repository: widget.repository,
@@ -851,8 +869,9 @@ class _FotosTab extends StatelessWidget {
 
 class _ProdutosTab extends StatelessWidget {
   final List<Map<String, Object?>> compras;
+  final Future<void> Function(Map<String, Object?> venda) onAbrirComanda;
 
-  const _ProdutosTab({required this.compras});
+  const _ProdutosTab({required this.compras, required this.onAbrirComanda});
 
   @override
   Widget build(BuildContext context) {
@@ -864,7 +883,11 @@ class _ProdutosTab extends StatelessWidget {
       itemCount: compras.length,
       itemBuilder: (context, index) {
         final v = compras[index];
-        final data = DateTime.parse(v['criada_em'] as String);
+        final data = DateTime.parse(v['data_venda'] as String);
+        final legado = v['origem_registro'] == 'legado';
+        final total = (v['total'] as num? ?? 0).toDouble();
+        final pago = (v['valor_pago'] as num? ?? 0).toDouble();
+        final saldo = (v['saldo_restante'] as num? ?? 0).toDouble();
         return Padding(
           padding: const EdgeInsets.only(bottom: 12),
           child: PremiumCard(
@@ -872,13 +895,20 @@ class _ProdutosTab extends StatelessWidget {
             child: ListTile(
               leading: const Icon(Icons.shopping_bag_outlined),
               title: Text(
-                'Venda ${v['numero']} • ${AppFormatters.moeda((v['total'] as num).toDouble())}',
+                'Venda/Comanda ${v['numero']} • ${AppFormatters.moeda(total)}',
               ),
               subtitle: Text(
-                '${data.day}/${data.month}/${data.year}\n${v['itens'] ?? ''}',
+                '${v['status_central']} • ${data.day}/${data.month}/${data.year}\n'
+                'Total ${AppFormatters.moeda(total)} • '
+                'Pago ${AppFormatters.moeda(pago)} • '
+                'Saldo ${AppFormatters.moeda(saldo)}\n'
+                '${v['itens_busca'] ?? ''}',
               ),
-              trailing: Text(v['status'] as String),
+              trailing: legado
+                  ? const Text('Somente leitura')
+                  : const Icon(Icons.chevron_right),
               isThreeLine: true,
+              onTap: legado ? null : () => onAbrirComanda(v),
             ),
           ),
         );

@@ -4,8 +4,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:studioflow/database/database_schema_latest.dart';
 import 'package:studioflow/models/domain/acesso.dart';
+import 'package:studioflow/models/domain/loja.dart';
 import 'package:studioflow/repositories/central_comandas_repository.dart';
+import 'package:studioflow/repositories/cliente_360_repository.dart';
 import 'package:studioflow/repositories/comanda_loja_repository.dart';
+import 'package:studioflow/repositories/loja_repository.dart';
 import 'package:studioflow/services/session_controller.dart';
 
 void main() {
@@ -223,12 +226,325 @@ void main() {
       'lib/screens/comandas_loja_page.dart',
     ).readAsStringSync();
     expect(source, contains("label: const Text('Editar comanda')"));
-    expect(source, contains("label: const Text('Registrar pagamento')"));
-    expect(source, contains("label: const Text('Excluir / Cancelar')"));
+    expect(
+      source,
+      contains("label: const Text('Registrar / editar pagamento')"),
+    );
+    expect(source, contains("label: const Text('Cancelar / excluir')"));
+    expect(source, contains('PopupMenuButton<String>'));
+    expect(source, contains("child: Text('Pagamento')"));
     expect(source, contains("DateFormat(\"dd/MM/yyyy 'às' HH:mm\")"));
     expect(source, isNot(contains("Responsável: \${data['profissional_id']}")));
   });
+
+  test('Nova Venda expõe Pago/Pendente, data e vencimento', () {
+    final source = File('lib/screens/vendas_loja_page.dart').readAsStringSync();
+    expect(source, contains("labelText: 'Situação do pagamento'"));
+    expect(source, contains("value: 'Pago'"));
+    expect(source, contains("value: 'Pendente'"));
+    expect(source, contains("? 'Data do pagamento'"));
+    expect(source, contains(": 'Data de vencimento'"));
+  });
+
+  test('Pix pendente não cria pagamento e cria conta com vencimento', () async {
+    final id = await repo.criar(
+      clienteId: 'client-1',
+      vencimento: DateTime(2026, 9, 1),
+    );
+    await repo.adicionarProduto(id, 'product-1', quantidade: 1);
+    await repo.finalizar(
+      id,
+      pagamentoInicial: 0,
+      formaPagamento: 'pix',
+      vencimento: DateTime(2026, 9, 1),
+    );
+    expect(
+      await db.query(
+        'comanda_loja_pagamentos',
+        where: 'comanda_id=?',
+        whereArgs: [id],
+      ),
+      isEmpty,
+    );
+    final account = (await db.query(
+      'contas_receber_loja',
+      where: 'comanda_id=?',
+      whereArgs: [id],
+    )).single;
+    expect(account['status'], 'pendente');
+    expect('${account['vencimento']}', contains('2026-09-01'));
+  });
+
+  test('Pix pago persiste a data escolhida pela Nova Venda', () async {
+    final loja = LojaRepository(databaseProvider: () async => db);
+    final product = await loja.buscarCodigo('COD-1');
+    final selected = DateTime(2026, 8, 17, 14, 25);
+    final id = await loja.finalizarVenda(
+      itens: [ItemCarrinho(product!, 1)],
+      desconto: 0,
+      pagamentos: const {'pix': 20},
+      profissionalId: 'user-1',
+      clienteId: 'client-1',
+      dataPagamento: selected,
+    );
+    final finance = (await db.query(
+      'movimentacoes_financeiras',
+      where: 'entidade_origem_id=?',
+      whereArgs: [id],
+    )).single;
+    expect(DateTime.parse('${finance['data']}').toLocal(), selected);
+  });
+
+  test('data final é a do pagamento que zerou o saldo', () async {
+    final id = await _finalized(repo, initialPayment: 0);
+    final first = DateTime(2026, 8, 20, 10);
+    final closing = DateTime(2026, 8, 18, 9);
+    await repo.registrarPagamento(id, 10, 'pix', dataPagamento: first);
+    await repo.registrarPagamento(id, 30, 'dinheiro', dataPagamento: closing);
+    final detail = await central.detalhe(id, origem: 'comanda');
+    expect(DateTime.parse('${detail['data_pagamento']}').toLocal(), closing);
+  });
+
+  test('correção de valor reabre saldo e cria conta auditável', () async {
+    final id = await _finalized(repo, initialPayment: 40);
+    final original = (await db.query(
+      'comanda_loja_pagamentos',
+      where: 'comanda_id=?',
+      whereArgs: [id],
+    )).single;
+    await repo.corrigirPagamento(
+      id,
+      original['id'] as String,
+      novaForma: 'dinheiro',
+      novaData: DateTime(2026, 8, 19, 9),
+      novoValor: 30,
+    );
+    final command = (await db.query(
+      'comandas_loja',
+      where: 'id=?',
+      whereArgs: [id],
+    )).single;
+    expect(command['valor_pago'], 30.0);
+    expect(command['status'], 'parcialmente_paga');
+    expect(
+      await db.query('comanda_auditoria', where: "acao='correcao_pagamento'"),
+      isNotEmpty,
+    );
+    expect(
+      await db.query(
+        'contas_receber_loja',
+        where: 'comanda_id=?',
+        whereArgs: [id],
+      ),
+      hasLength(1),
+    );
+  });
+
+  test('31 comanda atual do Cliente 360 é clicável', () {
+    final sources = _cliente360Sources();
+    expect(sources, everyElement(contains('onTap: legado ? null')));
+  });
+
+  test('32 Cliente 360 abre o mesmo detalhe operacional da Central', () {
+    final sources = _cliente360Sources();
+    expect(sources, everyElement(contains('VendaCentralDetalhePage(')));
+    expect(sources, everyElement(isNot(contains('ComandaDetalhePage('))));
+  });
+
+  test('33 Cliente 360 encaminha o mesmo comanda_id', () async {
+    final id = await repo.criar(clienteId: 'client-1');
+    final resumo = await _cliente360(db).carregar('client-1');
+    expect(resumo.historicoCompras.single['id'], id);
+    expect(
+      _cliente360Sources(),
+      everyElement(contains("venda['id'] as String")),
+    );
+  });
+
+  test('34 edição pelo Cliente 360 altera a mesma comanda', () async {
+    final id = await repo.criar(clienteId: 'client-1');
+    await repo.editar(comandaId: id, observacoes: 'Editada pelo Cliente 360');
+    final row = (await db.query(
+      'comandas_loja',
+      where: 'id=?',
+      whereArgs: [id],
+    )).single;
+    expect(row['observacoes'], 'Editada pelo Cliente 360');
+    expect(await db.query('comandas_loja'), hasLength(1));
+  });
+
+  test('35 adicionar item pelo Cliente 360 reflete na Central', () async {
+    final id = await repo.criar(clienteId: 'client-1');
+    await repo.adicionarProduto(id, 'product-1');
+    final cliente = await _cliente360(db).carregar('client-1');
+    final centralRow = (await central.listar(clienteId: 'client-1')).single;
+    expect(cliente.historicoCompras.single['id'], centralRow['id']);
+    expect(cliente.historicoCompras.single['total'], centralRow['total']);
+  });
+
+  test('36 remover item pelo Cliente 360 reflete na Central', () async {
+    final id = await repo.criar(clienteId: 'client-1');
+    await repo.adicionarProduto(id, 'product-1');
+    await repo.adicionarProduto(id, 'product-2');
+    final items = await repo.itens(id);
+    await repo.reconciliarItens(id, [
+      items.singleWhere((item) => item['produto_id'] == 'product-2'),
+    ]);
+    final cliente = await _cliente360(db).carregar('client-1');
+    expect(cliente.historicoCompras.single['total'], 30.0);
+    expect(
+      (await central.detalhe(id, origem: 'comanda'))['itens'],
+      hasLength(1),
+    );
+  });
+
+  test('37 pagamento pelo Cliente 360 reflete em Contas a Receber', () async {
+    final id = await _finalized(repo, initialPayment: 0);
+    await repo.registrarPagamento(id, 40, 'pix');
+    final account = (await db.query(
+      'contas_receber_loja',
+      where: 'comanda_id=?',
+      whereArgs: [id],
+    )).single;
+    expect(account['status'], 'paga');
+    expect(account['valor_recebido'], 40.0);
+  });
+
+  test('38 data escolhida aparece no Cliente 360 e no detalhe', () async {
+    final id = await _finalized(repo, initialPayment: 0);
+    final selected = DateTime(2026, 8, 20, 14, 30);
+    await repo.registrarPagamento(id, 40, 'pix', dataPagamento: selected);
+    final cliente = await _cliente360(db).carregar('client-1');
+    final detalhe = await central.detalhe(id, origem: 'comanda');
+    expect(
+      cliente.historicoCompras.single['data_pagamento'],
+      detalhe['data_pagamento'],
+    );
+    expect(DateTime.parse('${detalhe['data_pagamento']}').toLocal(), selected);
+  });
+
+  test('39 status Pago Pendente Parcial permanece sincronizado', () async {
+    final id = await _finalized(repo, initialPayment: 0);
+    expect(
+      (await _cliente360(
+        db,
+      ).carregar('client-1')).historicoCompras.single['status_central'],
+      'pendente',
+    );
+    await repo.registrarPagamento(id, 10, 'pix');
+    expect(
+      (await _cliente360(
+        db,
+      ).carregar('client-1')).historicoCompras.single['status_central'],
+      'parcial',
+    );
+    await repo.registrarPagamento(id, 30, 'pix');
+    expect(
+      (await _cliente360(
+        db,
+      ).carregar('client-1')).historicoCompras.single['status_central'],
+      'paga',
+    );
+  });
+
+  test('40 cancelamento pelo Cliente 360 usa o fluxo seguro compartilhado', () {
+    final centralSource = File(
+      'lib/screens/comandas_loja_page.dart',
+    ).readAsStringSync();
+    expect(
+      _cliente360Sources(),
+      everyElement(contains('VendaCentralDetalhePage(')),
+    );
+    expect(centralSource, contains('await commands.estornar('));
+  });
+
+  test('41 comanda cancelada permanece no histórico da cliente', () async {
+    final id = await _finalized(repo, initialPayment: 40);
+    await repo.estornar(id, 'Cancelada pelo Cliente 360');
+    final history = (await _cliente360(
+      db,
+    ).carregar('client-1')).historicoCompras;
+    expect(history.single['id'], id);
+    expect(history.single['status_central'], 'estornada');
+  });
+
+  test('42 voltar do detalhe atualiza as duas telas de Cliente 360', () {
+    expect(
+      _cliente360Sources(),
+      everyElement(
+        allOf(contains('await Navigator.push('), contains('await _carregar')),
+      ),
+    );
+  });
+
+  test('43 registro legado permanece somente leitura', () async {
+    await db.insert('vendas', {
+      'id': 'legacy-1',
+      'numero': 'LEG-1',
+      'comercio_id': 'commerce-1',
+      'cliente_id': 'client-1',
+      'usuario_id': 'user-1',
+      'subtotal': 19.0,
+      'desconto': 0.0,
+      'total': 19.0,
+      'status': 'concluida',
+      'criada_em': DateTime.utc(2026, 8, 18).toIso8601String(),
+    });
+    final legacy = (await _cliente360(
+      db,
+    ).carregar('client-1')).historicoCompras.single;
+    expect(legacy['origem_registro'], 'legado');
+    expect(_cliente360Sources(), everyElement(contains("legado ? null")));
+  });
+
+  test('44 navegação não cria comanda duplicada', () async {
+    final id = await repo.criar(clienteId: 'client-1');
+    await _cliente360(db).carregar('client-1');
+    await central.detalhe(id, origem: 'comanda');
+    expect(await db.query('comandas_loja'), hasLength(1));
+  });
+
+  test('45 detalhe do Cliente 360 não cria pagamento duplicado', () async {
+    final id = await _finalized(repo, initialPayment: 40);
+    await _cliente360(db).carregar('client-1');
+    await central.detalhe(id, origem: 'comanda');
+    expect(
+      await db.query(
+        'comanda_loja_pagamentos',
+        where: 'comanda_id=?',
+        whereArgs: [id],
+      ),
+      hasLength(1),
+    );
+  });
+
+  test(
+    '46 detalhe do Cliente 360 não cria conta a receber duplicada',
+    () async {
+      final id = await _finalized(repo, initialPayment: 0);
+      await _cliente360(db).carregar('client-1');
+      await central.detalhe(id, origem: 'comanda');
+      expect(
+        await db.query(
+          'contas_receber_loja',
+          where: 'comanda_id=?',
+          whereArgs: [id],
+        ),
+        hasLength(1),
+      );
+    },
+  );
 }
+
+Cliente360Repository _cliente360(Database db) => Cliente360Repository(
+  databaseProvider: () async => db,
+  comercioId: 'commerce-1',
+);
+
+List<String> _cliente360Sources() => [
+  File('lib/screens/clientes_360_page.dart').readAsStringSync(),
+  File('lib/screens/cliente_detalhes_premium_page.dart').readAsStringSync(),
+];
 
 Future<String> _finalized(
   ComandaLojaRepository repo, {
@@ -291,6 +607,16 @@ Future<void> _seed(Database db) async {
       'comercio_id': 'commerce-1',
       'ativo': 1,
       'data_cadastro': now,
+    });
+    await db.insert('estoque_saldos', {
+      'id': '${product.$1}-sale-balance',
+      'business_id': 'commerce-1',
+      'estoque_id': product.$1,
+      'finalidade': 'venda',
+      'quantidade_atual': product.$5,
+      'quantidade_reservada': 0.0,
+      'created_at': now,
+      'updated_at': now,
     });
   }
 }

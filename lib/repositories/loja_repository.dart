@@ -542,6 +542,7 @@ class LojaRepository {
     required String profissionalId,
     String? clienteId,
     String? observacoes,
+    DateTime? dataPagamento,
   }) async {
     final u = _exigir(AcaoPermissao.realizarVenda);
     if (desconto > 0) _exigir(AcaoPermissao.aplicarDesconto);
@@ -565,6 +566,7 @@ class LojaRepository {
         'data_venda': DateTime.now().toIso8601String(),
         'status': 'concluida',
       });
+      final paymentAt = (dataPagamento ?? DateTime.now()).toUtc();
       for (var index = 0; index < itens.length; index++) {
         final item = itens[index];
         final pecas = await txn.query(
@@ -656,8 +658,8 @@ class LojaRepository {
           'valor': pagamento.value,
           'forma_pagamento': pagamento.key,
           'status': 'pago',
-          'data': DateTime.now().toIso8601String(),
-          'data_criacao': DateTime.now().toIso8601String(),
+          'data': paymentAt.toIso8601String(),
+          'data_criacao': DateTime.now().toUtc().toIso8601String(),
           'categoria': 'venda de produto',
           'centro_resultado': 'loja',
           'entidade_origem': 'pdv_venda',

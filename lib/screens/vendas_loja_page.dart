@@ -4,6 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../models/domain/acesso.dart';
 import '../models/domain/loja.dart';
 import '../repositories/cliente_repository.dart';
+import '../repositories/comanda_loja_repository.dart';
 import '../repositories/loja_repository.dart';
 import '../services/session_controller.dart';
 import '../models/domain/scanner_product_draft.dart';
@@ -19,9 +20,13 @@ class VendasLojaPage extends StatefulWidget {
 
 class _VendasLojaPageState extends State<VendasLojaPage> {
   final repo = LojaRepository();
+  final comandas = ComandaLojaRepository();
   final List<ItemCarrinho> itens = [];
   final desconto = TextEditingController(text: '0');
   String pagamento = 'Pix';
+  String situacaoPagamento = 'Pago';
+  DateTime dataPagamento = DateTime.now();
+  DateTime? vencimento;
   bool finalizando = false;
   ClienteRegistro? cliente;
 
@@ -147,6 +152,50 @@ class _VendasLojaPageState extends State<VendasLojaPage> {
 
   double _valorPagamento(String valor) =>
       double.tryParse(valor.replaceAll(',', '.')) ?? 0;
+
+  String _formatDate(DateTime value) =>
+      '${value.day.toString().padLeft(2, '0')}/'
+      '${value.month.toString().padLeft(2, '0')}/${value.year}';
+
+  String _formatDateTime(DateTime value) =>
+      '${_formatDate(value)} às '
+      '${value.hour.toString().padLeft(2, '0')}:'
+      '${value.minute.toString().padLeft(2, '0')}';
+
+  Future<void> _selectPaymentDate() async {
+    final day = await showDatePicker(
+      context: context,
+      initialDate: dataPagamento,
+      firstDate: DateTime(2000),
+      lastDate: DateTime.now().add(const Duration(days: 730)),
+    );
+    if (day == null || !mounted) return;
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(dataPagamento),
+    );
+    if (time == null) return;
+    setState(
+      () => dataPagamento = DateTime(
+        day.year,
+        day.month,
+        day.day,
+        time.hour,
+        time.minute,
+      ),
+    );
+  }
+
+  Future<void> _selectDueDate() async {
+    final day = await showDatePicker(
+      context: context,
+      initialDate: vencimento ?? DateTime.now(),
+      firstDate: DateTime.now(),
+      lastDate: DateTime.now().add(const Duration(days: 730)),
+    );
+    if (day != null) setState(() => vencimento = day);
+  }
+
   Future<void> ler() async {
     final result = await Navigator.push<ScannerResult?>(
       context,
@@ -163,7 +212,8 @@ class _VendasLojaPageState extends State<VendasLojaPage> {
       }
     }
 
-    final codigo = result.draft?.referenciaComercial?.value ?? result.draft?.gtin?.value;
+    final codigo =
+        result.draft?.referenciaComercial?.value ?? result.draft?.gtin?.value;
     if (codigo == null) return;
 
     try {
@@ -180,20 +230,71 @@ class _VendasLojaPageState extends State<VendasLojaPage> {
   }
 
   Future<void> finalizar() async {
-    final pagamentos = await obterPagamentos();
-    if (pagamentos == null) return;
+    Map<String, double>? pagamentos;
+    if (situacaoPagamento == 'Pago') {
+      pagamentos = await obterPagamentos();
+      if (pagamentos == null) return;
+    } else {
+      if (cliente == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Vincule um cliente para criar a conta a receber pendente.',
+            ),
+          ),
+        );
+        return;
+      }
+      if (vencimento == null) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Informe o vencimento.')));
+        return;
+      }
+    }
     setState(() => finalizando = true);
     try {
-      final id = await repo.finalizarVenda(
-        itens: itens,
-        desconto: descontoValor,
-        pagamentos: pagamentos,
-        clienteId: cliente?.id,
-        profissionalId: SessionController.instance.usuario?.id ?? 'prof_1',
-      );
+      late final String id;
+      if (situacaoPagamento == 'Pago') {
+        id = await repo.finalizarVenda(
+          itens: itens,
+          desconto: descontoValor,
+          pagamentos: pagamentos!,
+          clienteId: cliente?.id,
+          profissionalId: SessionController.instance.usuario?.id ?? 'prof_1',
+          dataPagamento: dataPagamento,
+        );
+      } else {
+        id = await comandas.criar(
+          clienteId: cliente!.id,
+          vencimento: vencimento,
+        );
+        await comandas.reconciliarItens(
+          id,
+          itens
+              .map(
+                (item) => <String, Object?>{
+                  'produto_id': item.produto.id,
+                  'nome': item.produto.nome,
+                  'codigo': item.produto.codigoBarras,
+                  'quantidade': item.quantidade,
+                  'valor_unitario': item.produto.precoVenda,
+                  'desconto': 0.0,
+                },
+              )
+              .toList(),
+          desconto: descontoValor,
+        );
+        await comandas.finalizar(
+          id,
+          pagamentoInicial: 0,
+          formaPagamento: pagamento,
+          vencimento: vencimento,
+        );
+      }
       if (!mounted) return;
       final resumo =
-          'StudioFlow - Venda $id\n${itens.map((i) => '${i.quantidade}x ${i.produto.nome} - R\$ ${i.total.toStringAsFixed(2)}').join('\n')}\nTotal: R\$ ${total.toStringAsFixed(2)}\nPagamento: $pagamento';
+          'StudioFlow - Venda $id\n${itens.map((i) => '${i.quantidade}x ${i.produto.nome} - R\$ ${i.total.toStringAsFixed(2)}').join('\n')}\nTotal: R\$ ${total.toStringAsFixed(2)}\nSituação: $situacaoPagamento\nPagamento: $pagamento';
       await showDialog<void>(
         context: context,
         builder: (context) => AlertDialog(
@@ -218,6 +319,9 @@ class _VendasLojaPageState extends State<VendasLojaPage> {
         itens.clear();
         desconto.text = '0';
         cliente = null;
+        situacaoPagamento = 'Pago';
+        dataPagamento = DateTime.now();
+        vencimento = null;
       });
     } catch (e) {
       if (mounted) {
@@ -371,6 +475,41 @@ class _VendasLojaPageState extends State<VendasLojaPage> {
                         ),
                       ),
                     ],
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    initialValue: situacaoPagamento,
+                    decoration: const InputDecoration(
+                      labelText: 'Situação do pagamento',
+                    ),
+                    items: const [
+                      DropdownMenuItem(value: 'Pago', child: Text('Pago')),
+                      DropdownMenuItem(
+                        value: 'Pendente',
+                        child: Text('Pendente'),
+                      ),
+                    ],
+                    onChanged: (value) =>
+                        setState(() => situacaoPagamento = value ?? 'Pago'),
+                  ),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(
+                      situacaoPagamento == 'Pago'
+                          ? 'Data do pagamento'
+                          : 'Data de vencimento',
+                    ),
+                    subtitle: Text(
+                      situacaoPagamento == 'Pago'
+                          ? _formatDateTime(dataPagamento)
+                          : vencimento == null
+                          ? 'Selecionar vencimento'
+                          : _formatDate(vencimento!),
+                    ),
+                    trailing: const Icon(Icons.calendar_month_outlined),
+                    onTap: situacaoPagamento == 'Pago'
+                        ? _selectPaymentDate
+                        : _selectDueDate,
                   ),
                   SizedBox(height: 10),
                   Row(

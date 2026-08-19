@@ -534,6 +534,7 @@ class ComandaLojaRepository {
     String pagamentoId, {
     required String novaForma,
     required DateTime novaData,
+    double? novoValor,
   }) async {
     final user = _require(AcaoPermissao.realizarVenda);
     if (novaForma.trim().isEmpty) throw StateError('Informe a forma.');
@@ -555,6 +556,18 @@ class ComandaLojaRepository {
         throw StateError('Pagamento não encontrado.');
       }
       final original = payments.single;
+      final originalValue = (original['valor'] as num).toDouble();
+      final correctedValue = novoValor ?? originalValue;
+      final currentPaid = (commands.single['valor_pago'] as num).toDouble();
+      final total = (commands.single['total'] as num).toDouble();
+      final correctedPaid = currentPaid - originalValue + correctedValue;
+      if (correctedValue <= 0 ||
+          correctedPaid < 0 ||
+          correctedPaid > total + 0.001) {
+        throw StateError(
+          'Valor corrigido incompatível com o saldo da comanda.',
+        );
+      }
       final now = DateTime.now().toUtc().toIso8601String();
       await tx.update(
         'comanda_loja_pagamentos',
@@ -572,7 +585,7 @@ class ComandaLojaRepository {
         'id': '${pagamentoId}_correcao_estorno',
         'tipo': 'estorno',
         'descricao': 'Correção de pagamento da comanda',
-        'valor': -(original['valor'] as num).toDouble(),
+        'valor': -originalValue,
         'forma_pagamento': original['forma'],
         'status': 'estornado',
         'data': now,
@@ -591,10 +604,65 @@ class ComandaLojaRepository {
         user,
         commands.single,
         comandaId,
-        (original['valor'] as num).toDouble(),
+        correctedValue,
         novaForma.trim(),
         dataPagamento: novaData,
       );
+      final status = (total - correctedPaid).abs() < 0.01
+          ? 'paga'
+          : correctedPaid > 0
+          ? 'parcialmente_paga'
+          : 'aguardando_pagamento';
+      await tx.update(
+        'comandas_loja',
+        {
+          'valor_pago': correctedPaid,
+          'status': status,
+          'atualizado_em': DateTime.now().toUtc().toIso8601String(),
+        },
+        where: 'id=? AND comercio_id=?',
+        whereArgs: [comandaId, user.comercioId],
+      );
+      await tx.update(
+        'contas_receber_loja',
+        {
+          'valor_recebido': correctedPaid,
+          'status': status == 'aguardando_pagamento' ? 'pendente' : status,
+          'atualizado_em': DateTime.now().toUtc().toIso8601String(),
+        },
+        where: 'comanda_id=? AND comercio_id=?',
+        whereArgs: [comandaId, user.comercioId],
+      );
+      if (correctedPaid < total - 0.001) {
+        final accounts = await tx.query(
+          'contas_receber_loja',
+          columns: ['id'],
+          where: 'comanda_id=? AND comercio_id=?',
+          whereArgs: [comandaId, user.comercioId],
+          limit: 1,
+        );
+        if (accounts.isEmpty) {
+          if (commands.single['vencimento'] == null) {
+            throw StateError(
+              'Informe um vencimento antes de reduzir o valor pago.',
+            );
+          }
+          await tx.insert('contas_receber_loja', {
+            'id': IdGenerator.temporal(),
+            'comercio_id': user.comercioId,
+            'unidade_id': commands.single['unidade_id'],
+            'cliente_id': commands.single['cliente_id'],
+            'comanda_id': comandaId,
+            'profissional_id': commands.single['profissional_id'] ?? user.id,
+            'vencimento': commands.single['vencimento'],
+            'valor_total': total,
+            'valor_recebido': correctedPaid,
+            'status': correctedPaid > 0 ? 'parcialmente_paga' : 'pendente',
+            'criado_em': now,
+            'atualizado_em': now,
+          });
+        }
+      }
       await _audit(
         tx,
         user,

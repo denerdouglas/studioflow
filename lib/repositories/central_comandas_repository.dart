@@ -155,10 +155,14 @@ class CentralComandasRepository {
     );
     if (header.isEmpty) throw StateError('Comanda não encontrada.');
     if (origem == 'comanda') {
-      final items = await db.query(
-        'comanda_loja_itens',
-        where: 'comanda_id=? AND comercio_id=?',
-        whereArgs: [id, _comercio],
+      final items = await db.rawQuery(
+        '''SELECT i.*, CASE WHEN EXISTS(
+          SELECT 1 FROM pecas_unicas p
+          WHERE p.id=i.produto_id AND p.comercio_id=i.comercio_id)
+          THEN 'peca_unica' ELSE 'estoque' END origem_produto
+          FROM comanda_loja_itens i
+          WHERE i.comanda_id=? AND i.comercio_id=?''',
+        [id, _comercio],
       );
       final directPayments = await db.query(
         'comanda_loja_pagamentos',
@@ -182,7 +186,12 @@ class CentralComandasRepository {
         ..sort(
           (a, b) => '${a['registrado_em']}'.compareTo('${b['registrado_em']}'),
         );
-      return {...header.single, 'itens': items, 'pagamentos': allPayments};
+      return {
+        ...header.single,
+        'data_pagamento': _finalPaymentDate(header.single, allPayments),
+        'itens': items,
+        'pagamentos': allPayments,
+      };
     }
     final items = await db.rawQuery(
       '''SELECT vi.*, COALESCE(e.nome,p.nome,vi.produto_id) nome,
@@ -201,7 +210,12 @@ class CentralComandasRepository {
         ORDER BY data''',
       [id],
     );
-    return {...header.single, 'itens': items, 'pagamentos': payments};
+    return {
+      ...header.single,
+      'data_pagamento': _finalPaymentDate(header.single, payments),
+      'itens': items,
+      'pagamentos': payments,
+    };
   }
 
   Future<Map<String, Object?>> resumoCliente(String clienteId) async {
@@ -248,4 +262,20 @@ class CentralComandasRepository {
     'canceladas' => const {'cancelada', 'estornada'}.contains(status),
     _ => status == filtro,
   };
+
+  static Object? _finalPaymentDate(
+    Map<String, Object?> header,
+    List<Map<String, Object?>> payments,
+  ) {
+    final total = (header['total'] as num? ?? 0).toDouble();
+    var accumulated = 0.0;
+    final insertionOrder = [...payments]
+      ..sort((a, b) => '${a['id']}'.compareTo('${b['id']}'));
+    for (final payment in insertionOrder) {
+      if (payment['status'] != 'pago') continue;
+      accumulated += (payment['valor'] as num? ?? 0).toDouble();
+      if (accumulated >= total - 0.001) return payment['registrado_em'];
+    }
+    return null;
+  }
 }

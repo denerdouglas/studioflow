@@ -134,6 +134,20 @@ class _Cliente360DetalhePageState extends State<Cliente360DetalhePage> {
     }
   }
 
+  Future<void> _abrirComandaOperacional(Map<String, Object?> venda) async {
+    if (venda['origem_registro'] == 'legado') return;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => VendaCentralDetalhePage(
+          vendaId: venda['id'] as String,
+          origem: venda['origem_registro'] == 'venda' ? 'venda' : 'comanda',
+        ),
+      ),
+    );
+    if (mounted) await _carregar();
+  }
+
   @override
   Widget build(BuildContext context) {
     final r = _resumo;
@@ -305,6 +319,9 @@ class _Cliente360DetalhePageState extends State<Cliente360DetalhePage> {
                 ...r.historicoCompras.take(20).map((v) {
                   final data = DateTime.parse(v['data_venda'] as String);
                   final legado = v['origem_registro'] == 'legado';
+                  final total = (v['total'] as num? ?? 0).toDouble();
+                  final pago = (v['valor_pago'] as num? ?? 0).toDouble();
+                  final saldo = (v['saldo_restante'] as num? ?? 0).toDouble();
                   return Card(
                     child: ListTile(
                       leading: const Icon(Icons.shopping_bag_outlined),
@@ -312,29 +329,17 @@ class _Cliente360DetalhePageState extends State<Cliente360DetalhePage> {
                         'Comanda ${v['numero']} • ${AppFormatters.moeda((v['total'] as num).toDouble())}',
                       ),
                       subtitle: Text(
-                        '${data.day}/${data.month}/${data.year}\n${v['itens_busca'] ?? ''}',
+                        '${v['status_central']} • ${data.day}/${data.month}/${data.year}\n'
+                        'Total ${AppFormatters.moeda(total)} • '
+                        'Pago ${AppFormatters.moeda(pago)} • '
+                        'Saldo ${AppFormatters.moeda(saldo)}\n'
+                        '${v['itens_busca'] ?? ''}',
                       ),
-                      trailing: Text(v['status_central'] as String),
+                      trailing: legado
+                          ? const Text('Somente leitura')
+                          : const Icon(Icons.chevron_right),
                       isThreeLine: true,
-                      onTap: legado
-                          ? null
-                          : () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => v['origem_registro'] == 'venda'
-                                    ? VendaCentralDetalhePage(
-                                        vendaId: v['id'] as String,
-                                      )
-                                    : v['status'] == 'aberta'
-                                    ? ComandaDetalhePage(
-                                        comandaId: v['id'] as String,
-                                      )
-                                    : VendaCentralDetalhePage(
-                                        vendaId: v['id'] as String,
-                                        origem: 'comanda',
-                                      ),
-                              ),
-                            ),
+                      onTap: legado ? null : () => _abrirComandaOperacional(v),
                     ),
                   );
                 }),
