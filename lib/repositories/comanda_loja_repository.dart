@@ -937,7 +937,9 @@ class ComandaLojaRepository {
     final user = _require(AcaoPermissao.realizarVenda);
     final db = await _databaseProvider();
     final rows = await db.rawQuery(
-      '''SELECT c.*, cl.nome cliente_nome, co.nome_exibicao comercio_nome,
+      '''SELECT c.*, cl.nome cliente_nome,
+      COALESCE(cl.whatsapp,cl.telefone,'') cliente_telefone,
+      co.nome_exibicao comercio_nome,
       cp.forma forma_pagamento, cp.registrado_em data_pagamento
       FROM comandas_loja c JOIN clientes cl ON cl.id=c.cliente_id
       JOIN comercios co ON co.id=c.comercio_id
@@ -963,6 +965,16 @@ class ComandaLojaRepository {
       paymentMethod: '${command['forma_pagamento'] ?? 'Não informado'}',
       notes: command['observacoes'] as String?,
       items: await itens(comandaId),
+      commandNumber: '${command['numero']}',
+      clientPhone: '${command['cliente_telefone'] ?? ''}',
+      discount: (command['desconto'] as num? ?? 0).toDouble(),
+      amountPaid: (command['valor_pago'] as num? ?? 0).toDouble(),
+      status: switch ('${command['status']}') {
+        'paga' => 'Pago',
+        'parcialmente_paga' => 'Parcial',
+        _ => 'Pendente',
+      },
+      dueDate: DateTime.tryParse('${command['vencimento'] ?? ''}'),
     );
   }
 
@@ -1388,7 +1400,8 @@ class ComandaLojaRepository {
     });
     await db.insert('movimentacoes_financeiras', {
       'id': '${id}_finance',
-      'tipo': 'receita',
+      'comercio_id': user.comercioId,
+      'tipo': 'entrada',
       'descricao': 'Pagamento da comanda ${command['numero']}',
       'valor': value,
       'forma_pagamento': method,

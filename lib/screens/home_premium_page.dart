@@ -474,31 +474,50 @@ class _HomePremiumPageState extends State<HomePremiumPage> {
             ),
             Padding(
               padding: const EdgeInsets.all(20),
-              child: Row(
+              child: Column(
                 children: [
-                  Expanded(
-                    child: _buildMetricMini(
-                      title: 'Entradas',
-                      value: AppFormatters.moeda(caixa.totalEntradas),
-                      icon: Icons.arrow_downward,
-                      color: Color(0xFF15996B),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildMetricMini(
+                          title: 'Entradas',
+                          value: AppFormatters.moeda(caixa.totalEntradas),
+                          icon: Icons.arrow_downward,
+                          color: Color(0xFF15996B),
+                        ),
+                      ),
+                      Container(
+                        width: 1,
+                        height: 40,
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.surfaceContainerHighest,
+                      ),
+                      Expanded(
+                        child: _buildMetricMini(
+                          title: 'Saídas',
+                          value: AppFormatters.moeda(caixa.totalSaidas),
+                          icon: Icons.arrow_upward,
+                          color: const Color(0xFFD64D64),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  _buildMetricMini(
+                    title: 'Pendentes',
+                    value: AppFormatters.moeda(caixa.totalPendentes),
+                    icon: Icons.schedule,
+                    color: const Color(0xFFD99716),
+                  ),
+                  if (aba == 'servico') ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      '${caixa.atendimentosHoje} atendimentos hoje • '
+                      '${caixa.atendimentosMes} no mês',
+                      style: Theme.of(context).textTheme.bodySmall,
                     ),
-                  ),
-                  Container(
-                    width: 1,
-                    height: 40,
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.surfaceContainerHighest,
-                  ),
-                  Expanded(
-                    child: _buildMetricMini(
-                      title: 'Saídas',
-                      value: AppFormatters.moeda(caixa.totalSaidas),
-                      icon: Icons.arrow_upward,
-                      color: const Color(0xFFD64D64),
-                    ),
-                  ),
+                  ],
                 ],
               ),
             ),

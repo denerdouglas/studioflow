@@ -24,24 +24,23 @@ class _CaixaPageState extends State<CaixaPage> {
   DateTime _dataSelecionada = DateTime.now();
 
   List<MovimentoFinanceiroRegistro> _movimentosTodos = [];
+  List<Map<String, Object?>> _pendencias = [];
+  String _filtroFluxo = 'todos';
 
   late String _abaSelecionada;
 
   List<MovimentoFinanceiroRegistro> get _movimentos {
+    Iterable<MovimentoFinanceiroRegistro> result = _movimentosTodos;
     if (_abaSelecionada == 'servico') {
-      return _movimentosTodos
-          .where((m) => m.centroResultado == 'salao')
-          .toList();
+      result = result.where((m) => m.centroResultado == 'salao');
     } else if (_abaSelecionada == 'loja') {
-      return _movimentosTodos
-          .where((m) => m.centroResultado == 'loja')
-          .toList();
+      result = result.where((m) => m.centroResultado == 'loja');
     } else if (_abaSelecionada == 'consignado') {
-      return _movimentosTodos
-          .where((m) => m.centroResultado == 'consignado')
-          .toList();
+      result = result.where((m) => m.centroResultado == 'consignado');
     }
-    return _movimentosTodos;
+    if (_filtroFluxo == 'entradas') result = result.where((m) => m.entrada);
+    if (_filtroFluxo == 'saidas') result = result.where((m) => m.saida);
+    return result.where((m) => m.pago).toList();
   }
 
   ResumoCaixa? _resumoAtual;
@@ -69,6 +68,19 @@ class _CaixaPageState extends State<CaixaPage> {
       final resultados = await Future.wait([
         _repository.listarPorDia(_dataSelecionada, centroResultado: filtro),
         _repository.resumoDoDia(_dataSelecionada, centroResultado: filtro),
+        _repository.listarPendencias(
+          inicio: DateTime(
+            _dataSelecionada.year,
+            _dataSelecionada.month,
+            _dataSelecionada.day,
+          ),
+          fim: DateTime(
+            _dataSelecionada.year,
+            _dataSelecionada.month,
+            _dataSelecionada.day + 1,
+          ),
+          centroResultado: filtro,
+        ),
       ]);
 
       if (!mounted) {
@@ -78,6 +90,7 @@ class _CaixaPageState extends State<CaixaPage> {
       setState(() {
         _movimentosTodos = resultados[0] as List<MovimentoFinanceiroRegistro>;
         _resumoAtual = resultados[1] as ResumoCaixa;
+        _pendencias = resultados[2] as List<Map<String, Object?>>;
 
         _carregando = false;
         _erro = null;
@@ -318,6 +331,8 @@ class _CaixaPageState extends State<CaixaPage> {
             _seletorData(),
             SizedBox(height: 14),
             _seletorAbas(),
+            const SizedBox(height: 8),
+            _seletorFluxo(),
             SizedBox(height: 14),
             _resumoFinanceiro(),
             SizedBox(height: 14),
@@ -458,6 +473,23 @@ class _CaixaPageState extends State<CaixaPage> {
     );
   }
 
+  Widget _seletorFluxo() => SingleChildScrollView(
+    scrollDirection: Axis.horizontal,
+    padding: const EdgeInsets.symmetric(horizontal: 20),
+    child: SegmentedButton<String>(
+      showSelectedIcon: false,
+      segments: const [
+        ButtonSegment(value: 'todos', label: Text('Todos')),
+        ButtonSegment(value: 'entradas', label: Text('Entradas')),
+        ButtonSegment(value: 'saidas', label: Text('Saídas')),
+        ButtonSegment(value: 'pendentes', label: Text('Pendentes')),
+      ],
+      selected: {_filtroFluxo},
+      onSelectionChanged: (value) =>
+          setState(() => _filtroFluxo = value.single),
+    ),
+  );
+
   Widget _resumoFinanceiro() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -518,6 +550,34 @@ class _CaixaPageState extends State<CaixaPage> {
               ),
             ],
           ),
+          const SizedBox(height: 10),
+          _ResumoCard(
+            titulo: 'Pendentes',
+            valor: _resumoAtual?.totalPendentes ?? 0.0,
+            quantidade: _resumoAtual?.quantidadePendentes ?? 0,
+            icone: Icons.schedule,
+            cor: const Color(0xFFD99716),
+          ),
+          if (_abaSelecionada == 'servico') ...[
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: _ContagemCard(
+                    titulo: 'Atendimentos hoje',
+                    quantidade: _resumoAtual?.atendimentosHoje ?? 0,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _ContagemCard(
+                    titulo: 'Atendimentos no mês',
+                    quantidade: _resumoAtual?.atendimentosMes ?? 0,
+                  ),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );
@@ -558,6 +618,33 @@ class _CaixaPageState extends State<CaixaPage> {
             ],
           ),
         ),
+      );
+    }
+
+    if (_filtroFluxo == 'pendentes') {
+      if (_pendencias.isEmpty) {
+        return const Center(child: Text('Nenhuma pendência neste período.'));
+      }
+      return ListView.separated(
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 110),
+        itemCount: _pendencias.length,
+        separatorBuilder: (_, _) => const SizedBox(height: 10),
+        itemBuilder: (_, index) {
+          final item = _pendencias[index];
+          return Card(
+            child: ListTile(
+              leading: const Icon(Icons.schedule, color: Color(0xFFD99716)),
+              title: Text('${item['referencia']} • ${item['cliente_nome']}'),
+              subtitle: Text(
+                'Vencimento: ${item['vencimento'] ?? 'não informado'}',
+              ),
+              trailing: Text(
+                'R\$ ${(item['saldo'] as num).toStringAsFixed(2)}',
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+          );
+        },
       );
     }
 
@@ -690,6 +777,26 @@ class _ResumoCard extends StatelessWidget {
   }
 }
 
+class _ContagemCard extends StatelessWidget {
+  final String titulo;
+  final int quantidade;
+
+  const _ContagemCard({required this.titulo, required this.quantidade});
+
+  @override
+  Widget build(BuildContext context) => Card(
+    child: Padding(
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        children: [
+          Text('$quantidade', style: Theme.of(context).textTheme.titleLarge),
+          Text(titulo, textAlign: TextAlign.center),
+        ],
+      ),
+    ),
+  );
+}
+
 class _MovimentoCard extends StatelessWidget {
   final MovimentoFinanceiroRegistro movimento;
   final VoidCallback onTap;
@@ -760,7 +867,7 @@ class _MovimentoCard extends StatelessWidget {
                 children: [
                   Text(
                     '${movimento.entrada ? '+' : '-'} '
-                    'R\$ ${movimento.valor.toStringAsFixed(2)}',
+                    'R\$ ${movimento.valorRealizado.toStringAsFixed(2)}',
                     style: TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.bold,

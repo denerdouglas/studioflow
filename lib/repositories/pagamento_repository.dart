@@ -325,8 +325,8 @@ class PagamentoRepository {
       await txn.insert('movimentacoes_financeiras', {
         ...movimento,
         'id': '${movimentoId}_estorno',
-        'tipo': 'estorno',
-        'valor': -(movimento['valor'] as num).toDouble(),
+        'tipo': 'saida',
+        'valor': (movimento['valor'] as num).toDouble().abs(),
         'status': 'pago',
         'descricao': 'Estorno - ${movimento['descricao']}',
         'data': agora,

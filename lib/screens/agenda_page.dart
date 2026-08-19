@@ -355,24 +355,25 @@ class _AgendaPageState extends State<AgendaPage> {
   }
 
   Future<void> _concluirAgendamento(AgendamentoRegistro agendamento) async {
-    final valorRecebido = await showDialog<double>(
+    final pagamento = await showDialog<ConclusaoPagamentoAtendimento>(
       context: context,
       builder: (_) {
-        return ConcluirAgendamentoDialog(
-          valorInicial: (agendamento.valorFinal - agendamento.valorRecebido)
-              .clamp(0, double.infinity),
+        return ConcluirAtendimentoPagamentoDialog(
+          valorTotal: agendamento.valorFinal,
+          valorRecebidoAnterior: agendamento.valorRecebido,
+          formaInicial: agendamento.formaPagamento ?? 'pix',
         );
       },
     );
 
-    if (valorRecebido == null) {
+    if (pagamento == null) {
       return;
     }
 
     try {
       await _agendaRepository.concluirAgendamento(
         agendamentoId: agendamento.id,
-        valorRecebido: valorRecebido,
+        pagamento: pagamento,
       );
 
       setState(() {
@@ -391,7 +392,7 @@ class _AgendaPageState extends State<AgendaPage> {
           behavior: SnackBarBehavior.floating,
         ),
       );
-      await _mostrarConclusao(agendamento, valorRecebido);
+      await _mostrarConclusao(agendamento, pagamento.valorRecebido);
     } catch (erro) {
       if (!mounted) {
         return;
@@ -1596,6 +1597,223 @@ class _OpcaoAgendamento extends StatelessWidget {
       onTap: onTap,
     );
   }
+}
+
+class ConcluirAtendimentoPagamentoDialog extends StatefulWidget {
+  final double valorTotal;
+  final double valorRecebidoAnterior;
+  final String formaInicial;
+
+  const ConcluirAtendimentoPagamentoDialog({
+    super.key,
+    required this.valorTotal,
+    required this.valorRecebidoAnterior,
+    required this.formaInicial,
+  });
+
+  @override
+  State<ConcluirAtendimentoPagamentoDialog> createState() =>
+      _ConcluirAtendimentoPagamentoDialogState();
+}
+
+class _ConcluirAtendimentoPagamentoDialogState
+    extends State<ConcluirAtendimentoPagamentoDialog> {
+  late final TextEditingController valor;
+  String situacao = 'pago';
+  late String forma;
+  DateTime dataPagamento = DateTime.now();
+  DateTime? vencimento;
+
+  double get saldo => (widget.valorTotal - widget.valorRecebidoAnterior)
+      .clamp(0, double.infinity)
+      .toDouble();
+
+  @override
+  void initState() {
+    super.initState();
+    forma =
+        const {
+          'pix',
+          'dinheiro',
+          'cartao',
+          'outro',
+        }.contains(widget.formaInicial.toLowerCase())
+        ? widget.formaInicial.toLowerCase()
+        : 'pix';
+    valor = TextEditingController(text: saldo.toStringAsFixed(2));
+  }
+
+  @override
+  void dispose() {
+    valor.dispose();
+    super.dispose();
+  }
+
+  String _date(DateTime value) =>
+      '${value.day.toString().padLeft(2, '0')}/'
+      '${value.month.toString().padLeft(2, '0')}/${value.year} '
+      '${value.hour.toString().padLeft(2, '0')}:'
+      '${value.minute.toString().padLeft(2, '0')}';
+
+  Future<void> _pickPaymentDate() async {
+    final date = await showDatePicker(
+      context: context,
+      initialDate: dataPagamento,
+      firstDate: DateTime(2000),
+      lastDate: DateTime.now().add(const Duration(days: 730)),
+    );
+    if (date == null || !mounted) return;
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(dataPagamento),
+    );
+    if (time == null) return;
+    setState(
+      () => dataPagamento = DateTime(
+        date.year,
+        date.month,
+        date.day,
+        time.hour,
+        time.minute,
+      ),
+    );
+  }
+
+  Future<void> _pickDueDate() async {
+    final date = await showDatePicker(
+      context: context,
+      initialDate: vencimento ?? DateTime.now(),
+      firstDate: DateTime.now(),
+      lastDate: DateTime.now().add(const Duration(days: 730)),
+    );
+    if (date != null) setState(() => vencimento = date);
+  }
+
+  void _confirm() {
+    final received = situacao == 'pendente'
+        ? 0.0
+        : double.tryParse(valor.text.replaceAll(',', '.')) ?? -1;
+    if (received < 0 || received > saldo + 0.005) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Informe um valor recebido válido.')),
+      );
+      return;
+    }
+    if (situacao == 'pago' && (saldo - received).abs() > 0.005) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Pagamento pago deve quitar o saldo.')),
+      );
+      return;
+    }
+    if (situacao == 'parcial' && (received <= 0 || received >= saldo - 0.005)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Informe um valor parcial menor que o saldo.'),
+        ),
+      );
+      return;
+    }
+    if (situacao != 'pago' && vencimento == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Informe o vencimento da pendência.')),
+      );
+      return;
+    }
+    Navigator.pop(
+      context,
+      ConclusaoPagamentoAtendimento(
+        situacao: situacao,
+        valorRecebido: received,
+        formaPagamento: forma,
+        dataPagamento: dataPagamento,
+        vencimento: vencimento,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('Concluir atendimento'),
+    content: SingleChildScrollView(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Valor total: R\$ ${widget.valorTotal.toStringAsFixed(2)}'),
+          Text('Saldo atual: R\$ ${saldo.toStringAsFixed(2)}'),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<String>(
+            initialValue: situacao,
+            decoration: const InputDecoration(
+              labelText: 'Situação do pagamento',
+            ),
+            items: const [
+              DropdownMenuItem(value: 'pago', child: Text('Pago')),
+              DropdownMenuItem(value: 'parcial', child: Text('Parcial')),
+              DropdownMenuItem(value: 'pendente', child: Text('Pendente')),
+            ],
+            onChanged: (value) => setState(() {
+              situacao = value!;
+              valor.text = situacao == 'pendente'
+                  ? '0.00'
+                  : saldo.toStringAsFixed(2);
+            }),
+          ),
+          if (situacao != 'pendente') ...[
+            TextField(
+              controller: valor,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              decoration: const InputDecoration(
+                labelText: 'Valor recebido',
+                prefixText: 'R\$ ',
+              ),
+            ),
+            DropdownButtonFormField<String>(
+              initialValue: forma,
+              decoration: const InputDecoration(
+                labelText: 'Forma de pagamento',
+              ),
+              items: const [
+                DropdownMenuItem(value: 'pix', child: Text('Pix')),
+                DropdownMenuItem(value: 'dinheiro', child: Text('Dinheiro')),
+                DropdownMenuItem(value: 'cartao', child: Text('Cartão')),
+                DropdownMenuItem(value: 'outro', child: Text('Outra')),
+              ],
+              onChanged: (value) => setState(() => forma = value!),
+            ),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Data/hora do pagamento'),
+              subtitle: Text(_date(dataPagamento)),
+              onTap: _pickPaymentDate,
+            ),
+          ],
+          if (situacao != 'pago')
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Data de vencimento'),
+              subtitle: Text(
+                vencimento == null ? 'Selecionar' : _date(vencimento!),
+              ),
+              onTap: _pickDueDate,
+            ),
+          if (situacao != 'pago')
+            Text(
+              'Valor pendente: R\$ ${(saldo - (double.tryParse(valor.text.replaceAll(',', '.')) ?? 0)).clamp(0, double.infinity).toStringAsFixed(2)}',
+            ),
+        ],
+      ),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('Cancelar'),
+      ),
+      FilledButton(onPressed: _confirm, child: const Text('Concluir')),
+    ],
+  );
 }
 
 class ConcluirAgendamentoDialog extends StatefulWidget {

@@ -13,6 +13,12 @@ class PurchaseReceiptData {
   final String paymentMethod;
   final String? notes;
   final List<Map<String, Object?>> items;
+  final String? commandNumber;
+  final String? clientPhone;
+  final double discount;
+  final double? amountPaid;
+  final String? status;
+  final DateTime? dueDate;
 
   const PurchaseReceiptData({
     required this.establishment,
@@ -22,6 +28,12 @@ class PurchaseReceiptData {
     required this.paymentMethod,
     this.notes,
     required this.items,
+    this.commandNumber,
+    this.clientPhone,
+    this.discount = 0,
+    this.amountPaid,
+    this.status,
+    this.dueDate,
   });
 
   double get total => items.fold(
@@ -31,6 +43,10 @@ class PurchaseReceiptData {
         (item['quantidade'] as num).toDouble() *
             (item['valor_unitario'] as num).toDouble(),
   );
+
+  double get pending => (total - discount - (amountPaid ?? total))
+      .clamp(0, double.infinity)
+      .toDouble();
 }
 
 class PurchaseReceiptService {
@@ -43,8 +59,17 @@ class PurchaseReceiptService {
               '— ${AppFormatters.moeda(unit * quantity)}';
         })
         .join('\n');
-    return 'Olá, ${data.client}! 😊\n\nResumo da sua compra:\n\n$lines\n\n'
-        'Total: ${AppFormatters.moeda(data.total)}\n\n'
+    return 'StudioFlow / ${data.establishment}\n'
+        '${data.commandNumber == null ? '' : 'Comanda #${data.commandNumber}\n'}'
+        'Cliente: ${data.client}\n\nItens:\n$lines\n\n'
+        'Subtotal: ${AppFormatters.moeda(data.total)}\n'
+        '${data.discount <= 0 ? '' : 'Desconto: ${AppFormatters.moeda(data.discount)}\n'}'
+        'Total: ${AppFormatters.moeda(data.total - data.discount)}\n'
+        'Pago: ${AppFormatters.moeda(data.amountPaid ?? data.total - data.discount)}\n'
+        'Pendente: ${AppFormatters.moeda(data.pending)}\n'
+        '${data.status == null ? '' : 'Status: ${data.status}\n'}'
+        '${data.paymentMethod.trim().isEmpty ? '' : 'Forma de pagamento: ${data.paymentMethod}\n'}'
+        '${data.dueDate == null ? '' : 'Vencimento: ${AppFormatters.data(data.dueDate!)}\n'}'
         'Data da compra: ${AppFormatters.data(data.purchaseDate)}'
         '${data.paymentDate == null ? '' : '\nData de pagamento: ${AppFormatters.data(data.paymentDate!)}'}'
         '\n\nObrigado pela preferência!';

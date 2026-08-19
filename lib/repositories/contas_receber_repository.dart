@@ -4,6 +4,7 @@ import '../core/utils/id_generator.dart';
 import '../database/database_service.dart';
 import '../models/domain/acesso.dart';
 import '../services/session_controller.dart';
+import 'recebimento_servico_writer.dart';
 
 class ContasReceberRepository {
   final Future<Database> Function() _databaseProvider;
@@ -58,9 +59,10 @@ class ContasReceberRepository {
       where.add('r.vencimento <= ?');
       args.add(ate.toIso8601String());
     }
-    return db.rawQuery(
+    final loja = await db.rawQuery(
       '''SELECT r.*, c.nome cliente_nome, c.whatsapp cliente_telefone,
          co.numero comanda_numero,
+         'loja' origem_conta,
          (r.valor_total-r.valor_recebido) saldo,
          (SELECT MAX(p.registrado_em) FROM contas_receber_pagamentos p
            WHERE p.conta_id=r.id AND p.estornado=0) data_pagamento
@@ -69,6 +71,38 @@ class ContasReceberRepository {
          WHERE ${where.join(' AND ')} ORDER BY r.vencimento, c.nome''',
       args,
     );
+    final servicoWhere = <String>[
+      'cb.comercio_id = ?',
+      "cb.status IN ('pendente','parcial','confirmado_manual')",
+    ];
+    final servicoArgs = <Object?>[user.comercioId];
+    if (status != null) {
+      servicoWhere.add('cb.status = ?');
+      servicoArgs.add(status);
+    }
+    if (clienteId != null) {
+      servicoWhere.add('cb.cliente_id = ?');
+      servicoArgs.add(clienteId);
+    }
+    if (de != null) {
+      servicoWhere.add('cb.vencimento >= ?');
+      servicoArgs.add(de.toIso8601String());
+    }
+    if (ate != null) {
+      servicoWhere.add('cb.vencimento <= ?');
+      servicoArgs.add(ate.toIso8601String());
+    }
+    final servicos = await db.rawQuery('''SELECT cb.*, cb.valor valor_total,
+      c.nome cliente_nome, c.whatsapp cliente_telefone,
+      NULL comanda_numero, 'servico' origem_conta,
+      (cb.valor-cb.valor_recebido) saldo,
+      (SELECT MAX(p.registrado_em) FROM cobranca_pagamentos p
+        WHERE p.cobranca_id=cb.id AND p.estornado=0) data_pagamento
+      FROM cobrancas cb JOIN clientes c ON c.id=cb.cliente_id
+      WHERE ${servicoWhere.join(' AND ')}''', servicoArgs);
+    final result = <Map<String, Object?>>[...loja, ...servicos];
+    result.sort((a, b) => '${a['vencimento']}'.compareTo('${b['vencimento']}'));
+    return result;
   }
 
   Future<void> registrarPagamento(
@@ -91,7 +125,55 @@ class ContasReceberRepository {
         limit: 1,
       );
       if (rows.isEmpty) {
-        throw StateError('Conta não encontrada ou já paga.');
+        final serviceRows = await tx.query(
+          'cobrancas',
+          where: "id=? AND comercio_id=? AND status IN ('pendente','parcial')",
+          whereArgs: [contaId, user.comercioId],
+          limit: 1,
+        );
+        if (serviceRows.isEmpty) {
+          throw StateError('Conta não encontrada ou já paga.');
+        }
+        final service = serviceRows.single;
+        final received = (service['valor_recebido'] as num? ?? 0).toDouble();
+        final total = (service['valor'] as num).toDouble();
+        if (received + valor > total + 0.001) {
+          throw StateError('Pagamento maior que o saldo.');
+        }
+        final paymentDate = dataPagamento ?? DateTime.now();
+        final paymentId = IdGenerator.temporal();
+        await RecebimentoServicoWriter.registrar(
+          tx,
+          comercioId: user.comercioId,
+          agendamentoId: service['agendamento_id'] as String,
+          valor: valor,
+          formaPagamento: forma.trim(),
+          referencia: paymentId,
+          entidadeOrigem: 'conta_receber_servico',
+          usuarioId: user.id,
+          data: paymentDate,
+        );
+        await tx.insert('cobranca_pagamentos', {
+          'id': paymentId,
+          'cobranca_id': contaId,
+          'comercio_id': user.comercioId,
+          'valor': valor,
+          'forma': forma.trim(),
+          'registrado_em': paymentDate.toUtc().toIso8601String(),
+        });
+        final next = received + valor;
+        await tx.update(
+          'cobrancas',
+          {
+            'valor_recebido': next,
+            'status': next >= total - 0.001 ? 'confirmado_manual' : 'parcial',
+            if (next >= total - 0.001)
+              'confirmado_em': paymentDate.toUtc().toIso8601String(),
+          },
+          where: 'id=? AND comercio_id=?',
+          whereArgs: [contaId, user.comercioId],
+        );
+        return;
       }
       final account = rows.single;
       final received = (account['valor_recebido'] as num).toDouble();
@@ -126,7 +208,7 @@ class ContasReceberRepository {
       );
       await tx.insert('movimentacoes_financeiras', {
         'id': '${paymentId}_finance',
-        'tipo': 'receita',
+        'tipo': 'entrada',
         'descricao': 'Recebimento de comanda',
         'valor': valor,
         'forma_pagamento': forma.trim(),
@@ -223,9 +305,9 @@ class ContasReceberRepository {
       );
       await tx.insert('movimentacoes_financeiras', {
         'id': '${pagamentoId}_estorno',
-        'tipo': 'estorno',
+        'tipo': 'saida',
         'descricao': 'Estorno de conta a receber: ${motivo.trim()}',
-        'valor': -(payment['valor'] as num).toDouble(),
+        'valor': (payment['valor'] as num).toDouble().abs(),
         'forma_pagamento': payment['forma'],
         'status': 'pago',
         'data': now,

@@ -11,6 +11,22 @@ import 'agenda_completa_repository.dart';
 import 'pacotes_repository.dart';
 import 'recebimento_servico_writer.dart';
 
+class ConclusaoPagamentoAtendimento {
+  final String situacao;
+  final double valorRecebido;
+  final String formaPagamento;
+  final DateTime dataPagamento;
+  final DateTime? vencimento;
+
+  const ConclusaoPagamentoAtendimento({
+    required this.situacao,
+    required this.valorRecebido,
+    required this.formaPagamento,
+    required this.dataPagamento,
+    this.vencimento,
+  });
+}
+
 class ConflitoAgendaException implements Exception {
   final String mensagem;
   final List<DateTime> sugestoes;
@@ -187,9 +203,13 @@ class AgendamentoRegistro {
 
 class AgendaRepository {
   final DatabaseService _databaseService;
+  final Future<Database> Function()? _databaseProvider;
 
-  AgendaRepository({DatabaseService? databaseService})
+  AgendaRepository({DatabaseService? databaseService, this._databaseProvider})
     : _databaseService = databaseService ?? DatabaseService.instance;
+
+  Future<Database> get _database =>
+      _databaseProvider?.call() ?? _databaseService.database;
 
   String get _comercioId {
     final usuario = SessionController.instance.usuario;
@@ -946,9 +966,10 @@ class AgendaRepository {
 
   Future<void> concluirAgendamento({
     required String agendamentoId,
-    required double valorRecebido,
+    double? valorRecebido,
+    ConclusaoPagamentoAtendimento? pagamento,
   }) async {
-    final Database db = await _databaseService.database;
+    final Database db = await _database;
 
     final pacote = await db.query(
       'agendamentos',
@@ -971,6 +992,31 @@ class AgendaRepository {
       );
       if (rows.isEmpty) throw StateError('Agendamento não encontrado.');
       final agenda = rows.single;
+      final totalAtendimento =
+          ((agenda['valor_servico'] as num?)?.toDouble() ?? 0) -
+          ((agenda['desconto'] as num?)?.toDouble() ?? 0);
+      final recebidoAnterior =
+          (agenda['valor_recebido'] as num?)?.toDouble() ?? 0;
+      final conclusao =
+          pagamento ??
+          ConclusaoPagamentoAtendimento(
+            situacao:
+                (valorRecebido ?? 0) >= totalAtendimento - recebidoAnterior
+                ? 'pago'
+                : (valorRecebido ?? 0) > 0
+                ? 'parcial'
+                : 'pendente',
+            valorRecebido: valorRecebido ?? 0,
+            formaPagamento:
+                agenda['forma_pagamento'] as String? ?? 'Não informado',
+            dataPagamento: DateTime.now(),
+          );
+      final recebidoAgora = conclusao.valorRecebido
+          .clamp(
+            0,
+            (totalAtendimento - recebidoAnterior).clamp(0, double.infinity),
+          )
+          .toDouble();
 
       final estoqueConsumido =
           (agenda['estoque_consumido'] as num?)?.toInt() == 1;
@@ -1067,19 +1113,53 @@ class AgendaRepository {
           'compareceu': 1,
           'estoque_consumido': 1,
           'consumo_realizado_json': consumoRealizadoJson,
+          'forma_pagamento': conclusao.formaPagamento,
+          'pagamento_status':
+              recebidoAnterior + recebidoAgora >= totalAtendimento - 0.005
+              ? 'pago'
+              : recebidoAnterior + recebidoAgora > 0
+              ? 'parcial'
+              : 'pendente',
         },
         where: 'id = ? AND comercio_id = ? AND excluido = 0',
         whereArgs: [agendamentoId, _comercioId],
       );
-      await RecebimentoServicoWriter.registrar(
-        txn,
-        comercioId: _comercioId,
-        agendamentoId: agendamentoId,
-        valor: valorRecebido,
-        formaPagamento: agenda['forma_pagamento'] as String? ?? 'Não informado',
-        referencia: '${agendamentoId}_conclusao',
-        entidadeOrigem: 'pagamento_atendimento',
-      );
+      if (recebidoAgora > 0) {
+        await RecebimentoServicoWriter.registrar(
+          txn,
+          comercioId: _comercioId,
+          agendamentoId: agendamentoId,
+          valor: recebidoAgora,
+          formaPagamento: conclusao.formaPagamento,
+          referencia: '${agendamentoId}_conclusao',
+          entidadeOrigem: 'pagamento_atendimento',
+          data: conclusao.dataPagamento,
+        );
+      }
+      final saldo = (totalAtendimento - recebidoAnterior - recebidoAgora)
+          .clamp(0, double.infinity)
+          .toDouble();
+      final cobrancaId = 'servico_pendente_$agendamentoId';
+      if (saldo > 0.005) {
+        final now = DateTime.now().toUtc().toIso8601String();
+        await txn.insert('cobrancas', {
+          'id': cobrancaId,
+          'comercio_id': _comercioId,
+          'agendamento_id': agendamentoId,
+          'cliente_id': agenda['cliente_id'],
+          'valor': saldo,
+          'valor_recebido': 0.0,
+          'descricao': 'Atendimento ${agenda['servico_id']}',
+          'forma': conclusao.formaPagamento,
+          'status': recebidoAnterior + recebidoAgora > 0
+              ? 'parcial'
+              : 'pendente',
+          'vencimento': (conclusao.vencimento ?? DateTime.now())
+              .toUtc()
+              .toIso8601String(),
+          'criado_em': now,
+        }, conflictAlgorithm: ConflictAlgorithm.replace);
+      }
     });
   }
 

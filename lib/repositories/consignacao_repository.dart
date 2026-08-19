@@ -425,7 +425,7 @@ class ConsignacaoRepository {
       });
       await tx.insert('movimentacoes_financeiras', {
         'id': '${saleId}_p0',
-        'tipo': 'receita',
+        'tipo': 'entrada',
         'descricao': 'Venda PDV',
         'valor': salePrice,
         'forma_pagamento': formaPagamento.trim().toLowerCase(),
@@ -555,7 +555,7 @@ class ConsignacaoRepository {
       }
       await tx.insert('movimentacoes_financeiras', {
         'id': '${saleId}_p0',
-        'tipo': 'receita',
+        'tipo': 'entrada',
         'descricao': 'Venda PDV • ${pieces.length} peça(s) consignada(s)',
         'valor': total,
         'forma_pagamento': formaPagamento.trim().toLowerCase(),
@@ -756,9 +756,9 @@ class ConsignacaoRepository {
       );
       await tx.insert('movimentacoes_financeiras', {
         'id': '${saleId}_estorno',
-        'tipo': 'estorno',
+        'tipo': 'saida',
         'descricao': 'Estorno de venda PDV',
-        'valor': -value,
+        'valor': value.abs(),
         'forma_pagamento': event['forma_pagamento'],
         'status': 'pago',
         'data': now,

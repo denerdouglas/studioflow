@@ -653,7 +653,8 @@ class LojaRepository {
       for (final pagamento in pagamentos.entries) {
         await txn.insert('movimentacoes_financeiras', {
           'id': '${vendaId}_p${p++}',
-          'tipo': 'receita',
+          'comercio_id': u.comercioId,
+          'tipo': 'entrada',
           'descricao': 'Venda PDV',
           'valor': pagamento.value,
           'forma_pagamento': pagamento.key,
@@ -812,9 +813,10 @@ class LojaRepository {
         );
         await txn.insert('movimentacoes_financeiras', {
           'id': '${vendaId}_estorno_$index',
-          'tipo': 'estorno',
+          'comercio_id': u.comercioId,
+          'tipo': 'saida',
           'descricao': 'Estorno da venda $vendaId',
-          'valor': -((finance['valor'] as num?)?.toDouble() ?? 0),
+          'valor': ((finance['valor'] as num?)?.toDouble() ?? 0).abs(),
           'forma_pagamento': finance['forma_pagamento'],
           'status': 'pago',
           'data': now,

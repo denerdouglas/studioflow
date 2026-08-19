@@ -199,7 +199,7 @@ void main() {
       final movs = await db.query('movimentacoes_financeiras');
 
       // As movimentacoes devem ter centro de resultado "consignado"
-      final entradas = movs.where((m) => m['tipo'] == 'receita').toList();
+      final entradas = movs.where((m) => m['tipo'] == 'entrada').toList();
       expect(entradas.length, 1); // 1 venda (agrupada)
 
       expect(entradas.first['centro_resultado'], 'consignado');

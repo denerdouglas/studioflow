@@ -377,6 +377,15 @@ class _VendaCentralDetalhePageState extends State<VendaCentralDetalhePage> {
   );
   bool initialActionHandled = false;
 
+  Future<void> sendCommand() async {
+    final receipt = await commands.comprovante(widget.vendaId);
+    final message = PurchaseReceiptService.whatsappMessage(receipt);
+    await const ExternalActionService().abrirWhatsApp(
+      telefone: receipt.clientPhone,
+      mensagem: message,
+    );
+  }
+
   Future<void> payment() async {
     final value = TextEditingController();
     final method = TextEditingController(text: 'pix');
@@ -724,6 +733,11 @@ class _VendaCentralDetalhePageState extends State<VendaCentralDetalhePage> {
                               cancel(open: data['status_central'] == 'aberta'),
                     icon: const Icon(Icons.cancel_outlined),
                     label: const Text('Cancelar / excluir'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: sendCommand,
+                    icon: const Icon(Icons.send_outlined),
+                    label: const Text('Enviar comanda'),
                   ),
                 ],
               ),
@@ -1591,14 +1605,19 @@ class _ContasReceberPageState extends State<ContasReceberPage> {
                 (account) => ListTile(
                   title: Text(account['cliente_nome'] as String),
                   subtitle: Text(
-                    'Comanda ${account['comanda_numero'] ?? account['comanda_id']} • ${account['status']}\n'
+                    '${account['origem_conta'] == 'servico' ? 'Serviço' : 'Comanda'} '
+                    '${account['comanda_numero'] ?? account['comanda_id'] ?? account['agendamento_id']} • ${account['status']}\n'
                     'Total R\$ ${(account['valor_total'] as num).toStringAsFixed(2)} • '
                     'pago R\$ ${(account['valor_recebido'] as num).toStringAsFixed(2)} • '
                     'restante R\$ ${(account['saldo'] as num).toStringAsFixed(2)} • '
                     'vence ${account['vencimento']}',
                   ),
                   isThreeLine: true,
-                  trailing: account['status'] == 'paga'
+                  trailing:
+                      const {
+                        'paga',
+                        'confirmado_manual',
+                      }.contains(account['status'])
                       ? const Icon(Icons.check_circle)
                       : FilledButton(
                           onPressed: () => receive(account),

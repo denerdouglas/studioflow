@@ -44,17 +44,13 @@ class MovimentoFinanceiroRegistro {
     this.entidadeOrigemId,
   });
 
-  bool get entrada {
-    return tipo == 'entrada';
-  }
+  bool get entrada => const {'entrada', 'receita'}.contains(tipo);
 
-  bool get saida {
-    return tipo == 'saida';
-  }
+  bool get saida => const {'saida', 'despesa', 'estorno'}.contains(tipo);
 
-  bool get pago {
-    return status == 'pago';
-  }
+  bool get pago => status == 'pago';
+
+  double get valorRealizado => valor.abs();
 
   Map<String, Object?> paraMapa() {
     return {
@@ -148,6 +144,10 @@ class ResumoCaixa {
   final double saldo;
   final int quantidadeEntradas;
   final int quantidadeSaidas;
+  final double totalPendentes;
+  final int quantidadePendentes;
+  final int atendimentosHoje;
+  final int atendimentosMes;
 
   const ResumoCaixa({
     required this.totalEntradas,
@@ -155,6 +155,10 @@ class ResumoCaixa {
     required this.saldo,
     required this.quantidadeEntradas,
     required this.quantidadeSaidas,
+    this.totalPendentes = 0,
+    this.quantidadePendentes = 0,
+    this.atendimentosHoje = 0,
+    this.atendimentosMes = 0,
   });
 
   factory ResumoCaixa.vazio() {
@@ -170,9 +174,13 @@ class ResumoCaixa {
 
 class CaixaRepository {
   final DatabaseService _databaseService;
+  final Future<Database> Function()? _databaseProvider;
 
-  CaixaRepository({DatabaseService? databaseService})
+  CaixaRepository({DatabaseService? databaseService, this._databaseProvider})
     : _databaseService = databaseService ?? DatabaseService.instance;
+
+  Future<Database> get _database =>
+      _databaseProvider?.call() ?? _databaseService.database;
 
   String get _comercioId => SessionController.instance.usuario!.comercioId;
 
@@ -181,7 +189,7 @@ class CaixaRepository {
     required DateTime fim,
     String? centroResultado,
   }) async {
-    final Database db = await _databaseService.database;
+    final Database db = await _database;
 
     String whereStr = 'data >= ? AND data < ? AND comercio_id = ?';
     List<Object?> whereArgs = [
@@ -238,7 +246,7 @@ class CaixaRepository {
   }
 
   Future<void> inserir(MovimentoFinanceiroRegistro movimento) async {
-    final db = await _databaseService.database;
+    final db = await _database;
 
     await db.insert('movimentacoes_financeiras', {
       ...movimento.paraMapa(),
@@ -247,7 +255,7 @@ class CaixaRepository {
   }
 
   Future<void> atualizar(MovimentoFinanceiroRegistro movimento) async {
-    final db = await _databaseService.database;
+    final db = await _database;
 
     await db.update(
       'movimentacoes_financeiras',
@@ -258,7 +266,7 @@ class CaixaRepository {
   }
 
   Future<void> excluir(String id) async {
-    final db = await _databaseService.database;
+    final db = await _database;
 
     await db.delete(
       'movimentacoes_financeiras',
@@ -268,7 +276,7 @@ class CaixaRepository {
   }
 
   Future<MovimentoFinanceiroRegistro?> buscarPorId(String id) async {
-    final db = await _databaseService.database;
+    final db = await _database;
 
     final resultado = await db.query(
       'movimentacoes_financeiras',
@@ -301,15 +309,25 @@ class CaixaRepository {
     int qtdEntradas = 0;
     int qtdSaidas = 0;
 
-    for (final item in lista) {
+    for (final item in lista.where((item) => item.pago)) {
       if (item.entrada) {
-        entradas += item.valor;
+        entradas += item.valorRealizado;
         qtdEntradas++;
-      } else {
-        saidas += item.valor;
+      } else if (item.saida) {
+        saidas += item.valorRealizado;
         qtdSaidas++;
       }
     }
+
+    final pendencias = await _resumoPendencias(
+      inicio: inicio,
+      fim: fim,
+      centroResultado: centroResultado,
+    );
+    final atendimentos = await _quantidadesAtendimentos(
+      referencia: inicio,
+      centroResultado: centroResultado,
+    );
 
     return ResumoCaixa(
       totalEntradas: entradas,
@@ -317,7 +335,109 @@ class CaixaRepository {
       saldo: entradas - saidas,
       quantidadeEntradas: qtdEntradas,
       quantidadeSaidas: qtdSaidas,
+      totalPendentes: pendencias.$1,
+      quantidadePendentes: pendencias.$2,
+      atendimentosHoje: atendimentos.$1,
+      atendimentosMes: atendimentos.$2,
     );
+  }
+
+  Future<List<Map<String, Object?>>> listarPendencias({
+    required DateTime inicio,
+    required DateTime fim,
+    String? centroResultado,
+  }) async {
+    final db = await _database;
+    final result = <Map<String, Object?>>[];
+    if (centroResultado == null || centroResultado == 'loja') {
+      result.addAll(
+        await db.rawQuery(
+          '''SELECT r.id, 'loja' centro_resultado,
+          COALESCE(co.numero,r.id) referencia,
+          COALESCE(c.nome,'Cliente') cliente_nome,
+          MAX(r.valor_total-r.valor_recebido,0) saldo,
+          r.vencimento, r.status
+          FROM contas_receber_loja r
+          LEFT JOIN comandas_loja co ON co.id=r.comanda_id
+          LEFT JOIN clientes c ON c.id=r.cliente_id
+          WHERE r.comercio_id=? AND r.criado_em<?
+            AND r.status NOT IN ('paga','estornada')
+            AND r.valor_total-r.valor_recebido>0.001''',
+          [_comercioId, fim.toIso8601String()],
+        ),
+      );
+    }
+    if (centroResultado == null || centroResultado == 'salao') {
+      result.addAll(
+        await db.rawQuery(
+          '''SELECT a.id, 'salao' centro_resultado,
+          COALESCE(s.nome,'Atendimento') referencia,
+          COALESCE(c.nome,'Cliente') cliente_nome,
+          MAX(a.valor_servico-a.desconto-a.valor_recebido,0) saldo,
+          cb.vencimento, a.pagamento_status status
+          FROM agendamentos a
+          LEFT JOIN servicos s ON s.id=a.servico_id
+          LEFT JOIN clientes c ON c.id=a.cliente_id
+          LEFT JOIN cobrancas cb ON cb.agendamento_id=a.id
+            AND cb.status IN ('pendente','parcial')
+          WHERE a.comercio_id=? AND a.inicio>=? AND a.inicio<?
+            AND a.status='concluido' AND a.excluido=0
+            AND COALESCE(a.forma_pagamento,'')!='Pacote'
+            AND a.valor_servico-a.desconto-a.valor_recebido>0.001
+          GROUP BY a.id''',
+          [_comercioId, inicio.toIso8601String(), fim.toIso8601String()],
+        ),
+      );
+    }
+    return result;
+  }
+
+  Future<(double, int)> _resumoPendencias({
+    required DateTime inicio,
+    required DateTime fim,
+    String? centroResultado,
+  }) async {
+    final rows = await listarPendencias(
+      inicio: inicio,
+      fim: fim,
+      centroResultado: centroResultado,
+    );
+    return (
+      rows.fold<double>(
+        0,
+        (total, row) => total + (row['saldo'] as num? ?? 0).toDouble(),
+      ),
+      rows.length,
+    );
+  }
+
+  Future<(int, int)> _quantidadesAtendimentos({
+    required DateTime referencia,
+    String? centroResultado,
+  }) async {
+    if (centroResultado != null && centroResultado != 'salao') return (0, 0);
+    final db = await _database;
+    final dayStart = DateTime(
+      referencia.year,
+      referencia.month,
+      referencia.day,
+    );
+    final dayEnd = dayStart.add(const Duration(days: 1));
+    final monthStart = DateTime(referencia.year, referencia.month, 1);
+    final monthEnd = referencia.month == 12
+        ? DateTime(referencia.year + 1, 1, 1)
+        : DateTime(referencia.year, referencia.month + 1, 1);
+    Future<int> count(DateTime start, DateTime end) async {
+      final rows = await db.rawQuery(
+        '''SELECT COUNT(*) quantidade FROM agendamentos
+        WHERE comercio_id=? AND inicio>=? AND inicio<?
+          AND status='concluido' AND excluido=0''',
+        [_comercioId, start.toIso8601String(), end.toIso8601String()],
+      );
+      return (rows.single['quantidade'] as num? ?? 0).toInt();
+    }
+
+    return (await count(dayStart, dayEnd), await count(monthStart, monthEnd));
   }
 
   Future<void> registrarEntradaServico({
@@ -386,7 +506,7 @@ class CaixaRepository {
   }
 
   Future<bool> existeEntradaDoAgendamento(String agendamentoId) async {
-    final Database db = await _databaseService.database;
+    final Database db = await _database;
 
     final resultado = await db.query(
       'movimentacoes_financeiras',
@@ -470,7 +590,7 @@ class CaixaRepository {
     required DateTime inicio,
     required DateTime fim,
   }) async {
-    final Database db = await _databaseService.database;
+    final Database db = await _database;
 
     final resultado = await db.rawQuery(
       '''
@@ -522,7 +642,7 @@ class CaixaRepository {
     required DateTime inicio,
     required DateTime fim,
   }) async {
-    final Database db = await _databaseService.database;
+    final Database db = await _database;
 
     final registros = await db.query(
       'movimentacoes_financeiras',

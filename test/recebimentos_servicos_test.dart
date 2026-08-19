@@ -165,13 +165,14 @@ void main() {
       final movimentos = await _movimentos(db, 'agenda_1', todos: true);
       expect(movimentos, hasLength(2));
       expect(
-        movimentos.where((m) => m['tipo'] == 'estorno').single['valor'],
-        -100,
+        movimentos.where((m) => m['tipo'] == 'saida').single['valor'],
+        100,
       );
       expect(await _valorRecebido(db, 'agenda_1'), 0);
       final resumo = await _resumo(db, usuario.comercioId, data);
       expect(resumo.faturamento, 100);
-      expect(resumo.recebido, 0);
+      expect(resumo.recebido, 100);
+      expect(resumo.saldoRealizado, 0);
       expect(resumo.aReceber, 100);
     });
   });
