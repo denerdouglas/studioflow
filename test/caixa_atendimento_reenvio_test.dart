@@ -21,7 +21,7 @@ void main() {
   late ComandaLojaRepository comandas;
   late ContasReceberRepository contas;
   late LojaRepository loja;
-  final day = DateTime(2026, 8, 19, 10);
+  final day = DateTime.now();
 
   setUp(() async {
     db = await databaseFactoryFfi.openDatabase(
@@ -98,7 +98,7 @@ void main() {
       where: 'comanda_id=?',
       whereArgs: [id],
     )).single;
-    final paidAt = DateTime(2026, 8, 22, 14, 30);
+    final paidAt = DateTime.now().add(const Duration(days: 3, hours: 4, minutes: 30));
     await contas.registrarPagamento(
       account['id'] as String,
       20,
@@ -214,7 +214,7 @@ void main() {
   });
 
   test('21 vencimento pendente é persistido', () async {
-    final due = DateTime(2026, 8, 25);
+    final due = DateTime.now().add(const Duration(days: 6));
     await _conclude(agenda, 'pendente', 0, day, due: due);
     expect(
       DateTime.parse(
@@ -231,7 +231,7 @@ void main() {
       charge['id'] as String,
       100,
       'pix',
-      dataPagamento: DateTime(2026, 8, 22, 14, 30),
+      dataPagamento: DateTime.now().add(const Duration(days: 3, hours: 4, minutes: 30)),
     );
     expect((await db.query('cobrancas')).single['status'], 'confirmado_manual');
     expect((await _appointment(db))['pagamento_status'], 'pago');
@@ -346,15 +346,15 @@ Future<String> _command(
 }) async {
   final id = await repo.criar(
     clienteId: 'client-1',
-    vencimento: DateTime(2026, 8, 25),
+    vencimento: DateTime.now().add(const Duration(days: 6)),
   );
   await repo.adicionarProduto(id, 'product-1');
   await repo.finalizar(
     id,
     pagamentoInicial: paid,
     formaPagamento: 'pix',
-    vencimento: DateTime(2026, 8, 25),
-    dataPagamento: DateTime(2026, 8, 19, 10),
+    vencimento: DateTime.now().add(const Duration(days: 6)),
+    dataPagamento: DateTime.now(),
   );
   return id;
 }
@@ -373,7 +373,7 @@ Future<void> _conclude(
     valorRecebido: received,
     formaPagamento: method,
     dataPagamento: paidAt,
-    vencimento: due ?? DateTime(2026, 8, 25),
+    vencimento: due ?? DateTime.now().add(const Duration(days: 6)),
   ),
 );
 
@@ -394,8 +394,8 @@ Future<void> _movement(
   'valor': value,
   'forma_pagamento': 'pix',
   'status': 'pago',
-  'data': DateTime(2026, 8, 19, 10).toIso8601String(),
-  'data_criacao': DateTime(2026, 8, 19, 10).toIso8601String(),
+  'data': DateTime.now().toIso8601String(),
+  'data_criacao': DateTime.now().toIso8601String(),
   'categoria': 'Teste',
   'centro_resultado': center,
 });
@@ -415,7 +415,7 @@ String _message() => PurchaseReceiptService.whatsappMessage(
     discount: 5,
     amountPaid: 10,
     status: 'Parcial',
-    dueDate: DateTime(2026, 8, 25),
+    dueDate: DateTime.now().add(const Duration(days: 6)),
     items: const [
       {
         'nome': 'Anel',
