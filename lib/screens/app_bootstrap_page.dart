@@ -7,6 +7,8 @@ import '../models/domain/acesso.dart';
 import '../services/auto_sync_controller.dart';
 import '../services/session_controller.dart';
 import '../database/database_service.dart';
+import '../services/notification_service.dart';
+import '../services/update_service.dart';
 import 'acesso_page.dart';
 import 'dashboard_premium_page.dart';
 
@@ -52,6 +54,19 @@ class _AppBootstrapPageState extends State<AppBootstrapPage> {
       final erroSessao = SessionController.instance.erroInicializacao;
       if (erroSessao != null) {
         throw erroSessao;
+      }
+
+      // Request notifications and check updates
+      try {
+        await NotificationService().init();
+        await NotificationService().requestPermissions();
+        if (mounted) {
+          unawaited(
+            UpdateService().checkForUpdates(context, fromBackground: true),
+          );
+        }
+      } catch (e) {
+        debugPrint('Aviso: falha na inicializacao de notificacoes/updates: $e');
       }
 
       if (mounted) {

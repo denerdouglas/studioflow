@@ -1,3 +1,4 @@
+import '../services/notification_service.dart';
 import 'package:sqflite/sqflite.dart';
 
 import '../database/database_service.dart';
@@ -203,6 +204,38 @@ class ResumoCategoriaFinanceira {
 }
 
 class FinanceiroRepository {
+  Future<void> _agendarNotificacoesFinanceiras(MovimentacaoFinanceiraRegistro mov) async {
+    final now = DateTime.now();
+    final idNotificacao = NotificationService().generateId(mov.id);
+
+    if (mov.status != 'pendente') {
+      await NotificationService().cancelNotification(idNotificacao);
+      return;
+    }
+
+    final dataVencimento = mov.data;
+    final scheduledDate = DateTime(dataVencimento.year, dataVencimento.month, dataVencimento.day, 8, 0);
+
+    if (scheduledDate.isAfter(now)) {
+      final isReceita = mov.tipo == 'entrada';
+      final title = isReceita ? 'Conta a receber vencendo' : 'Pagamento pendente';
+      final valor = mov.valor.toStringAsFixed(2);
+      final body = 'R\$ $valor vence hoje.';
+
+      await NotificationService().scheduleNotification(
+        id: idNotificacao,
+        title: title,
+        body: body,
+        scheduledDate: scheduledDate,
+        channelId: 'studioflow_financeiro',
+        channelName: 'Financeiro',
+        channelDescription: 'Lembretes de vencimentos',
+      );
+    } else {
+      await NotificationService().cancelNotification(idNotificacao);
+    }
+  }
+
   final DatabaseService _databaseService;
 
   FinanceiroRepository({DatabaseService? databaseService})
@@ -303,6 +336,8 @@ class FinanceiroRepository {
       ...movimentacao.paraMapa(),
       'comercio_id': _comercioId,
     }, conflictAlgorithm: ConflictAlgorithm.abort);
+
+    await _agendarNotificacoesFinanceiras(movimentacao);
   }
 
   Future<void> atualizar(MovimentacaoFinanceiraRegistro movimentacao) async {
@@ -318,6 +353,8 @@ class FinanceiroRepository {
     if (quantidadeAlterada == 0) {
       throw StateError('Movimentação financeira não encontrada.');
     }
+
+    await _agendarNotificacoesFinanceiras(movimentacao);
   }
 
   Future<void> salvar(MovimentacaoFinanceiraRegistro movimentacao) async {
@@ -339,6 +376,8 @@ class FinanceiroRepository {
       where: 'id = ? AND comercio_id = ?',
       whereArgs: [id, _comercioId],
     );
+
+    await NotificationService().cancelNotification(NotificationService().generateId(id));
   }
 
   Future<double> totalEntradas() async {

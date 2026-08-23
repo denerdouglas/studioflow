@@ -1,3 +1,4 @@
+import '../services/notification_service.dart';
 import 'dart:convert';
 import 'package:sqflite/sqflite.dart';
 
@@ -5,6 +6,7 @@ import '../database/database_service.dart';
 import '../models/domain/acesso.dart';
 import '../services/session_controller.dart';
 import '../services/whatsapp_queue_service.dart';
+
 import '../models/domain/agendamento_grupo_registro.dart';
 import '../domain/services/agenda_conflict_checker.dart';
 import 'agenda_completa_repository.dart';
@@ -379,6 +381,7 @@ class AgendaRepository {
       }, conflictAlgorithm: ConflictAlgorithm.abort);
 
       await _enfileirarWhatsapp(txn, agendamento);
+      await _agendarNotificacoesLocais(agendamento);
     });
   }
 
@@ -468,6 +471,35 @@ class AgendaRepository {
         await _enfileirarWhatsapp(txn, item);
       }
     });
+  }
+
+  Future<void> _agendarNotificacoesLocais(
+    AgendamentoRegistro agendamento,
+  ) async {
+    final now = DateTime.now();
+    final duasHorasAntes = agendamento.inicio.subtract(
+      const Duration(hours: 2),
+    );
+    final idNotificacao = NotificationService().generateId(agendamento.id);
+
+    if (agendamento.status == 'cancelado' ||
+        agendamento.status == 'concluido' ||
+        agendamento.status == 'falta') {
+      await NotificationService().cancelNotification(idNotificacao);
+      return;
+    }
+
+    if (duasHorasAntes.isAfter(now)) {
+      await NotificationService().scheduleNotification(
+        id: idNotificacao,
+        title: 'Próximo atendimento',
+        body: ' às :',
+        scheduledDate: duasHorasAntes,
+        channelId: 'studioflow_agenda',
+        channelName: 'Agenda',
+        channelDescription: 'Lembretes de agendamentos',
+      );
+    }
   }
 
   Future<void> _enfileirarWhatsapp(

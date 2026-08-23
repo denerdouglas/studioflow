@@ -8,6 +8,9 @@ import '../services/acesso_online_service.dart';
 import '../services/backend_api_client.dart';
 import '../services/backend_sync_service.dart';
 import '../services/session_controller.dart';
+import '../services/notification_service.dart';
+import '../services/update_service.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 class ProducaoPage extends StatefulWidget {
   const ProducaoPage({super.key});
@@ -24,11 +27,37 @@ class _ProducaoPageState extends State<ProducaoPage> {
   bool _ocupado = false;
   String? _statusServidor;
 
+  PackageInfo? _packageInfo;
+  UpdateInfo? _updateInfo;
+  bool _verificandoUpdate = false;
+
   @override
   void initState() {
     super.initState();
     _estado = _repository.carregarEstado();
     _verificarServidor();
+    _carregarVersao();
+  }
+
+  Future<void> _carregarVersao() async {
+    final info = await PackageInfo.fromPlatform();
+    if (mounted) {
+      setState(() => _packageInfo = info);
+    }
+  }
+
+  Future<void> _verificarUpdateManual() async {
+    setState(() => _verificandoUpdate = true);
+    final info = await UpdateService().fetchRemoteUpdateInfo();
+    if (mounted) {
+      setState(() {
+        _updateInfo = info;
+        _verificandoUpdate = false;
+      });
+      if (info != null) {
+        UpdateService().checkForUpdates(context, fromBackground: false);
+      }
+    }
   }
 
   Future<void> _verificarServidor() async {
@@ -257,6 +286,40 @@ class _ProducaoPageState extends State<ProducaoPage> {
                   title: 'Marketplace StudioFlow',
                   detail: 'Disponível em uma atualização futura.',
                   ok: false,
+                ),
+                Card(
+                  child: ListTile(
+                    leading: const Icon(
+                      Icons.system_update,
+                      color: Colors.blue,
+                    ),
+                    title: const Text('Atualizações e Versão'),
+                    subtitle: Text(
+                      'Versão instalada: ${_packageInfo?.version ?? '...'}\n'
+                      'Build: ${_packageInfo?.buildNumber ?? '...'}\n'
+                      'Última disponível: ${_updateInfo?.latestBuild ?? '...'}\n'
+                      'Status: ${_updateInfo != null && int.tryParse(_packageInfo?.buildNumber ?? '0')! < _updateInfo!.latestBuild ? 'Atualização disponível' : 'Atualizado'}',
+                    ),
+                    trailing: _verificandoUpdate
+                        ? const CircularProgressIndicator()
+                        : IconButton(
+                            icon: const Icon(Icons.refresh),
+                            onPressed: _verificarUpdateManual,
+                          ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed: () {
+                    NotificationService().showNotification(
+                      id: 888,
+                      title: 'Teste de Notificação',
+                      body:
+                          'Se você está vendo isso, as notificações locais estão funcionando perfeitamente no StudioFlow!',
+                    );
+                  },
+                  icon: const Icon(Icons.notifications_active),
+                  label: const Text('Testar notificação local'),
                 ),
                 const SizedBox(height: 12),
                 if (_ocupado)
