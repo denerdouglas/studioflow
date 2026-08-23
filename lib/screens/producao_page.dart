@@ -109,12 +109,16 @@ class _ProducaoPageState extends State<ProducaoPage> {
   }
 
   Future<void> _sincronizar(String comercioId) async {
+    _mensagem('Sincronizando...');
     await _executar(() async {
       final resultado = await _syncService.sincronizar(comercioId);
-      _mensagem(
-        '${resultado.enviadas} enviados, ${resultado.recebidas} recebidos, '
-        '${resultado.conflitos} conflitos.',
-      );
+      if (resultado.pendentes > 0) {
+        _mensagem(
+          '${resultado.enviadas} de ${resultado.enviadas + resultado.pendentes} operações sincronizadas. ${resultado.pendentes} aguardando nova tentativa.',
+        );
+      } else {
+        _mensagem('Sincronização concluída.');
+      }
     });
   }
 
@@ -149,7 +153,7 @@ class _ProducaoPageState extends State<ProducaoPage> {
     try {
       await action();
     } on Object catch (error) {
-      _mensagem(error.toString());
+      _mensagem(error.toString().replaceFirst('Bad state: ', ''));
     } finally {
       if (mounted) {
         setState(() {
@@ -225,7 +229,9 @@ class _ProducaoPageState extends State<ProducaoPage> {
                   detail:
                       '${estado.operacoesPendentes} operação(ões) pendente(s). '
                       '${estado.backendConfigurado ? 'Envio online ativo.' : 'Envio online desativado.'}',
-                  ok: estado.operacoesPendentes == 0,
+                  ok:
+                      estado.operacoesPendentes == 0 &&
+                      estado.operacoesEmErro == 0,
                 ),
                 _StatusCard(
                   icon: Icons.cloud_outlined,

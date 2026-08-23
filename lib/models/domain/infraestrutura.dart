@@ -31,6 +31,8 @@ class EstadoInfraestrutura {
   final String? endpointPublico;
   final bool sincronizacaoAtiva;
   final int operacoesPendentes;
+  final int operacoesEmErro;
+  final int operacoesSincronizadas;
   final int ultimoCursor;
   final DateTime? ultimaSincronizacao;
   final String? ultimoErro;
@@ -41,6 +43,8 @@ class EstadoInfraestrutura {
     required this.endpointPublico,
     required this.sincronizacaoAtiva,
     required this.operacoesPendentes,
+    this.operacoesEmErro = 0,
+    this.operacoesSincronizadas = 0,
     this.ultimoCursor = 0,
     this.ultimaSincronizacao,
     this.ultimoErro,

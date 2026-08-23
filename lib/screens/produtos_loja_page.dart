@@ -374,7 +374,7 @@ class _ProdutoFormPageState extends State<ProdutoFormPage> {
       p?.categoria ??
           catalog?.category ??
           widget.draftInicial?.categoriaSugerida?.value ??
-          'CosmÃ©ticos',
+          'Cosméticos',
     );
 
     // Campos mantidos por compatibilidade (ocultos ou com default)
@@ -481,8 +481,8 @@ class _ProdutoFormPageState extends State<ProdutoFormPage> {
             _c('descricao').text = product.description ?? '';
           }
           if (_c('categoria').text.trim().isEmpty ||
-              _c('categoria').text == 'CosmÃ©ticos') {
-            _c('categoria').text = product.category ?? 'CosmÃ©ticos';
+              _c('categoria').text == 'Cosméticos') {
+            _c('categoria').text = product.category ?? 'Cosméticos';
           }
           if (_c('imagem').text.trim().isEmpty) {
             _c('imagem').text = product.imageUrl ?? '';
@@ -689,13 +689,13 @@ class _ProdutoFormPageState extends State<ProdutoFormPage> {
             _campo('categoria', 'Categoria'),
             _campo(
               'barras',
-              'CÃ³digo / cÃ³digo de barras',
+              'Código / cÃ³digo de barras',
               suffix: IconButton(
                 onPressed: consultandoCodigo ? null : _scan,
                 icon: const Icon(Icons.barcode_reader),
               ),
             ),
-            _campo('descricao', 'DescriÃ§Ã£o (opcional)', linhas: 2),
+            _campo('descricao', 'Descrição (opcional)', linhas: 2),
 
             const SizedBox(height: 24),
             const Text(
@@ -722,7 +722,7 @@ class _ProdutoFormPageState extends State<ProdutoFormPage> {
             if (tipoProduto != TipoProduto.usoInterno)
               _campo(
                 'preco',
-                'PreÃ§o de venda',
+                'Preço de venda',
                 numero: true,
                 obrigatorio: true,
               ),
@@ -741,13 +741,13 @@ class _ProdutoFormPageState extends State<ProdutoFormPage> {
 
             const SizedBox(height: 24),
             const Text(
-              'CONTEÃšDO',
+              'CONTEÚDO',
               style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey),
             ),
 
             Row(
               children: [
-                Expanded(child: _campo('conteudo', 'ConteÃºdo', numero: true)),
+                Expanded(child: _campo('conteudo', 'Conteúdo', numero: true)),
                 const SizedBox(width: 12),
                 Expanded(
                   child: DropdownButtonFormField<String>(
@@ -961,7 +961,7 @@ class _ProdutoDetalhePageState extends State<ProdutoDetalhePage> {
               dense: true,
             ),
             ListTile(
-              title: const Text('CÃ³digo / CÃ³digo de barras'),
+              title: const Text('Código / Código de barras'),
               subtitle: Text(
                 (p.codigoBarras ?? '').isEmpty
                     ? 'NÃ£o informado'
@@ -971,7 +971,7 @@ class _ProdutoDetalhePageState extends State<ProdutoDetalhePage> {
             ),
             if ((p.descricao ?? '').isNotEmpty)
               ListTile(
-                title: const Text('DescriÃ§Ã£o'),
+                title: const Text('Descrição'),
                 subtitle: Text(p.descricao!),
                 dense: true,
               ),
@@ -1007,14 +1007,14 @@ class _ProdutoDetalhePageState extends State<ProdutoDetalhePage> {
 
             if (isVenda)
               ListTile(
-                title: const Text('PreÃ§o de venda'),
+                title: const Text('Preço de venda'),
                 subtitle: Text('R\$ ${p.precoVenda.toStringAsFixed(2)}'),
                 dense: true,
               ),
 
             const Divider(height: 32),
             Text(
-              'CONTEÃšDO',
+              'CONTEÚDO',
               style: Theme.of(
                 context,
               ).textTheme.titleSmall?.copyWith(color: Colors.grey),
@@ -1022,7 +1022,7 @@ class _ProdutoDetalhePageState extends State<ProdutoDetalhePage> {
             const SizedBox(height: 8),
 
             ListTile(
-              title: const Text('ConteÃºdo por unidade'),
+              title: const Text('Conteúdo por unidade'),
               subtitle: Text(
                 '${p.conteudoPorUnidade.toStringAsFixed(2).replaceAll(RegExp(r"([.]*0+)(?!.*\d)"), "")} ${p.unidadeConteudo}',
               ),
@@ -1175,7 +1175,9 @@ class _AjusteEstoquePageState extends State<AjusteEstoquePage> {
         );
       }
 
-      if (mounted) { Navigator.pop(context); }
+      if (mounted) {
+        Navigator.pop(context);
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(
@@ -1183,7 +1185,9 @@ class _AjusteEstoquePageState extends State<AjusteEstoquePage> {
         ).showSnackBar(SnackBar(content: Text('Erro: $e')));
       }
     } finally {
-      if (mounted) { setState(() => salvando = false); }
+      if (mounted) {
+        setState(() => salvando = false);
+      }
     }
   }
 

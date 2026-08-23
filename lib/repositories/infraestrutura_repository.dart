@@ -45,6 +45,28 @@ class InfraestruturaRepository {
           ),
         ) ??
         0;
+    final erros =
+        Sqflite.firstIntValue(
+          await db.rawQuery(
+            "SELECT COUNT(*) FROM fila_sincronizacao WHERE comercio_id = ? AND status = 'erro'",
+            [_comercioId],
+          ),
+        ) ??
+        0;
+    final sincronizados =
+        Sqflite.firstIntValue(
+          await db.rawQuery(
+            "SELECT COUNT(*) FROM fila_sincronizacao WHERE comercio_id = ? AND status = 'sincronizado' AND atualizada_em > ?",
+            [
+              _comercioId,
+              DateTime.now()
+                  .toUtc()
+                  .subtract(const Duration(days: 1))
+                  .toIso8601String(),
+            ],
+          ),
+        ) ??
+        0;
     final config = integracoes.isEmpty
         ? <String, Object?>{}
         : integracoes.first;
@@ -54,6 +76,8 @@ class InfraestruturaRepository {
       endpointPublico: config['endpoint_publico'] as String?,
       sincronizacaoAtiva: config['sincronizacao_ativa'] == 1,
       operacoesPendentes: pendentes,
+      operacoesEmErro: erros,
+      operacoesSincronizadas: sincronizados,
       ultimoCursor: config['ultimo_cursor'] as int? ?? 0,
       ultimaSincronizacao: DateTime.tryParse(
         config['ultima_sincronizacao'] as String? ?? '',

@@ -325,19 +325,33 @@ class _CaixaPageState extends State<CaixaPage> {
     return Scaffold(
       backgroundColor: _corFundo,
       body: SafeArea(
-        child: Column(
-          children: [
-            _cabecalho(),
-            _seletorData(),
-            SizedBox(height: 14),
-            _seletorAbas(),
-            const SizedBox(height: 8),
-            _seletorFluxo(),
-            SizedBox(height: 14),
-            _resumoFinanceiro(),
-            SizedBox(height: 14),
-            Expanded(child: _conteudo()),
-          ],
+        child: RefreshIndicator(
+          color: _corPrincipal,
+          onRefresh: _carregarCaixa,
+          child: CustomScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            slivers: [
+              SliverToBoxAdapter(
+                child: Column(
+                  children: [
+                    _cabecalho(),
+                    _seletorData(),
+                    SizedBox(height: 14),
+                    _seletorAbas(),
+                    const SizedBox(height: 8),
+                    _seletorFluxo(),
+                    SizedBox(height: 14),
+                    _resumoFinanceiro(),
+                    SizedBox(height: 14),
+                  ],
+                ),
+              ),
+              _conteudoSliver(),
+              const SliverPadding(
+                padding: EdgeInsets.only(bottom: 120),
+              ), // Padding para o FAB
+            ],
+          ),
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
@@ -583,39 +597,45 @@ class _CaixaPageState extends State<CaixaPage> {
     );
   }
 
-  Widget _conteudo() {
+  Widget _conteudoSliver() {
     if (_carregando) {
-      return Center(child: CircularProgressIndicator(color: _corPrincipal));
+      return SliverFillRemaining(
+        hasScrollBody: false,
+        child: Center(child: CircularProgressIndicator(color: _corPrincipal)),
+      );
     }
 
     if (_erro != null) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(30),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.error_outline, size: 65, color: _vermelho),
-              SizedBox(height: 14),
-              Text(
-                _erro!,
-                textAlign: TextAlign.center,
-                style: TextStyle(color: _textoEscuro),
-              ),
-              SizedBox(height: 16),
-              FilledButton.icon(
-                onPressed: () {
-                  setState(() {
-                    _carregando = true;
-                    _erro = null;
-                  });
+      return SliverFillRemaining(
+        hasScrollBody: false,
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(30),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.error_outline, size: 65, color: _vermelho),
+                SizedBox(height: 14),
+                Text(
+                  _erro!,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: _textoEscuro),
+                ),
+                SizedBox(height: 16),
+                FilledButton.icon(
+                  onPressed: () {
+                    setState(() {
+                      _carregando = true;
+                      _erro = null;
+                    });
 
-                  _carregarCaixa();
-                },
-                icon: Icon(Icons.refresh),
-                label: Text('Tentar novamente'),
-              ),
-            ],
+                    _carregarCaixa();
+                  },
+                  icon: Icon(Icons.refresh),
+                  label: Text('Tentar novamente'),
+                ),
+              ],
+            ),
           ),
         ),
       );
@@ -623,69 +643,75 @@ class _CaixaPageState extends State<CaixaPage> {
 
     if (_filtroFluxo == 'pendentes') {
       if (_pendencias.isEmpty) {
-        return const Center(child: Text('Nenhuma pendência neste período.'));
+        return const SliverFillRemaining(
+          hasScrollBody: false,
+          child: Center(child: Text('Nenhuma pendência neste período.')),
+        );
       }
-      return ListView.separated(
-        padding: const EdgeInsets.fromLTRB(20, 0, 20, 110),
-        itemCount: _pendencias.length,
-        separatorBuilder: (_, _) => const SizedBox(height: 10),
-        itemBuilder: (_, index) {
-          final item = _pendencias[index];
-          return Card(
-            child: ListTile(
-              leading: const Icon(Icons.schedule, color: Color(0xFFD99716)),
-              title: Text('${item['referencia']} • ${item['cliente_nome']}'),
-              subtitle: Text(
-                'Vencimento: ${item['vencimento'] ?? 'não informado'}',
+      return SliverPadding(
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        sliver: SliverList.separated(
+          itemCount: _pendencias.length,
+          separatorBuilder: (_, _) => const SizedBox(height: 10),
+          itemBuilder: (_, index) {
+            final item = _pendencias[index];
+            return Card(
+              child: ListTile(
+                leading: const Icon(Icons.schedule, color: Color(0xFFD99716)),
+                title: Text('${item['referencia']} • ${item['cliente_nome']}'),
+                subtitle: Text(
+                  'Vencimento: ${item['vencimento'] ?? 'não informado'}',
+                ),
+                trailing: Text(
+                  'R\$ ${(item['saldo'] as num).toStringAsFixed(2)}',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
               ),
-              trailing: Text(
-                'R\$ ${(item['saldo'] as num).toStringAsFixed(2)}',
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-            ),
-          );
-        },
+            );
+          },
+        ),
       );
     }
 
     if (_movimentos.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: EdgeInsets.all(30),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                Icons.account_balance_wallet_outlined,
-                size: 70,
-                color: Color(0xFFB6A9C3),
-              ),
-              SizedBox(height: 16),
-              Text(
-                'Nenhuma movimentação neste dia',
-                style: TextStyle(
-                  fontSize: 19,
-                  fontWeight: FontWeight.bold,
-                  color: _textoEscuro,
+      return SliverFillRemaining(
+        hasScrollBody: false,
+        child: Center(
+          child: Padding(
+            padding: EdgeInsets.all(30),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.account_balance_wallet_outlined,
+                  size: 70,
+                  color: Color(0xFFB6A9C3),
                 ),
-              ),
-              SizedBox(height: 7),
-              Text(
-                'Toque em “Nova movimentação” para registrar uma entrada ou saída.',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: _textoClaro),
-              ),
-            ],
+                SizedBox(height: 16),
+                Text(
+                  'Nenhuma movimentação neste dia',
+                  style: TextStyle(
+                    fontSize: 19,
+                    fontWeight: FontWeight.bold,
+                    color: _textoEscuro,
+                  ),
+                ),
+                SizedBox(height: 7),
+                Text(
+                  'Toque em “Nova movimentação” para registrar uma entrada ou saída.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: _textoClaro),
+                ),
+              ],
+            ),
           ),
         ),
       );
     }
 
-    return RefreshIndicator(
-      color: _corPrincipal,
-      onRefresh: _carregarCaixa,
-      child: ListView.separated(
-        padding: const EdgeInsets.fromLTRB(20, 0, 20, 110),
+    return SliverPadding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      sliver: SliverList.separated(
         itemCount: _movimentos.length,
         separatorBuilder: (_, _) {
           return SizedBox(height: 10);

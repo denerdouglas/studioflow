@@ -539,14 +539,22 @@ class BackendSyncService {
         operations: operations,
       );
     } on BackendHttpException catch (error) {
-      if (error.statusCode == 401) {
-        session = await _refreshSession(endpoint, session);
-        response = await _api.push(
-          endpoint: endpoint,
-          accessToken: session.accessToken,
-          operations: operations,
-        );
-      } else if (error.statusCode >= 400 && error.statusCode < 500) {
+      BackendHttpException err = error;
+      if (err.statusCode == 401) {
+        try {
+          session = await _refreshSession(endpoint, session);
+          response = await _api.push(
+            endpoint: endpoint,
+            accessToken: session.accessToken,
+            operations: operations,
+          );
+        } on BackendHttpException catch (innerErr) {
+          err = innerErr;
+        }
+      }
+      if (err.statusCode >= 400 &&
+          err.statusCode < 500 &&
+          err.statusCode != 401) {
         if (operations.length > 1) {
           return await _enviarComIsolamento(
             db,
@@ -579,7 +587,7 @@ class BackendSyncService {
           return _PushOutcome(session, 0, 0);
         }
       } else {
-        rethrow;
+        throw err;
       }
     }
     var applied = 0;
@@ -861,10 +869,21 @@ class BackendSyncService {
       throw StateError('A sessão online expirou. Entre novamente.');
     }
 
-    final response = await _api.refresh(
-      endpoint: endpoint,
-      refreshToken: atual.refreshToken,
-    );
+    Map<String, dynamic> response;
+    try {
+      response = await _api.refresh(
+        endpoint: endpoint,
+        refreshToken: atual.refreshToken,
+      );
+    } on BackendHttpException catch (error) {
+      if (error.statusCode == 401) {
+        await _vault.delete(session.comercioId);
+        throw StateError(
+          'Sessão online expirada ou revogada. Entre novamente.',
+        );
+      }
+      rethrow;
+    }
 
     final updated = SessaoBackend(
       comercioId: atual.comercioId,
