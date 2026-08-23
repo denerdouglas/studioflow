@@ -33,6 +33,7 @@ android {
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
+        isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
@@ -58,7 +59,7 @@ android {
     }
 
     lint {
-        // O flutter analyze é a validação estática oficial deste projeto.
+        // O flutter analyze e a validacao estatica oficial deste projeto.
         // Evita consulta remota do Android Lint durante um release offline.
         checkReleaseBuilds = false
     }
@@ -86,4 +87,6 @@ kotlin {
 flutter {
     source = "../.."
 }
-
+dependencies {
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
+}
