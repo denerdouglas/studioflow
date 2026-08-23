@@ -64,6 +64,7 @@ final class StudioFlowApi {
   Handler get handler {
     final router = Router()
       ..get('/health', _health)
+      ..get('/v1/public/app-config', _appConfig)
       ..post('/v1/auth/register-business', _registerBusiness)
       ..post('/v1/auth/login', _login)
       ..post('/v1/auth/refresh', _refresh)
@@ -124,6 +125,19 @@ final class StudioFlowApi {
       'timestamp': DateTime.now().toUtc().toIso8601String(),
     });
   }
+  Future<Response> _appConfig(Request request) async {
+    return _json(200, {
+      'android': {
+        'latest_build': config.appLatestBuild,
+        'latest_version': config.appLatestVersion,
+        'min_build': config.appMinBuild,
+        'force_update': config.appForceUpdate,
+        'store_url': config.appStoreUrl,
+        'message': config.appUpdateMessage,
+      }
+    });
+  }
+
 
   Future<Response> _registerBusiness(Request request) async {
     final body = await _body(request);

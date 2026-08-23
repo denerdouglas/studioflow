@@ -26,6 +26,12 @@ final class BackendConfig {
   final Uri catalogBaseUrl;
   final String? catalogUserAgent;
   final String whatsappGraphApiVersion;
+  final int appLatestBuild;
+  final String appLatestVersion;
+  final int appMinBuild;
+  final bool appForceUpdate;
+  final String appStoreUrl;
+  final String appUpdateMessage;
 
   const BackendConfig({
     required this.databaseUrl,
@@ -52,6 +58,12 @@ final class BackendConfig {
     this.automationWebhookToken,
     required this.catalogBaseUrl,
     this.catalogUserAgent,
+    required this.appLatestBuild,
+    required this.appLatestVersion,
+    required this.appMinBuild,
+    required this.appForceUpdate,
+    required this.appStoreUrl,
+    required this.appUpdateMessage,
     required this.whatsappGraphApiVersion,
   });
 
@@ -110,6 +122,12 @@ final class BackendConfig {
       catalogUserAgent: env['CATALOG_USER_AGENT']?.trim().isNotEmpty == true
           ? env['CATALOG_USER_AGENT']!.trim()
           : 'StudioFlow/1.0 (https://studioflowapp.com.br; contato@studioflowapp.com.br)',
+      appLatestBuild: int.tryParse(env['APP_LATEST_BUILD'] ?? '') ?? 4052,
+      appLatestVersion: env['APP_LATEST_VERSION'] ?? '1.4.11',
+      appMinBuild: int.tryParse(env['APP_MIN_BUILD'] ?? '') ?? 4050,
+      appForceUpdate: env['APP_FORCE_UPDATE'] == 'true',
+      appStoreUrl: env['APP_STORE_URL'] ?? 'https://play.google.com/store/apps/details?id=com.rolgsystems.studioflow',
+      appUpdateMessage: env['APP_UPDATE_MESSAGE'] ?? 'Nova atualização do StudioFlow disponível.',
       whatsappGraphApiVersion: env['WHATSAPP_GRAPH_API_VERSION'] ?? 'v23.0',
     );
   }
