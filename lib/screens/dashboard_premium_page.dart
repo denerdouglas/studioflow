@@ -35,21 +35,49 @@ class _DashboardPremiumPageState extends State<DashboardPremiumPage> {
     });
   }
 
-  @override
+@override
   Widget build(BuildContext context) {
-    final paginas = [
+    final usuario = SessionController.instance.usuario!;
+    final exibeAgenda = usuario.moduloServicosAtivo;
+
+    final paginas = <Widget>[
       HomePremiumPage(
         nomeResponsavel: widget.nomeResponsavel,
         nomeNegocio: widget.nomeNegocio,
         tema: widget.tema,
       ),
-      SessionController.instance.usuario!.pode(ModuloPermissao.agenda)
-          ? const AgendaPage()
-          : const Center(child: Text('Acesso não permitido.')),
-      SessionController.instance.usuario!.pode(ModuloPermissao.lojaSalao)
+      if (exibeAgenda)
+        usuario.pode(ModuloPermissao.agenda)
+            ? const AgendaPage()
+            : const Center(child: Text('Acesso não permitido.')),
+      usuario.pode(ModuloPermissao.lojaSalao)
           ? const LojaSalaoPage()
           : const Center(child: Text('Acesso não permitido.')),
       MaisPremiumPage(tema: widget.tema),
+    ];
+
+    final destinations = <NavigationDestination>[
+      const NavigationDestination(
+        icon: Icon(Icons.home_outlined),
+        selectedIcon: Icon(Icons.home),
+        label: 'Início',
+      ),
+      if (exibeAgenda)
+        const NavigationDestination(
+          icon: Icon(Icons.calendar_month_outlined),
+          selectedIcon: Icon(Icons.calendar_month),
+          label: 'Agenda',
+        ),
+      const NavigationDestination(
+        icon: Icon(Icons.storefront_outlined),
+        selectedIcon: Icon(Icons.storefront),
+        label: 'Loja',
+      ),
+      const NavigationDestination(
+        icon: Icon(Icons.menu),
+        selectedIcon: Icon(Icons.menu_open),
+        label: 'Mais',
+      ),
     ];
 
     return Scaffold(
@@ -60,28 +88,7 @@ class _DashboardPremiumPageState extends State<DashboardPremiumPage> {
         backgroundColor: Colors.white,
         indicatorColor: widget.tema.corPrincipal.withValues(alpha: 0.14),
         onDestinationSelected: _mudarPagina,
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.home_outlined),
-            selectedIcon: Icon(Icons.home),
-            label: 'Início',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.calendar_month_outlined),
-            selectedIcon: Icon(Icons.calendar_month),
-            label: 'Agenda',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.storefront_outlined),
-            selectedIcon: Icon(Icons.storefront),
-            label: 'Loja',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.menu),
-            selectedIcon: Icon(Icons.menu_open),
-            label: 'Mais',
-          ),
-        ],
+        destinations: destinations,
       ),
     );
   }

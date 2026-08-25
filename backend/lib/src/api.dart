@@ -66,6 +66,7 @@ final class StudioFlowApi {
       ..get('/health', _health)
       ..get('/v1/public/app-config', _appConfig)
       ..post('/v1/auth/register-business', _registerBusiness)
+      ..patch('/v1/auth/business/modules', _updateBusinessModules)
       ..post('/v1/auth/login', _login)
       ..post('/v1/auth/refresh', _refresh)
       ..post('/v1/auth/logout', _logout)
@@ -125,6 +126,7 @@ final class StudioFlowApi {
       'timestamp': DateTime.now().toUtc().toIso8601String(),
     });
   }
+
   Future<Response> _appConfig(Request request) async {
     return _json(200, {
       'android': {
@@ -134,10 +136,28 @@ final class StudioFlowApi {
         'force_update': config.appForceUpdate,
         'store_url': config.appStoreUrl,
         'message': config.appUpdateMessage,
-      }
+      },
     });
   }
 
+  Future<Response> _updateBusinessModules(Request request) async {
+    final body = await _body(request);
+    final actor = _authenticate(request);
+    if (actor.businessId == null) {
+      return _error(403, 'forbidden', 'Nenhum negócio associado.');
+  }
+
+    final moduloLojaAtivo = body['moduloLojaAtivo'] as bool? ?? true;
+    final moduloServicosAtivo = body['moduloServicosAtivo'] as bool? ?? true;
+
+    await store.updateBusinessModules(
+      businessId: actor.businessId!,
+      moduloLojaAtivo: moduloLojaAtivo,
+      moduloServicosAtivo: moduloServicosAtivo,
+    );
+
+    return _json(200, {'success': true});
+  }
 
   Future<Response> _registerBusiness(Request request) async {
     final body = await _body(request);
@@ -147,10 +167,14 @@ final class StudioFlowApi {
     final login = _normalizeLogin(_requiredText(body, 'login', max: 254));
     final password = _requiredText(body, 'password', max: 128);
     final segment = (body['segment'] as String? ?? 'salao').trim();
+    final moduloLojaAtivo = body['moduloLojaAtivo'] as bool? ?? true;
+    final moduloServicosAtivo = body['moduloServicosAtivo'] as bool? ?? true;
     final account = await store.createBusinessOwner(
       businessId: _optionalIdentifier(body['businessId']) ?? _uuid.v4(),
       businessName: businessName,
       segment: segment,
+      moduloLojaAtivo: moduloLojaAtivo,
+      moduloServicosAtivo: moduloServicosAtivo,
       userId: _optionalIdentifier(body['userId']) ?? _uuid.v4(),
       ownerName: ownerName,
       phone: phone,

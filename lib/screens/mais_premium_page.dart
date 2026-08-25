@@ -27,6 +27,7 @@ class MaisPremiumPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final usuario = SessionController.instance.usuario;
+    final exibeServicos = usuario?.moduloServicosAtivo ?? true;
     if (usuario == null) {
       return Scaffold(body: Center(child: Text('Sessão expirada')));
     }
@@ -62,7 +63,7 @@ class MaisPremiumPage extends StatelessWidget {
               subtitle: 'Cadastro, contatos e histórico',
               destination: const ClientesPage(),
             ),
-          if (usuario.pode(ModuloPermissao.funcionarios))
+          if (exibeServicos && usuario.pode(ModuloPermissao.funcionarios))
             _buildMenuItem(
               context: context,
               icon: Icons.groups_outlined,
@@ -71,7 +72,7 @@ class MaisPremiumPage extends StatelessWidget {
               subtitle: 'Profissionais, colaboradores e comissões',
               destination: const EquipeComissoesPage(),
             ),
-          if (usuario.pode(ModuloPermissao.servicos))
+          if (exibeServicos && usuario.pode(ModuloPermissao.servicos))
             _buildMenuItem(
               context: context,
               icon: Icons.design_services_outlined,

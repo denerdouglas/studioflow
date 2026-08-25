@@ -251,6 +251,8 @@ class UsuarioAcesso {
   final String temaModo;
   final bool temaAutomatico;
   final String capaUrl;
+  final bool moduloLojaAtivo;
+  final bool moduloServicosAtivo;
 
   const UsuarioAcesso({
     required this.id,
@@ -274,6 +276,8 @@ class UsuarioAcesso {
     this.temaModo = 'claro',
     this.temaAutomatico = true,
     this.capaUrl = '',
+    this.moduloLojaAtivo = true,
+    this.moduloServicosAtivo = true,
   });
 
   bool pode(ModuloPermissao modulo) {
@@ -305,6 +309,8 @@ class UsuarioGerenciavel {
   final String temaModo;
   final bool temaAutomatico;
   final String capaUrl;
+  final bool moduloLojaAtivo;
+  final bool moduloServicosAtivo;
 
   const UsuarioGerenciavel({
     required this.id,
@@ -325,6 +331,8 @@ class UsuarioGerenciavel {
     this.temaModo = 'claro',
     this.temaAutomatico = true,
     this.capaUrl = '',
+    this.moduloLojaAtivo = true,
+    this.moduloServicosAtivo = true,
   });
 }
 
@@ -337,6 +345,8 @@ class CadastroComercioEntrada {
   final String senha;
   final bool permanecerConectado;
   final TipoEstabelecimento tipoEstabelecimento;
+  final bool moduloLojaAtivo;
+  final bool moduloServicosAtivo;
 
   const CadastroComercioEntrada({
     required this.nomeComercio,
@@ -347,5 +357,7 @@ class CadastroComercioEntrada {
     required this.senha,
     required this.permanecerConectado,
     this.tipoEstabelecimento = TipoEstabelecimento.salao,
+    this.moduloLojaAtivo = true,
+    this.moduloServicosAtivo = true,
   });
 }

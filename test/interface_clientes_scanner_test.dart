@@ -46,7 +46,7 @@ void main() {
       expect(data.fornecedor, 'Miriam Guido');
     });
 
-    test('não confunde preço monet?rio com código', () {
+    test('não confunde preço monetário com código', () {
       final data = VisionOcrService.parseText('R\$ 5268,76\nREF: 123456');
       expect(data.preco, 5268.76);
       expect(data.codigo, '123456');
@@ -83,9 +83,31 @@ void main() {
     expect(find.byType(LojaSalaoPage), findsOneWidget);
     SessionController.instance.cancelarSincronizacaoEmTeste();
   });
+
+  testWidgets('barra premium tem Início, Loja e Mais quando moduloServicosAtivo é false', (tester) async {
+    SessionController.instance.entrar(_usuario(moduloServicosAtivo: false));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: DashboardPremiumPage(
+          nomeResponsavel: 'Dener',
+          nomeNegocio: 'Studio',
+          tipoNegocio: 'Loja',
+          tema: StudioFlowThemeData.sugeridoParaCategoria('Loja'),
+        ),
+      ),
+    );
+    expect(find.byType(NavigationDestination), findsNWidgets(3));
+    final labels = tester
+        .widgetList<NavigationDestination>(find.byType(NavigationDestination))
+        .map((item) => item.label)
+        .toList();
+    expect(labels, ['Início', 'Loja', 'Mais']);
+    SessionController.instance.cancelarSincronizacaoEmTeste();
+  });
+
 }
 
-UsuarioAcesso _usuario() => UsuarioAcesso(
+UsuarioAcesso _usuario({bool moduloLojaAtivo = true, bool moduloServicosAtivo = true}) => UsuarioAcesso(
   id: 'u',
   comercioId: 'c',
   codigoComercio: 'SF',
@@ -96,6 +118,8 @@ UsuarioAcesso _usuario() => UsuarioAcesso(
   emailLogin: 'teste@studioflow.test',
   funcao: FuncaoUsuario.dono,
   ativo: true,
+  moduloLojaAtivo: moduloLojaAtivo,
+  moduloServicosAtivo: moduloServicosAtivo,
   permissoes: ModuloPermissao.values.toSet(),
   acoes: AcaoPermissao.values.toSet(),
 );

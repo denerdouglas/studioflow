@@ -338,6 +338,7 @@ class _ServicosPageState extends State<ServicosPage> {
 
   @override
   Widget build(BuildContext context) {
+    if (SessionController.instance.usuario?.moduloServicosAtivo != true) return const Scaffold(body: Center(child: Text('Mdulo inativo')));
     return Scaffold(
       backgroundColor: _corFundo,
       body: SafeArea(
@@ -578,6 +579,7 @@ class _ServicoCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (SessionController.instance.usuario?.moduloServicosAtivo != true) return const Scaffold(body: Center(child: Text('Mdulo inativo')));
     final cor = servico.ativo
         ? Theme.of(context).colorScheme.primary
         : const Color(0xFF968AA5);
@@ -709,6 +711,7 @@ class _ServicoInformacao extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (SessionController.instance.usuario?.moduloServicosAtivo != true) return const Scaffold(body: Center(child: Text('Mdulo inativo')));
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
       decoration: BoxDecoration(
@@ -741,6 +744,7 @@ class OpcoesServicoSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (SessionController.instance.usuario?.moduloServicosAtivo != true) return const Scaffold(body: Center(child: Text('Mdulo inativo')));
     return Container(
       padding: const EdgeInsets.fromLTRB(22, 18, 22, 28),
       decoration: BoxDecoration(
@@ -837,6 +841,7 @@ class _OpcaoServico extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (SessionController.instance.usuario?.moduloServicosAtivo != true) return const Scaffold(body: Center(child: Text('Mdulo inativo')));
     return ListTile(
       contentPadding: EdgeInsets.zero,
       leading: Container(
@@ -1439,6 +1444,7 @@ class _ServicoFormSheetState extends State<ServicoFormSheet> {
 
   @override
   Widget build(BuildContext context) {
+    if (SessionController.instance.usuario?.moduloServicosAtivo != true) return const Scaffold(body: Center(child: Text('Mdulo inativo')));
     final teclado = MediaQuery.viewInsetsOf(context).bottom;
 
     final editando = widget.servicoInicial != null;
@@ -1891,6 +1897,7 @@ class _FichaConsumoSheetState extends State<FichaConsumoSheet> {
 
   @override
   Widget build(BuildContext context) {
+    if (SessionController.instance.usuario?.moduloServicosAtivo != true) return const Scaffold(body: Center(child: Text('Mdulo inativo')));
     final teclado = MediaQuery.viewInsetsOf(context).bottom;
 
     return Container(

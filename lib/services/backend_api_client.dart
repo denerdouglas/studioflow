@@ -97,6 +97,24 @@ class BackendApiClient {
     }, accessToken: accessToken);
   }
 
+Future<Map<String, dynamic>> updateBusinessModules(Uri endpoint, String token, bool moduloLojaAtivo, bool moduloServicosAtivo) async {
+    final response = await _client.patch(
+      endpoint.replace(path: '/api/v1/auth/business/modules'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ',
+      },
+      body: jsonEncode({
+        'moduloLojaAtivo': moduloLojaAtivo,
+        'moduloServicosAtivo': moduloServicosAtivo,
+      }),
+    );
+    if (response.statusCode >= 400) {
+      throw BackendHttpException(response.statusCode, 'UPDATE_FAILED', response.body);
+    }
+    return jsonDecode(response.body);
+  }
+
   Future<Map<String, dynamic>> pull({
     required Uri endpoint,
     required String accessToken,

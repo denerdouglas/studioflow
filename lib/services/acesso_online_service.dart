@@ -118,4 +118,14 @@ class AcessoOnlineService {
     );
     return usuario;
   }
+
+  Future<void> updateModules({
+    required String comercioId,
+    required bool moduloLojaAtivo,
+    required bool moduloServicosAtivo,
+  }) async {
+    final t = await _vault.read(comercioId);
+    if (t == null) return;
+    await _api.updateBusinessModules(Uri.parse(endpoint), t.accessToken, moduloLojaAtivo, moduloServicosAtivo);
+  }
 }

@@ -12,9 +12,17 @@ abstract interface class BackendStore {
     required String phone,
     required String login,
     required String passwordHash,
+    bool moduloLojaAtivo = true,
+    bool moduloServicosAtivo = true,
   });
 
   Future<List<AccountIdentity>> findAccountsByLogin(String normalizedLogin);
+  Future<void> updateBusinessModules({
+    required String businessId,
+    required bool moduloLojaAtivo,
+    required bool moduloServicosAtivo,
+  });
+
   Future<AccountIdentity?> findAccount(String userId, String businessId);
 
   Future<void> createSession(SessionRecord session);

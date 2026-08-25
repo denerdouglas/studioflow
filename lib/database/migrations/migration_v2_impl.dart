@@ -21,6 +21,8 @@ abstract final class MigrationV2 {
         telefone TEXT NOT NULL,
         email TEXT NOT NULL,
         ativo INTEGER NOT NULL DEFAULT 1,
+        modulo_loja_ativo INTEGER NOT NULL DEFAULT 1,
+        modulo_servicos_ativo INTEGER NOT NULL DEFAULT 1,
         criado_em TEXT NOT NULL,
         atualizado_em TEXT NOT NULL
       )

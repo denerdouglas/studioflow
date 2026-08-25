@@ -35,6 +35,7 @@ class _AcessoPageState extends State<AcessoPage>
   final _codigoUnidade = TextEditingController();
   bool _cadastroProprietario = true;
   bool _permanecer = true;
+  bool _somenteLoja = false;
   TipoEstabelecimento _tipoEstabelecimento = TipoEstabelecimento.salao;
   bool _ocultarSenha = true;
   bool _processando = false;
@@ -349,6 +350,8 @@ class _AcessoPageState extends State<AcessoPage>
         senha: _senha.text,
         permanecerConectado: _permanecer,
         tipoEstabelecimento: _tipoEstabelecimento,
+        moduloLojaAtivo: true,
+        moduloServicosAtivo: !_somenteLoja,
       );
 
       if (!_online.configurado) {
@@ -590,7 +593,26 @@ class _AcessoPageState extends State<AcessoPage>
           _campo(_codigoUnidade, 'Código público da unidade *', Icons.key),
           const SizedBox(height: 12),
         ],
-        _campo(_nomeComercio, 'Nome do estabelecimento *', Icons.store),
+if (_cadastroProprietario) ...[
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 12),
+            child: Text(
+              'Como voc pretende usar o StudioFlow?',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ),
+          SegmentedButton<bool>(
+            segments: const [
+              ButtonSegment(value: false, label: Text('Servios + Loja')),
+              ButtonSegment(value: true, label: Text('Somente Loja')),
+            ],
+            selected: {_somenteLoja},
+            onSelectionChanged: (value) =>
+                setState(() => _somenteLoja = value.single),
+          ),
+          const SizedBox(height: 12),
+        ],
+        _campo(_nomeComercio, _somenteLoja ? 'Nome do negcio *' : 'Nome do estabelecimento *', Icons.store),
         const SizedBox(height: 12),
         _campo(_nomeExibicao, 'Nome exibido no aplicativo *', Icons.badge),
         const SizedBox(height: 12),

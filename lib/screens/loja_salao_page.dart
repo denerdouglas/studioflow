@@ -5,6 +5,7 @@ import 'vendas_loja_page.dart';
 import 'assistente_gestao_page.dart';
 import '../models/domain/centro_resultado.dart';
 
+
 class LojaSalaoPage extends StatelessWidget {
   const LojaSalaoPage({super.key});
 

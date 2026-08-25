@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../services/session_controller.dart';
 
 import '../repositories/funcionarios_repository.dart';
 
@@ -152,6 +153,7 @@ class _FuncionariosPageState extends State<FuncionariosPage> {
 
   @override
   Widget build(BuildContext context) {
+    if (SessionController.instance.usuario?.moduloServicosAtivo != true) return const Scaffold(body: Center(child: Text('Mdulo inativo')));
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.surface,
       appBar: AppBar(
@@ -373,6 +375,7 @@ class OpcoesFuncionarioSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (SessionController.instance.usuario?.moduloServicosAtivo != true) return const Scaffold(body: Center(child: Text('Mdulo inativo')));
     return Container(
       padding: const EdgeInsets.fromLTRB(22, 18, 22, 28),
       decoration: BoxDecoration(
@@ -611,6 +614,7 @@ class _FuncionarioFormSheetState extends State<FuncionarioFormSheet> {
 
   @override
   Widget build(BuildContext context) {
+    if (SessionController.instance.usuario?.moduloServicosAtivo != true) return const Scaffold(body: Center(child: Text('Mdulo inativo')));
     final teclado = MediaQuery.viewInsetsOf(context).bottom;
 
     return Container(

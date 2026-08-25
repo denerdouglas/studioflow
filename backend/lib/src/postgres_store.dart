@@ -34,6 +34,8 @@ final class PostgresBackendStore
     required String phone,
     required String login,
     required String passwordHash,
+    bool moduloLojaAtivo = true,
+    bool moduloServicosAtivo = true,
   }) {
     return _pool.runTx((tx) async {
       await _setTenant(tx, businessId);
@@ -78,7 +80,7 @@ final class PostgresBackendStore
         Sql.named('''
           SELECT u.id, u.business_id, b.display_name AS business_name,
                  u.name, u.phone, u.login, u.password_hash, u.role, u.active,
-                 b.booking_slug, b.booking_enabled
+                 b.booking_slug, b.booking_enabled, b.modulo_loja_ativo, b.modulo_servicos_ativo
           FROM users u
           INNER JOIN businesses b ON b.id = u.business_id
           WHERE lower(u.login) = @login
@@ -92,6 +94,28 @@ final class PostgresBackendStore
   }
 
   @override
+  @override
+  Future<void> updateBusinessModules({
+    required String businessId,
+    required bool moduloLojaAtivo,
+    required bool moduloServicosAtivo,
+  }) {
+    return _pool.runTx((tx) async {
+      await _setTenant(tx, businessId);
+      await tx.execute(
+        Sql.named(
+          'UPDATE businesses SET modulo_loja_ativo = @loja, modulo_servicos_ativo = @servicos, updated_at = now() WHERE id = @id',
+        ),
+        parameters: {
+          'id': businessId,
+          'loja': moduloLojaAtivo,
+          'servicos': moduloServicosAtivo,
+        },
+      );
+    });
+  }
+
+  @override
   Future<AccountIdentity?> findAccount(String userId, String businessId) {
     return _pool.runTx((tx) async {
       await _setTenant(tx, businessId);
@@ -99,7 +123,7 @@ final class PostgresBackendStore
         Sql.named('''
           SELECT u.id, u.business_id, b.display_name AS business_name,
                  u.name, u.phone, u.login, u.password_hash, u.role, u.active,
-                 b.booking_slug, b.booking_enabled
+                 b.booking_slug, b.booking_enabled, b.modulo_loja_ativo, b.modulo_servicos_ativo
           FROM users u
           INNER JOIN businesses b ON b.id = u.business_id
           WHERE u.id = @userId AND u.business_id = @businessId
@@ -498,7 +522,7 @@ final class PostgresBackendStore
         Sql.named('''
           SELECT u.id, u.business_id, b.display_name AS business_name,
                  u.name, u.phone, u.login, u.password_hash, u.role, u.active,
-                 b.booking_slug, b.booking_enabled
+                 b.booking_slug, b.booking_enabled, b.modulo_loja_ativo, b.modulo_servicos_ativo
           FROM users u INNER JOIN businesses b ON b.id = u.business_id
           WHERE u.id = @userId AND u.business_id = @businessId
         '''),

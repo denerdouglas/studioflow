@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../services/session_controller.dart';
 
 import '../repositories/caixa_repository.dart';
 
@@ -48,10 +49,14 @@ class _CaixaPageState extends State<CaixaPage> {
   bool _carregando = true;
   String? _erro;
 
-  @override
+@override
   void initState() {
     super.initState();
+    final usuario = SessionController.instance.usuario;
     _abaSelecionada = widget.abaInicial;
+    if (usuario?.moduloServicosAtivo == false && (_abaSelecionada == 'geral' || _abaSelecionada == 'servico')) {
+      _abaSelecionada = 'loja';
+    }
     _carregarCaixa();
   }
 

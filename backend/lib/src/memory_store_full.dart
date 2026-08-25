@@ -37,6 +37,8 @@ final class MemoryBackendStore
     required String phone,
     required String login,
     required String passwordHash,
+    bool moduloLojaAtivo = true,
+    bool moduloServicosAtivo = true,
   }) async {
     final account = AccountIdentity(
       userId: userId,
@@ -66,6 +68,14 @@ final class MemoryBackendStore
         .toList()
       ..sort((a, b) => a.businessName.compareTo(b.businessName));
   }
+
+  @override
+  @override
+  Future<void> updateBusinessModules({
+    required String businessId,
+    required bool moduloLojaAtivo,
+    required bool moduloServicosAtivo,
+  }) async {}
 
   @override
   Future<AccountIdentity?> findAccount(String userId, String businessId) async {

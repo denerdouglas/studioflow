@@ -871,6 +871,7 @@ class _AgendaPageState extends State<AgendaPage> {
 
   @override
   Widget build(BuildContext context) {
+    if (SessionController.instance.usuario?.moduloServicosAtivo != true) return const Scaffold(body: Center(child: Text('Mdulo inativo')));
     return Scaffold(
       backgroundColor: _corFundo,
       body: SafeArea(
@@ -1177,6 +1178,7 @@ class _AgendamentoCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (SessionController.instance.usuario?.moduloServicosAtivo != true) return const Scaffold(body: Center(child: Text('Mdulo inativo')));
     final corPrincipal = Theme.of(context).colorScheme.primary;
 
     return Padding(
@@ -1357,6 +1359,7 @@ class _StatusAgendamento extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (SessionController.instance.usuario?.moduloServicosAtivo != true) return const Scaffold(body: Center(child: Text('Mdulo inativo')));
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
       decoration: BoxDecoration(
@@ -1383,6 +1386,7 @@ class OpcoesAgendamentoSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (SessionController.instance.usuario?.moduloServicosAtivo != true) return const Scaffold(body: Center(child: Text('Mdulo inativo')));
     return ConstrainedBox(
       constraints: BoxConstraints(
         maxHeight: MediaQuery.sizeOf(context).height * 0.9,
@@ -1575,6 +1579,7 @@ class _OpcaoAgendamento extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (SessionController.instance.usuario?.moduloServicosAtivo != true) return const Scaffold(body: Center(child: Text('Mdulo inativo')));
     return ListTile(
       contentPadding: EdgeInsets.zero,
       leading: Container(
@@ -1874,6 +1879,7 @@ class _ConcluirAgendamentoDialogState extends State<ConcluirAgendamentoDialog> {
 
   @override
   Widget build(BuildContext context) {
+    if (SessionController.instance.usuario?.moduloServicosAtivo != true) return const Scaffold(body: Center(child: Text('Mdulo inativo')));
     return AlertDialog(
       title: Text(widget.titulo),
       content: Column(

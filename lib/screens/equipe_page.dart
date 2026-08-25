@@ -354,6 +354,7 @@ class _EquipePageState extends State<EquipePage>
 
   @override
   Widget build(BuildContext context) {
+    if (SessionController.instance.usuario?.moduloServicosAtivo != true) return const Scaffold(body: Center(child: Text('Mdulo inativo')));
     if (_actor.funcao != FuncaoUsuario.dono) {
       return const Scaffold(body: Center(child: Text('Acesso não permitido.')));
     }

@@ -165,6 +165,8 @@ class AcessoRepository {
         'telefone': telefone,
         'email': login,
         'ativo': 1,
+        'modulo_loja_ativo': (account['moduloLojaAtivo'] == true) ? 1 : 0,
+        'modulo_servicos_ativo': (account['moduloServicosAtivo'] == false) ? 0 : 1,
         if (account['bookingSlug'] != null)
           'booking_slug': account['bookingSlug'],
         if (account['bookingEnabled'] != null)
@@ -276,7 +278,9 @@ class AcessoRepository {
         c.cor_secundaria,
         c.cor_destaque,
         c.tema_modo,
-        c.tema_automatico
+        c.tema_automatico,
+        c.modulo_loja_ativo,
+        c.modulo_servicos_ativo
       FROM usuarios u
       INNER JOIN comercios c ON c.id = u.comercio_id
       WHERE LOWER(u.email_login) = LOWER(?)
@@ -344,7 +348,9 @@ class AcessoRepository {
         c.cor_secundaria,
         c.cor_destaque,
         c.tema_modo,
-        c.tema_automatico
+        c.tema_automatico,
+        c.modulo_loja_ativo,
+        c.modulo_servicos_ativo
       FROM usuarios u
       INNER JOIN comercios c ON c.id = u.comercio_id
       WHERE LOWER(u.email_login) = LOWER(?)
@@ -444,7 +450,9 @@ class AcessoRepository {
         c.cor_secundaria,
         c.cor_destaque,
         c.tema_modo,
-        c.tema_automatico      FROM usuarios u
+        c.tema_automatico,
+        c.modulo_loja_ativo,
+        c.modulo_servicos_ativo      FROM usuarios u
       INNER JOIN comercios c ON c.id = u.comercio_id
       WHERE UPPER(c.codigo_acesso) = UPPER(?)
         AND LOWER(u.email_login) = LOWER(?)
@@ -538,7 +546,9 @@ class AcessoRepository {
         c.cor_secundaria,
         c.cor_destaque,
         c.tema_modo,
-        c.tema_automatico      FROM usuarios u
+        c.tema_automatico,
+        c.modulo_loja_ativo,
+        c.modulo_servicos_ativo      FROM usuarios u
       INNER JOIN comercios c ON c.id = u.comercio_id
       WHERE u.id = ?
       LIMIT 1
@@ -888,6 +898,8 @@ class AcessoRepository {
       temaModo: mapa['tema_modo'] as String? ?? 'claro',
       temaAutomatico: (mapa['tema_automatico'] as num? ?? 1) == 1,
       capaUrl: mapa['capa_url'] as String? ?? '',
+      moduloLojaAtivo: (mapa['modulo_loja_ativo'] as num? ?? 1) == 1,
+      moduloServicosAtivo: (mapa['modulo_servicos_ativo'] as num? ?? 1) == 1,
     );
   }
 

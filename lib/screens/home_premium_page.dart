@@ -33,16 +33,22 @@ class _HomePremiumPageState extends State<HomePremiumPage> {
   final DashboardSummaryService _summaryService = DashboardSummaryService();
   final ModalidadesRepository _modalidadesRepository = ModalidadesRepository();
   final WidgetRegistry _registry = WidgetRegistry();
-  final DashboardConfiguration _config = DashboardConfiguration.defaultLayout();
+  late final DashboardConfiguration _config;
 
   DashboardSummary? _summary;
   List<ModalidadeRegistro> _modalidades = const [];
   bool _isLoading = true;
   String? _error;
 
-  @override
+@override
   void initState() {
     super.initState();
+    final usuario = SessionController.instance.usuario;
+    if (usuario?.moduloServicosAtivo == false) {
+      _config = DashboardConfiguration.lojaLayout();
+    } else {
+      _config = DashboardConfiguration.defaultLayout();
+    }
     _registerWidgets();
     _loadData();
   }

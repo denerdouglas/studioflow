@@ -1,0 +1,3 @@
+ALTER TABLE businesses
+ADD COLUMN modulo_loja_ativo BOOLEAN NOT NULL DEFAULT TRUE,
+ADD COLUMN modulo_servicos_ativo BOOLEAN NOT NULL DEFAULT TRUE;

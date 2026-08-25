@@ -4,6 +4,9 @@ import '../models/domain/acesso.dart';
 import '../models/domain/configuracao_comercio.dart';
 import '../repositories/configuracoes_repository.dart';
 import '../core/routes/app_routes.dart';
+import 'app_bootstrap_page.dart';
+import '../services/acesso_online_service.dart';
+import '../database/database_service.dart';
 import '../services/session_controller.dart';
 import 'aparencia_page.dart';
 import 'agendamento_online_page.dart';
@@ -131,8 +134,49 @@ class _ConfiguracoesPageState extends State<ConfiguracoesPage> {
     super.dispose();
   }
 
+Future<void> _ativarServicos() async {
+    final confirmou = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Ativar Servios / Salo?'),
+        content: const Text('Isso adicionar os mdulos de Agenda, Servios e Profissionais ao seu menu. Os dados de Loja no sero afetados.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Confirmar')),
+        ],
+      ),
+    );
+    if (confirmou != true) return;
+
+    setState(() => _carregando = true);
+    try {
+      final db = await DatabaseService.instance.database;
+      await db.update('comercios', {'modulo_servicos_ativo': 1}, where: 'id = ?', whereArgs: [_usuario.comercioId]);
+
+      final api = AcessoOnlineService();
+      if (api.configurado) {
+        await api.updateModules(comercioId: _usuario.comercioId, moduloLojaAtivo: _usuario.moduloLojaAtivo, moduloServicosAtivo: true);
+      }
+
+      await SessionController.instance.inicializar();
+
+      if (!mounted) return;
+
+      Navigator.pushAndRemoveUntil(
+        context,
+        AppRoutes.material(builder: (_) => const AppBootstrapPage()),
+        (route) => false,
+      );
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Falha ao ativar: ')));
+    } finally {
+      if (mounted) setState(() => _carregando = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final exibeServicos = _usuario.moduloServicosAtivo;
     if (!_usuario.pode(ModuloPermissao.configuracoes)) {
       return const Scaffold(
         body: Center(child: Text('Acesso às configurações não permitido.')),
@@ -145,10 +189,11 @@ class _ConfiguracoesPageState extends State<ConfiguracoesPage> {
           : ListView(
               padding: const EdgeInsets.all(20),
               children: [
-                Card(
-                  child: ListTile(
-                    leading: Icon(Icons.groups_outlined),
-                    title: Text('Equipe'),
+                if (exibeServicos)
+                  Card(
+                    child: ListTile(
+                      leading: Icon(Icons.groups_outlined),
+                      title: Text('Equipe'),
                     subtitle: Text('Ativos, solicitações e inativos'),
                     trailing: Icon(Icons.chevron_right),
                     onTap: () => Navigator.push(
@@ -358,6 +403,15 @@ class _ConfiguracoesPageState extends State<ConfiguracoesPage> {
                     _salvando ? 'Salvando...' : 'Salvar configurações',
                   ),
                 ),
+
+                if (!exibeServicos) ...[
+                  const SizedBox(height: 24),
+                  ElevatedButton.icon(
+                    onPressed: _ativarServicos,
+                    icon: const Icon(Icons.store),
+                    label: const Text('Ativar Servios / Salo'),
+                  ),
+                ],
               ],
             ),
     );
