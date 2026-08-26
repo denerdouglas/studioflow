@@ -54,6 +54,9 @@ class BackendApiClient {
     required String phone,
     required String login,
     required String password,
+    required bool moduloLojaAtivo,
+    required bool moduloServicosAtivo,
+    required String moduleConfiguration,
   }) {
     return _post(endpoint, '/v1/auth/register-business', {
       'businessId': businessId,
@@ -64,6 +67,9 @@ class BackendApiClient {
       'phone': phone,
       'login': login,
       'password': password,
+      'moduloLojaAtivo': moduloLojaAtivo,
+      'moduloServicosAtivo': moduloServicosAtivo,
+      'moduleConfiguration': moduleConfiguration,
     });
   }
 
@@ -97,22 +103,33 @@ class BackendApiClient {
     }, accessToken: accessToken);
   }
 
-Future<Map<String, dynamic>> updateBusinessModules(Uri endpoint, String token, bool moduloLojaAtivo, bool moduloServicosAtivo) async {
+  Future<Map<String, dynamic>> updateBusinessModules(
+    Uri endpoint,
+    String token,
+    bool moduloLojaAtivo,
+    bool moduloServicosAtivo,
+    String moduleConfiguration,
+  ) async {
     final response = await _client.patch(
       endpoint.replace(path: '/api/v1/auth/business/modules'),
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': 'Bearer ',
+        'Authorization': 'Bearer $token',
       },
       body: jsonEncode({
         'moduloLojaAtivo': moduloLojaAtivo,
         'moduloServicosAtivo': moduloServicosAtivo,
+        'moduleConfiguration': moduleConfiguration,
       }),
     );
     if (response.statusCode >= 400) {
-      throw BackendHttpException(response.statusCode, 'UPDATE_FAILED', response.body);
+      throw BackendHttpException(
+        response.statusCode,
+        'UPDATE_FAILED',
+        response.body,
+      );
     }
-    return jsonDecode(response.body);
+    return Map<String, dynamic>.from(jsonDecode(response.body) as Map);
   }
 
   Future<Map<String, dynamic>> pull({

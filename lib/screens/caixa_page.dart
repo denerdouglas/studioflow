@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/session_controller.dart';
+import '../models/domain/business_profile.dart';
 
 import '../repositories/caixa_repository.dart';
 
@@ -49,12 +50,13 @@ class _CaixaPageState extends State<CaixaPage> {
   bool _carregando = true;
   String? _erro;
 
-@override
+  @override
   void initState() {
     super.initState();
     final usuario = SessionController.instance.usuario;
     _abaSelecionada = widget.abaInicial;
-    if (usuario?.moduloServicosAtivo == false && (_abaSelecionada == 'geral' || _abaSelecionada == 'servico')) {
+    if (usuario?.moduloAtivo(BusinessModule.servicos) == false &&
+        (_abaSelecionada == 'geral' || _abaSelecionada == 'servico')) {
       _abaSelecionada = 'loja';
     }
     _carregarCaixa();
@@ -442,18 +444,27 @@ class _CaixaPageState extends State<CaixaPage> {
   }
 
   Widget _seletorAbas() {
+    final modules = SessionController.instance.usuario!.businessProfile.modules;
+    final services = modules.possui(BusinessModule.servicos);
+    final store = modules.possui(BusinessModule.loja);
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Row(
         children: [
-          _abaCard('Geral', 'geral'),
-          const SizedBox(width: 8),
-          _abaCard('Serviços', 'servico'),
-          const SizedBox(width: 8),
-          _abaCard('Loja', 'loja'),
-          const SizedBox(width: 8),
-          _abaCard('Consignado', 'consignado'),
+          if (services && store) ...[
+            _abaCard('Geral', 'geral'),
+            const SizedBox(width: 8),
+          ],
+          if (services) ...[
+            _abaCard('Serviços', 'servico'),
+            const SizedBox(width: 8),
+          ],
+          if (store) ...[
+            _abaCard('Loja', 'loja'),
+            const SizedBox(width: 8),
+            _abaCard('Consignado', 'consignado'),
+          ],
         ],
       ),
     );

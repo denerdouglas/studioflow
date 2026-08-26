@@ -1,4 +1,5 @@
 import '../models/domain/acesso.dart';
+import '../models/domain/business_profile.dart';
 import '../models/domain/sincronizacao_backend.dart';
 import '../repositories/acesso_repository.dart';
 import 'backend_api_client.dart';
@@ -98,6 +99,13 @@ class AcessoOnlineService {
       phone: entrada.telefone,
       login: entrada.email,
       password: entrada.senha,
+      moduloLojaAtivo: entrada.effectiveModuleConfiguration.possui(
+        BusinessModule.loja,
+      ),
+      moduloServicosAtivo: entrada.effectiveModuleConfiguration.possui(
+        BusinessModule.servicos,
+      ),
+      moduleConfiguration: entrada.effectiveModuleConfiguration.toJson(),
     );
     final account = Map<String, dynamic>.from(response['account'] as Map);
     final usuario = await _repository.restaurarContaOnline(
@@ -123,9 +131,16 @@ class AcessoOnlineService {
     required String comercioId,
     required bool moduloLojaAtivo,
     required bool moduloServicosAtivo,
+    required BusinessModuleConfiguration moduleConfiguration,
   }) async {
     final t = await _vault.read(comercioId);
     if (t == null) return;
-    await _api.updateBusinessModules(Uri.parse(endpoint), t.accessToken, moduloLojaAtivo, moduloServicosAtivo);
+    await _api.updateBusinessModules(
+      Uri.parse(endpoint),
+      t.accessToken,
+      moduloLojaAtivo,
+      moduloServicosAtivo,
+      moduleConfiguration.toJson(),
+    );
   }
 }

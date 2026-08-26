@@ -6,6 +6,7 @@ import '../core/utils/booking_slug.dart';
 import '../database/database_service.dart';
 import '../database/migrations/migration_v2_impl.dart';
 import '../models/domain/acesso.dart';
+import '../models/domain/business_profile.dart';
 
 typedef DatabaseProvider = Future<Database> Function();
 
@@ -38,6 +39,16 @@ class AcessoRepository {
         'nome': entrada.nomeComercio.trim(),
         'nome_exibicao': entrada.nomeExibicao.trim(),
         'tipo_estabelecimento': entrada.tipoEstabelecimento.name,
+        'modulo_loja_ativo':
+            entrada.effectiveModuleConfiguration.possui(BusinessModule.loja)
+            ? 1
+            : 0,
+        'modulo_servicos_ativo':
+            entrada.effectiveModuleConfiguration.possui(BusinessModule.servicos)
+            ? 1
+            : 0,
+        'modulos_configuracao_json': entrada.effectiveModuleConfiguration
+            .toJson(),
         'responsavel': entrada.responsavel.trim(),
         'telefone': entrada.telefone.trim(),
         'email': entrada.email.trim().toLowerCase(),
@@ -166,7 +177,13 @@ class AcessoRepository {
         'email': login,
         'ativo': 1,
         'modulo_loja_ativo': (account['moduloLojaAtivo'] == true) ? 1 : 0,
-        'modulo_servicos_ativo': (account['moduloServicosAtivo'] == false) ? 0 : 1,
+        'modulo_servicos_ativo': (account['moduloServicosAtivo'] == false)
+            ? 0
+            : 1,
+        if (account['segment'] != null)
+          'tipo_estabelecimento': account['segment'],
+        if (account['moduleConfiguration'] != null)
+          'modulos_configuracao_json': account['moduleConfiguration'],
         if (account['bookingSlug'] != null)
           'booking_slug': account['bookingSlug'],
         if (account['bookingEnabled'] != null)
@@ -280,7 +297,8 @@ class AcessoRepository {
         c.tema_modo,
         c.tema_automatico,
         c.modulo_loja_ativo,
-        c.modulo_servicos_ativo
+        c.modulo_servicos_ativo,
+        c.modulos_configuracao_json
       FROM usuarios u
       INNER JOIN comercios c ON c.id = u.comercio_id
       WHERE LOWER(u.email_login) = LOWER(?)
@@ -350,7 +368,8 @@ class AcessoRepository {
         c.tema_modo,
         c.tema_automatico,
         c.modulo_loja_ativo,
-        c.modulo_servicos_ativo
+        c.modulo_servicos_ativo,
+        c.modulos_configuracao_json
       FROM usuarios u
       INNER JOIN comercios c ON c.id = u.comercio_id
       WHERE LOWER(u.email_login) = LOWER(?)
@@ -452,7 +471,8 @@ class AcessoRepository {
         c.tema_modo,
         c.tema_automatico,
         c.modulo_loja_ativo,
-        c.modulo_servicos_ativo      FROM usuarios u
+        c.modulo_servicos_ativo,
+        c.modulos_configuracao_json FROM usuarios u
       INNER JOIN comercios c ON c.id = u.comercio_id
       WHERE UPPER(c.codigo_acesso) = UPPER(?)
         AND LOWER(u.email_login) = LOWER(?)
@@ -548,7 +568,8 @@ class AcessoRepository {
         c.tema_modo,
         c.tema_automatico,
         c.modulo_loja_ativo,
-        c.modulo_servicos_ativo      FROM usuarios u
+        c.modulo_servicos_ativo,
+        c.modulos_configuracao_json FROM usuarios u
       INNER JOIN comercios c ON c.id = u.comercio_id
       WHERE u.id = ?
       LIMIT 1
@@ -900,6 +921,11 @@ class AcessoRepository {
       capaUrl: mapa['capa_url'] as String? ?? '',
       moduloLojaAtivo: (mapa['modulo_loja_ativo'] as num? ?? 1) == 1,
       moduloServicosAtivo: (mapa['modulo_servicos_ativo'] as num? ?? 1) == 1,
+      moduleConfiguration: mapa['modulos_configuracao_json'] == null
+          ? null
+          : BusinessModuleConfiguration.fromJson(
+              mapa['modulos_configuracao_json'] as String,
+            ),
     );
   }
 

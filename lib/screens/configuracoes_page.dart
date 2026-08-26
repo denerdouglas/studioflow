@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/domain/acesso.dart';
+import '../models/domain/business_profile.dart';
 import '../models/domain/configuracao_comercio.dart';
 import '../repositories/configuracoes_repository.dart';
 import '../core/routes/app_routes.dart';
@@ -40,13 +41,51 @@ class _ConfiguracoesPageState extends State<ConfiguracoesPage> {
   bool _confirmarExclusoes = true;
   bool _carregando = true;
   bool _salvando = false;
+  late BusinessModuleConfiguration _modules;
 
   UsuarioAcesso get _usuario => SessionController.instance.usuario!;
 
   @override
   void initState() {
     super.initState();
+    _modules = _usuario.businessProfile.modules;
     _carregar();
+  }
+
+  Future<void> _salvarRecursos() async {
+    setState(() => _salvando = true);
+    try {
+      final db = await DatabaseService.instance.database;
+      await db.update(
+        'comercios',
+        {
+          'modulo_loja_ativo': _modules.possui(BusinessModule.loja) ? 1 : 0,
+          'modulo_servicos_ativo': _modules.possui(BusinessModule.servicos)
+              ? 1
+              : 0,
+          'modulos_configuracao_json': _modules.toJson(),
+        },
+        where: 'id = ?',
+        whereArgs: [_usuario.comercioId],
+      );
+      final api = AcessoOnlineService();
+      if (api.configurado) {
+        await api.updateModules(
+          comercioId: _usuario.comercioId,
+          moduloLojaAtivo: _modules.possui(BusinessModule.loja),
+          moduloServicosAtivo: _modules.possui(BusinessModule.servicos),
+          moduleConfiguration: _modules,
+        );
+      }
+      await SessionController.instance.atualizarUsuario();
+      if (mounted) {
+        _mensagem('Recursos atualizados. Seus dados foram preservados.');
+      }
+    } catch (_) {
+      if (mounted) _mensagem('Não foi possível atualizar os recursos.');
+    } finally {
+      if (mounted) setState(() => _salvando = false);
+    }
   }
 
   Future<void> _carregar() async {
@@ -134,28 +173,55 @@ class _ConfiguracoesPageState extends State<ConfiguracoesPage> {
     super.dispose();
   }
 
-Future<void> _ativarServicos() async {
+  Future<void> _ativarServicos() async {
     final confirmou = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
         title: const Text('Ativar Servios / Salo?'),
-        content: const Text('Isso adicionar os mdulos de Agenda, Servios e Profissionais ao seu menu. Os dados de Loja no sero afetados.'),
+        content: const Text(
+          'Isso adicionar os mdulos de Agenda, Servios e Profissionais ao seu menu. Os dados de Loja no sero afetados.',
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
-          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Confirmar')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Confirmar'),
+          ),
         ],
       ),
     );
     if (confirmou != true) return;
 
-    setState(() => _carregando = true);
+    setState(() {
+      _carregando = true;
+      _modules = _modules
+          .alterar(BusinessModule.servicos, true)
+          .alterar(BusinessModule.agenda, true)
+          .alterar(BusinessModule.equipe, true);
+    });
     try {
       final db = await DatabaseService.instance.database;
-      await db.update('comercios', {'modulo_servicos_ativo': 1}, where: 'id = ?', whereArgs: [_usuario.comercioId]);
+      await db.update(
+        'comercios',
+        {
+          'modulo_servicos_ativo': 1,
+          'modulos_configuracao_json': _modules.toJson(),
+        },
+        where: 'id = ?',
+        whereArgs: [_usuario.comercioId],
+      );
 
       final api = AcessoOnlineService();
       if (api.configurado) {
-        await api.updateModules(comercioId: _usuario.comercioId, moduloLojaAtivo: _usuario.moduloLojaAtivo, moduloServicosAtivo: true);
+        await api.updateModules(
+          comercioId: _usuario.comercioId,
+          moduloLojaAtivo: _modules.possui(BusinessModule.loja),
+          moduloServicosAtivo: true,
+          moduleConfiguration: _modules,
+        );
       }
 
       await SessionController.instance.inicializar();
@@ -168,7 +234,11 @@ Future<void> _ativarServicos() async {
         (route) => false,
       );
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Falha ao ativar: ')));
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Falha ao ativar: ')));
+      }
     } finally {
       if (mounted) setState(() => _carregando = false);
     }
@@ -176,7 +246,7 @@ Future<void> _ativarServicos() async {
 
   @override
   Widget build(BuildContext context) {
-    final exibeServicos = _usuario.moduloServicosAtivo;
+    final exibeServicos = _usuario.moduloAtivo(BusinessModule.servicos);
     if (!_usuario.pode(ModuloPermissao.configuracoes)) {
       return const Scaffold(
         body: Center(child: Text('Acesso às configurações não permitido.')),
@@ -194,14 +264,14 @@ Future<void> _ativarServicos() async {
                     child: ListTile(
                       leading: Icon(Icons.groups_outlined),
                       title: Text('Equipe'),
-                    subtitle: Text('Ativos, solicitações e inativos'),
-                    trailing: Icon(Icons.chevron_right),
-                    onTap: () => Navigator.push(
-                      context,
-                      AppRoutes.material(builder: (_) => const EquipePage()),
+                      subtitle: Text('Ativos, solicitações e inativos'),
+                      trailing: Icon(Icons.chevron_right),
+                      onTap: () => Navigator.push(
+                        context,
+                        AppRoutes.material(builder: (_) => const EquipePage()),
+                      ),
                     ),
                   ),
-                ),
                 Card(
                   child: ListTile(
                     leading: Icon(Icons.swap_horiz),
@@ -376,6 +446,33 @@ Future<void> _ativarServicos() async {
                 ),
                 SizedBox(height: 16),
                 _titulo('Preferências'),
+                Card(
+                  child: ExpansionTile(
+                    leading: const Icon(Icons.extension_outlined),
+                    title: const Text('Recursos do StudioFlow'),
+                    subtitle: const Text(
+                      'Ative ou oculte recursos sem excluir dados',
+                    ),
+                    children: [
+                      for (final module in BusinessModule.values)
+                        SwitchListTile(
+                          value: _modules.possui(module),
+                          title: Text(_nomeModulo(module)),
+                          onChanged: (value) => setState(
+                            () => _modules = _modules.alterar(module, value),
+                          ),
+                        ),
+                      Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: FilledButton.icon(
+                          onPressed: _salvando ? null : _salvarRecursos,
+                          icon: const Icon(Icons.save_outlined),
+                          label: const Text('Salvar recursos'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
                 const ListTile(
                   contentPadding: EdgeInsets.zero,
                   leading: Icon(Icons.attach_money),
@@ -426,6 +523,20 @@ Future<void> _ativarServicos() async {
       ),
     );
   }
+
+  String _nomeModulo(BusinessModule module) => switch (module) {
+    BusinessModule.agenda => 'Agenda',
+    BusinessModule.servicos => 'Serviços',
+    BusinessModule.equipe => 'Profissionais e equipe',
+    BusinessModule.clientes => 'Clientes',
+    BusinessModule.caixa => 'Caixa',
+    BusinessModule.financeiro => 'Financeiro',
+    BusinessModule.loja => 'Loja e vendas',
+    BusinessModule.produtos => 'Produtos',
+    BusinessModule.estoque => 'Estoque e insumos',
+    BusinessModule.fornecedores => 'Fornecedores',
+    BusinessModule.relatorios => 'Relatórios',
+  };
 
   Widget _campo(
     TextEditingController controller,

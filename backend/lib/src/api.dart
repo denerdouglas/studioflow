@@ -145,15 +145,17 @@ final class StudioFlowApi {
     final actor = _authenticate(request);
     if (actor.businessId == null) {
       return _error(403, 'forbidden', 'Nenhum negócio associado.');
-  }
+    }
 
     final moduloLojaAtivo = body['moduloLojaAtivo'] as bool? ?? true;
     final moduloServicosAtivo = body['moduloServicosAtivo'] as bool? ?? true;
+    final moduleConfiguration = body['moduleConfiguration'] as String?;
 
     await store.updateBusinessModules(
       businessId: actor.businessId!,
       moduloLojaAtivo: moduloLojaAtivo,
       moduloServicosAtivo: moduloServicosAtivo,
+      moduleConfiguration: moduleConfiguration,
     );
 
     return _json(200, {'success': true});
@@ -169,12 +171,14 @@ final class StudioFlowApi {
     final segment = (body['segment'] as String? ?? 'salao').trim();
     final moduloLojaAtivo = body['moduloLojaAtivo'] as bool? ?? true;
     final moduloServicosAtivo = body['moduloServicosAtivo'] as bool? ?? true;
+    final moduleConfiguration = body['moduleConfiguration'] as String?;
     final account = await store.createBusinessOwner(
       businessId: _optionalIdentifier(body['businessId']) ?? _uuid.v4(),
       businessName: businessName,
       segment: segment,
       moduloLojaAtivo: moduloLojaAtivo,
       moduloServicosAtivo: moduloServicosAtivo,
+      moduleConfiguration: moduleConfiguration,
       userId: _optionalIdentifier(body['userId']) ?? _uuid.v4(),
       ownerName: ownerName,
       phone: phone,

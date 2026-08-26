@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../core/routes/app_routes.dart';
 import '../core/theme/studioflow_theme.dart';
 import '../models/domain/acesso.dart';
+import '../models/domain/business_profile.dart';
 import '../services/session_controller.dart';
 import 'academy_page.dart';
 import '../controllers/academy_controller.dart';
@@ -27,7 +28,6 @@ class MaisPremiumPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final usuario = SessionController.instance.usuario;
-    final exibeServicos = usuario?.moduloServicosAtivo ?? true;
     if (usuario == null) {
       return Scaffold(body: Center(child: Text('Sessão expirada')));
     }
@@ -54,7 +54,8 @@ class MaisPremiumPage extends StatelessWidget {
           _buildUserProfile(usuario, context),
           const SizedBox(height: 24),
           _buildSectionTitle('Gestão & Vendas'),
-          if (usuario.pode(ModuloPermissao.clientes))
+          if (usuario.moduloAtivo(BusinessModule.clientes) &&
+              usuario.pode(ModuloPermissao.clientes))
             _buildMenuItem(
               context: context,
               icon: Icons.people_outline,
@@ -63,7 +64,8 @@ class MaisPremiumPage extends StatelessWidget {
               subtitle: 'Cadastro, contatos e histórico',
               destination: const ClientesPage(),
             ),
-          if (exibeServicos && usuario.pode(ModuloPermissao.funcionarios))
+          if (usuario.moduloAtivo(BusinessModule.equipe) &&
+              usuario.pode(ModuloPermissao.funcionarios))
             _buildMenuItem(
               context: context,
               icon: Icons.groups_outlined,
@@ -72,7 +74,8 @@ class MaisPremiumPage extends StatelessWidget {
               subtitle: 'Profissionais, colaboradores e comissões',
               destination: const EquipeComissoesPage(),
             ),
-          if (exibeServicos && usuario.pode(ModuloPermissao.servicos))
+          if (usuario.moduloAtivo(BusinessModule.servicos) &&
+              usuario.pode(ModuloPermissao.servicos))
             _buildMenuItem(
               context: context,
               icon: Icons.design_services_outlined,
@@ -81,7 +84,8 @@ class MaisPremiumPage extends StatelessWidget {
               subtitle: 'Serviços, preços, duração e combos',
               destination: const ServicosPacotesPage(),
             ),
-          if (usuario.pode(ModuloPermissao.agenda))
+          if (usuario.moduloAtivo(BusinessModule.agenda) &&
+              usuario.pode(ModuloPermissao.agenda))
             _buildMenuItem(
               context: context,
               icon: Icons.support_agent,
@@ -90,7 +94,8 @@ class MaisPremiumPage extends StatelessWidget {
               subtitle: 'Disponibilidade, clientes 360º, Pix',
               destination: const CentralAtendimentoPage(),
             ),
-          if (usuario.pode(ModuloPermissao.lojaSalao))
+          if (usuario.moduloAtivo(BusinessModule.loja) &&
+              usuario.pode(ModuloPermissao.lojaSalao))
             _buildMenuItem(
               context: context,
               icon: Icons.store_mall_directory_outlined,
@@ -100,7 +105,8 @@ class MaisPremiumPage extends StatelessWidget {
               destination: const LojaSalaoPage(),
             ),
 
-          if (usuario.pode(ModuloPermissao.clientes))
+          if (usuario.moduloAtivo(BusinessModule.clientes) &&
+              usuario.pode(ModuloPermissao.clientes))
             _buildMenuItem(
               context: context,
               icon: Icons.cake_outlined,

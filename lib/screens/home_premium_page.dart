@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../core/helpers/app_formatters.dart';
 import '../core/theme/studioflow_theme.dart';
 import '../models/domain/acesso.dart';
+import '../models/domain/business_profile.dart';
 import '../repositories/modalidades_repository.dart';
 import '../services/session_controller.dart';
 import '../services/dashboard_summary_service.dart';
@@ -40,15 +41,14 @@ class _HomePremiumPageState extends State<HomePremiumPage> {
   bool _isLoading = true;
   String? _error;
 
-@override
+  @override
   void initState() {
     super.initState();
     final usuario = SessionController.instance.usuario;
-    if (usuario?.moduloServicosAtivo == false) {
-      _config = DashboardConfiguration.lojaLayout();
-    } else {
-      _config = DashboardConfiguration.defaultLayout();
-    }
+    _config = DashboardConfiguration.forModules(
+      usuario?.businessProfile.modules ??
+          BusinessModuleConfiguration.complete(),
+    );
     _registerWidgets();
     _loadData();
   }

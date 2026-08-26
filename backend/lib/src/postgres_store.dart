@@ -36,18 +36,26 @@ final class PostgresBackendStore
     required String passwordHash,
     bool moduloLojaAtivo = true,
     bool moduloServicosAtivo = true,
+    String? moduleConfiguration,
   }) {
     return _pool.runTx((tx) async {
       await _setTenant(tx, businessId);
       await tx.execute(
         Sql.named('''
-          INSERT INTO businesses (id, name, display_name, segment)
-          VALUES (@id, @name, @name, @segment)
+          INSERT INTO businesses
+            (id, name, display_name, segment, modulo_loja_ativo,
+             modulo_servicos_ativo, module_configuration)
+          VALUES
+            (@id, @name, @name, @segment, @loja, @servicos,
+             CAST(@modules AS jsonb))
         '''),
         parameters: {
           'id': businessId,
           'name': businessName,
           'segment': segment,
+          'loja': moduloLojaAtivo,
+          'servicos': moduloServicosAtivo,
+          'modules': moduleConfiguration,
         },
       );
       final result = await tx.execute(
@@ -68,7 +76,13 @@ final class PostgresBackendStore
           'passwordHash': passwordHash,
         },
       );
-      return _accountFromRow(result.single.toColumnMap(), businessName);
+      return _accountFromRow({
+        ...result.single.toColumnMap(),
+        'segment': segment,
+        'modulo_loja_ativo': moduloLojaAtivo,
+        'modulo_servicos_ativo': moduloServicosAtivo,
+        'module_configuration': moduleConfiguration,
+      }, businessName);
     });
   }
 
@@ -80,7 +94,9 @@ final class PostgresBackendStore
         Sql.named('''
           SELECT u.id, u.business_id, b.display_name AS business_name,
                  u.name, u.phone, u.login, u.password_hash, u.role, u.active,
-                 b.booking_slug, b.booking_enabled, b.modulo_loja_ativo, b.modulo_servicos_ativo
+                 b.booking_slug, b.booking_enabled, b.modulo_loja_ativo,
+                 b.modulo_servicos_ativo, b.segment,
+                 b.module_configuration::text AS module_configuration
           FROM users u
           INNER JOIN businesses b ON b.id = u.business_id
           WHERE lower(u.login) = @login
@@ -99,17 +115,23 @@ final class PostgresBackendStore
     required String businessId,
     required bool moduloLojaAtivo,
     required bool moduloServicosAtivo,
+    String? moduleConfiguration,
   }) {
     return _pool.runTx((tx) async {
       await _setTenant(tx, businessId);
       await tx.execute(
-        Sql.named(
-          'UPDATE businesses SET modulo_loja_ativo = @loja, modulo_servicos_ativo = @servicos, updated_at = now() WHERE id = @id',
-        ),
+        Sql.named('''UPDATE businesses
+             SET modulo_loja_ativo = @loja,
+                 modulo_servicos_ativo = @servicos,
+                 module_configuration = COALESCE(
+                   CAST(@modules AS jsonb), module_configuration),
+                 updated_at = now()
+             WHERE id = @id'''),
         parameters: {
           'id': businessId,
           'loja': moduloLojaAtivo,
           'servicos': moduloServicosAtivo,
+          'modules': moduleConfiguration,
         },
       );
     });
@@ -123,7 +145,9 @@ final class PostgresBackendStore
         Sql.named('''
           SELECT u.id, u.business_id, b.display_name AS business_name,
                  u.name, u.phone, u.login, u.password_hash, u.role, u.active,
-                 b.booking_slug, b.booking_enabled, b.modulo_loja_ativo, b.modulo_servicos_ativo
+                 b.booking_slug, b.booking_enabled, b.modulo_loja_ativo,
+                 b.modulo_servicos_ativo, b.segment,
+                 b.module_configuration::text AS module_configuration
           FROM users u
           INNER JOIN businesses b ON b.id = u.business_id
           WHERE u.id = @userId AND u.business_id = @businessId
@@ -522,7 +546,9 @@ final class PostgresBackendStore
         Sql.named('''
           SELECT u.id, u.business_id, b.display_name AS business_name,
                  u.name, u.phone, u.login, u.password_hash, u.role, u.active,
-                 b.booking_slug, b.booking_enabled, b.modulo_loja_ativo, b.modulo_servicos_ativo
+                 b.booking_slug, b.booking_enabled, b.modulo_loja_ativo,
+                 b.modulo_servicos_ativo, b.segment,
+                 b.module_configuration::text AS module_configuration
           FROM users u INNER JOIN businesses b ON b.id = u.business_id
           WHERE u.id = @userId AND u.business_id = @businessId
         '''),
@@ -559,6 +585,10 @@ final class PostgresBackendStore
       active: row['active'] as bool,
       bookingSlug: row['booking_slug'] as String?,
       bookingEnabled: row['booking_enabled'] as bool?,
+      moduloLojaAtivo: row['modulo_loja_ativo'] as bool? ?? true,
+      moduloServicosAtivo: row['modulo_servicos_ativo'] as bool? ?? true,
+      segment: row['segment'] as String?,
+      moduleConfiguration: row['module_configuration'] as String?,
     );
   }
 

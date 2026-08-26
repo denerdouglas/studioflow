@@ -12,6 +12,8 @@ final class AccountIdentity {
   final bool? bookingEnabled;
   final bool moduloLojaAtivo;
   final bool moduloServicosAtivo;
+  final String? segment;
+  final String? moduleConfiguration;
 
   const AccountIdentity({
     required this.userId,
@@ -27,6 +29,8 @@ final class AccountIdentity {
     this.bookingEnabled,
     this.moduloLojaAtivo = true,
     this.moduloServicosAtivo = true,
+    this.segment,
+    this.moduleConfiguration,
   });
 
   Map<String, Object?> toPublicJson() => {
@@ -41,6 +45,8 @@ final class AccountIdentity {
     'bookingEnabled': bookingEnabled,
     'moduloLojaAtivo': moduloLojaAtivo,
     'moduloServicosAtivo': moduloServicosAtivo,
+    'segment': segment,
+    'moduleConfiguration': moduleConfiguration,
   };
 }
 

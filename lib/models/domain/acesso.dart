@@ -1,3 +1,5 @@
+import 'business_profile.dart';
+
 enum TipoEstabelecimento {
   salao,
   barbearia,
@@ -253,6 +255,7 @@ class UsuarioAcesso {
   final String capaUrl;
   final bool moduloLojaAtivo;
   final bool moduloServicosAtivo;
+  final BusinessModuleConfiguration? moduleConfiguration;
 
   const UsuarioAcesso({
     required this.id,
@@ -278,7 +281,32 @@ class UsuarioAcesso {
     this.capaUrl = '',
     this.moduloLojaAtivo = true,
     this.moduloServicosAtivo = true,
+    this.moduleConfiguration,
   });
+
+  BusinessProfile get businessProfile {
+    if (moduleConfiguration != null) {
+      return BusinessProfile(
+        segment: tipoEstabelecimento,
+        modules: moduleConfiguration!,
+        explicitConfiguration: true,
+      );
+    }
+    if (!moduloServicosAtivo || !moduloLojaAtivo) {
+      return BusinessProfile(
+        segment: tipoEstabelecimento,
+        modules: BusinessModuleConfiguration.defaultsFor(
+          tipoEstabelecimento,
+          somenteLoja: !moduloServicosAtivo && moduloLojaAtivo,
+        ),
+        explicitConfiguration: false,
+      );
+    }
+    return BusinessProfile.legacy(tipoEstabelecimento);
+  }
+
+  bool moduloAtivo(BusinessModule module) =>
+      businessProfile.modules.possui(module);
 
   bool pode(ModuloPermissao modulo) {
     return ativo &&
@@ -311,6 +339,7 @@ class UsuarioGerenciavel {
   final String capaUrl;
   final bool moduloLojaAtivo;
   final bool moduloServicosAtivo;
+  final BusinessModuleConfiguration? moduleConfiguration;
 
   const UsuarioGerenciavel({
     required this.id,
@@ -333,6 +362,7 @@ class UsuarioGerenciavel {
     this.capaUrl = '',
     this.moduloLojaAtivo = true,
     this.moduloServicosAtivo = true,
+    this.moduleConfiguration,
   });
 }
 
@@ -347,6 +377,7 @@ class CadastroComercioEntrada {
   final TipoEstabelecimento tipoEstabelecimento;
   final bool moduloLojaAtivo;
   final bool moduloServicosAtivo;
+  final BusinessModuleConfiguration? moduleConfiguration;
 
   const CadastroComercioEntrada({
     required this.nomeComercio,
@@ -359,5 +390,13 @@ class CadastroComercioEntrada {
     this.tipoEstabelecimento = TipoEstabelecimento.salao,
     this.moduloLojaAtivo = true,
     this.moduloServicosAtivo = true,
+    this.moduleConfiguration,
   });
+
+  BusinessModuleConfiguration get effectiveModuleConfiguration =>
+      moduleConfiguration ??
+      BusinessModuleConfiguration.defaultsFor(
+        tipoEstabelecimento,
+        somenteLoja: !moduloServicosAtivo,
+      );
 }

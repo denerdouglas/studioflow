@@ -39,6 +39,7 @@ final class MemoryBackendStore
     required String passwordHash,
     bool moduloLojaAtivo = true,
     bool moduloServicosAtivo = true,
+    String? moduleConfiguration,
   }) async {
     final account = AccountIdentity(
       userId: userId,
@@ -50,6 +51,10 @@ final class MemoryBackendStore
       role: 'dono',
       passwordHash: passwordHash,
       active: true,
+      segment: segment,
+      moduloLojaAtivo: moduloLojaAtivo,
+      moduloServicosAtivo: moduloServicosAtivo,
+      moduleConfiguration: moduleConfiguration,
     );
     _accounts[_accountKey(userId, businessId)] = account;
     return account;
@@ -75,7 +80,28 @@ final class MemoryBackendStore
     required String businessId,
     required bool moduloLojaAtivo,
     required bool moduloServicosAtivo,
-  }) async {}
+    String? moduleConfiguration,
+  }) async {
+    for (final entry in _accounts.entries.toList()) {
+      final current = entry.value;
+      if (current.businessId != businessId) continue;
+      _accounts[entry.key] = AccountIdentity(
+        userId: current.userId,
+        businessId: current.businessId,
+        businessName: current.businessName,
+        userName: current.userName,
+        phone: current.phone,
+        login: current.login,
+        role: current.role,
+        passwordHash: current.passwordHash,
+        active: current.active,
+        segment: current.segment,
+        moduloLojaAtivo: moduloLojaAtivo,
+        moduloServicosAtivo: moduloServicosAtivo,
+        moduleConfiguration: moduleConfiguration ?? current.moduleConfiguration,
+      );
+    }
+  }
 
   @override
   Future<AccountIdentity?> findAccount(String userId, String businessId) async {
@@ -260,6 +286,10 @@ final class MemoryBackendStore
       role: current.role,
       passwordHash: newPasswordHash,
       active: current.active,
+      segment: current.segment,
+      moduloLojaAtivo: current.moduloLojaAtivo,
+      moduloServicosAtivo: current.moduloServicosAtivo,
+      moduleConfiguration: current.moduleConfiguration,
     );
     _accounts[key] = updated;
     for (final session

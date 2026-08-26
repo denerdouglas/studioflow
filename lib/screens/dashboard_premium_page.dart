@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../core/theme/studioflow_theme.dart';
 import '../models/domain/acesso.dart';
+import '../models/domain/business_profile.dart';
 import '../services/session_controller.dart';
 import 'agenda_page.dart';
 import 'home_premium_page.dart';
@@ -35,10 +36,11 @@ class _DashboardPremiumPageState extends State<DashboardPremiumPage> {
     });
   }
 
-@override
+  @override
   Widget build(BuildContext context) {
     final usuario = SessionController.instance.usuario!;
-    final exibeAgenda = usuario.moduloServicosAtivo;
+    final exibeAgenda = usuario.moduloAtivo(BusinessModule.agenda);
+    final exibeLoja = usuario.moduloAtivo(BusinessModule.loja);
 
     final paginas = <Widget>[
       HomePremiumPage(
@@ -50,18 +52,20 @@ class _DashboardPremiumPageState extends State<DashboardPremiumPage> {
         usuario.pode(ModuloPermissao.agenda)
             ? const AgendaPage()
             : const Center(child: Text('Acesso não permitido.')),
-      usuario.pode(ModuloPermissao.lojaSalao)
-          ? const LojaSalaoPage()
-          : const Center(child: Text('Acesso não permitido.')),
+      if (exibeLoja)
+        usuario.pode(ModuloPermissao.lojaSalao)
+            ? const LojaSalaoPage()
+            : const Center(child: Text('Acesso não permitido.')),
       MaisPremiumPage(tema: widget.tema),
     ];
 
     final destinations = <NavigationDestination>[
-      const NavigationDestination(
-        icon: Icon(Icons.home_outlined),
-        selectedIcon: Icon(Icons.home),
-        label: 'Início',
-      ),
+      if (exibeLoja)
+        const NavigationDestination(
+          icon: Icon(Icons.home_outlined),
+          selectedIcon: Icon(Icons.home),
+          label: 'Início',
+        ),
       if (exibeAgenda)
         const NavigationDestination(
           icon: Icon(Icons.calendar_month_outlined),

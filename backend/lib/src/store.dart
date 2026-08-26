@@ -14,6 +14,7 @@ abstract interface class BackendStore {
     required String passwordHash,
     bool moduloLojaAtivo = true,
     bool moduloServicosAtivo = true,
+    String? moduleConfiguration,
   });
 
   Future<List<AccountIdentity>> findAccountsByLogin(String normalizedLogin);
@@ -21,6 +22,7 @@ abstract interface class BackendStore {
     required String businessId,
     required bool moduloLojaAtivo,
     required bool moduloServicosAtivo,
+    String? moduleConfiguration,
   });
 
   Future<AccountIdentity?> findAccount(String userId, String businessId);
