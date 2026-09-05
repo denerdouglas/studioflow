@@ -187,6 +187,47 @@ void main() {
       expect(livres.map((e) => e.hour), [9]);
     });
 
+    test('disponibilidade respeita vínculo profissional e serviço', () async {
+      final data = DateTime(2026, 7, 23);
+      await agenda.salvarHorario(
+        HorarioProfissional(
+          id: 'horario_vinculo',
+          profissionalId: 'prof_1',
+          diaSemana: data.weekday,
+          inicio: '09:00',
+          fim: '12:00',
+        ),
+      );
+      await db.insert('profissionais', {
+        'id': 'prof_2',
+        'comercio_id': dono.comercioId,
+        'nome': 'Bia',
+        'whatsapp': '11999990003',
+        'cargo': 'Cabeleireira',
+        'ativo': 1,
+        'percentual_comissao': 50,
+        'meta_mensal': 0,
+        'faturamento_mes': 0,
+        'data_cadastro': DateTime(2026, 7, 22).toIso8601String(),
+      });
+      await db.insert('profissional_servicos', {
+        'profissional_id': 'prof_2',
+        'servico_id': 'servico_1',
+        'business_id': dono.comercioId,
+        'ativo': 1,
+      });
+
+      expect(
+        await agenda.horariosDisponiveis(
+          profissionalId: 'prof_1',
+          data: data,
+          duracaoMinutos: 60,
+          servicoId: 'servico_1',
+        ),
+        isEmpty,
+      );
+    });
+
     test(
       'bloqueio pode ser editado, excluído e preserva horário livre',
       () async {

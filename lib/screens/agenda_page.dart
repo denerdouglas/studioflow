@@ -18,6 +18,7 @@ import '../services/session_controller.dart';
 import '../services/whatsapp_queue_service.dart';
 import '../widgets/mensagem_revisao_dialog.dart';
 import 'novo_agendamento_sheet.dart';
+import '../services/preferencias_service.dart';
 
 class AgendaPage extends StatefulWidget {
   final ClienteRegistro? clienteInicial;
@@ -59,6 +60,11 @@ class _AgendaPageState extends State<AgendaPage> {
   List<ClienteRegistro> _clientes = [];
   List<ProfissionalBasicoRegistro> _profissionais = [];
   List<ModalidadeRegistro> _modalidades = const [];
+  List<ServicoBasicoRegistro> _servicos = const [];
+  List<DateTime> _horariosLivres = const [];
+  bool _mostrarHorariosLivres = false;
+  String? _profissionalDisponibilidadeId;
+  String? _servicoDisponibilidadeId;
   String? _modalidadeId;
   Set<String> _servicosModalidade = const {};
   Set<String> _profissionaisModalidade = const {};
@@ -73,6 +79,20 @@ class _AgendaPageState extends State<AgendaPage> {
     super.initState();
     _dataSelecionada = widget.dataInicial ?? DateTime.now();
     _carregarTudo();
+    _carregarPreferenciaDisponibilidade();
+  }
+
+  Future<void> _carregarPreferenciaDisponibilidade() async {
+    final businessId = SessionController.instance.usuario?.comercioId;
+    if (businessId == null) return;
+    var value = false;
+    try {
+      value = await PreferenciasService.mostrarHorariosLivres(businessId);
+    } catch (_) {
+      // A preferência é apenas de UX; indisponibilidade do storage mantém o
+      // default seguro sem comprometer a agenda.
+    }
+    if (mounted) setState(() => _mostrarHorariosLivres = value);
   }
 
   Future<void> _carregarTudo() async {
@@ -83,6 +103,7 @@ class _AgendaPageState extends State<AgendaPage> {
         _agendaRepository.listarPorDia(_dataSelecionada),
         _clienteRepository.listar(),
         _cadastrosRepository.listarProfissionais(),
+        _cadastrosRepository.listarServicos(),
         _modalidadesRepository.listar(incluirInativas: false),
         _agendaCompletaRepository.listarBloqueios(
           aPartirDe: DateTime(
@@ -104,14 +125,15 @@ class _AgendaPageState extends State<AgendaPage> {
 
         _profissionais = resultados[2] as List<ProfissionalBasicoRegistro>;
 
-        _modalidades = resultados[3] as List<ModalidadeRegistro>;
+        _servicos = resultados[3] as List<ServicoBasicoRegistro>;
+        _modalidades = resultados[4] as List<ModalidadeRegistro>;
         final inicioDia = DateTime(
           _dataSelecionada.year,
           _dataSelecionada.month,
           _dataSelecionada.day,
         );
         final fimDia = inicioDia.add(const Duration(days: 1));
-        _bloqueios = (resultados[4] as List<BloqueioAgenda>)
+        _bloqueios = (resultados[5] as List<BloqueioAgenda>)
             .where(
               (bloqueio) =>
                   bloqueio.inicio.isBefore(fimDia) &&
@@ -122,6 +144,7 @@ class _AgendaPageState extends State<AgendaPage> {
         _carregando = false;
         _erro = null;
       });
+      await _carregarHorariosLivres();
 
       if (widget.clienteInicial != null && !_abriuFormularioInicial) {
         _abriuFormularioInicial = true;
@@ -153,6 +176,40 @@ class _AgendaPageState extends State<AgendaPage> {
         _erro = 'Não foi possível carregar a agenda.';
       });
     }
+  }
+
+  Future<void> _carregarHorariosLivres() async {
+    final professionalId = _profissionalDisponibilidadeId;
+    final serviceId = _servicoDisponibilidadeId;
+    if (!_mostrarHorariosLivres ||
+        professionalId == null ||
+        serviceId == null) {
+      if (mounted) setState(() => _horariosLivres = const []);
+      return;
+    }
+    final service = _servicos.where((item) => item.id == serviceId).firstOrNull;
+    if (service == null) return;
+    final slots = await _agendaCompletaRepository.horariosDisponiveis(
+      profissionalId: professionalId,
+      data: _dataSelecionada,
+      duracaoMinutos: service.duracaoMinutos,
+      servicoId: service.id,
+    );
+    if (mounted) setState(() => _horariosLivres = slots);
+  }
+
+  Future<void> _alterarMostrarLivres(bool value) async {
+    final businessId = SessionController.instance.usuario!.comercioId;
+    setState(() {
+      _mostrarHorariosLivres = value;
+      if (!value) _horariosLivres = const [];
+    });
+    try {
+      await PreferenciasService.salvarMostrarHorariosLivres(businessId, value);
+    } catch (_) {
+      // O toggle continua válido durante a sessão mesmo sem persistência.
+    }
+    await _carregarHorariosLivres();
   }
 
   Future<void> _selecionarData() async {
@@ -903,6 +960,7 @@ class _AgendaPageState extends State<AgendaPage> {
             _seletorData(),
             SizedBox(height: 10),
             _filtroModalidade(),
+            _controlesDisponibilidade(),
             SizedBox(height: 12),
             Expanded(child: _conteudo()),
           ],
@@ -1103,6 +1161,64 @@ class _AgendaPageState extends State<AgendaPage> {
       ],
     ),
   );
+  Widget _controlesDisponibilidade() => Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 20),
+    child: Column(
+      children: [
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Mostrar horários disponíveis'),
+          subtitle: const Text(
+            'Selecione serviço e profissional para precisão.',
+          ),
+          value: _mostrarHorariosLivres,
+          onChanged: _alterarMostrarLivres,
+        ),
+        if (_mostrarHorariosLivres)
+          Row(
+            children: [
+              Expanded(
+                child: DropdownButtonFormField<String>(
+                  initialValue: _profissionalDisponibilidadeId,
+                  decoration: const InputDecoration(labelText: 'Profissional'),
+                  items: _profissionais
+                      .map(
+                        (item) => DropdownMenuItem(
+                          value: item.id,
+                          child: Text(item.nome),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (value) {
+                    setState(() => _profissionalDisponibilidadeId = value);
+                    _carregarHorariosLivres();
+                  },
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: DropdownButtonFormField<String>(
+                  initialValue: _servicoDisponibilidadeId,
+                  decoration: const InputDecoration(labelText: 'Serviço'),
+                  items: _servicos
+                      .map(
+                        (item) => DropdownMenuItem(
+                          value: item.id,
+                          child: Text(item.nome),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (value) {
+                    setState(() => _servicoDisponibilidadeId = value);
+                    _carregarHorariosLivres();
+                  },
+                ),
+              ),
+            ],
+          ),
+      ],
+    ),
+  );
   Widget _conteudo() {
     if (_carregando) {
       return Center(child: CircularProgressIndicator(color: _corPrincipal));
@@ -1121,20 +1237,26 @@ class _AgendaPageState extends State<AgendaPage> {
                     _profissionaisModalidade.contains(item.profissionalId),
               )
               .toList();
-    if (visible.isEmpty && _bloqueios.isEmpty) {
+    if (visible.isEmpty && _bloqueios.isEmpty && _horariosLivres.isEmpty) {
       return Center(
         child: Text('Nenhum agendamento ou bloqueio para este filtro.'),
       );
     }
 
+    final timeline = <({DateTime inicio, Object valor})>[
+      ..._bloqueios.map((item) => (inicio: item.inicio, valor: item)),
+      ...visible.map((item) => (inicio: item.inicio, valor: item)),
+      ..._horariosLivres.map((item) => (inicio: item, valor: item)),
+    ]..sort((a, b) => a.inicio.compareTo(b.inicio));
+
     return ListView.builder(
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 110),
-      itemCount: _bloqueios.length + visible.length,
+      itemCount: timeline.length,
       itemBuilder: (context, index) {
-        if (index < _bloqueios.length) {
-          final bloqueio = _bloqueios[index];
+        final value = timeline[index].valor;
+        if (value is BloqueioAgenda) {
           return _BloqueioCard(
-            bloqueio: bloqueio,
+            bloqueio: value,
             onTap: () async {
               await Navigator.push(
                 context,
@@ -1144,7 +1266,21 @@ class _AgendaPageState extends State<AgendaPage> {
             },
           );
         }
-        final agendamento = visible[index - _bloqueios.length];
+        if (value is DateTime) {
+          final service = _servicos
+              .where((item) => item.id == _servicoDisponibilidadeId)
+              .first;
+          return Card(
+            color: const Color(0xFFEAF8F1),
+            child: ListTile(
+              leading: const Icon(Icons.event_available, color: Colors.green),
+              title: Text('${_formatarHora(value)} — HORÁRIO DISPONÍVEL'),
+              subtitle: Text('${service.nome} • ${service.duracaoMinutos} min'),
+              onTap: () => _novoAgendamentoNoHorario(value),
+            ),
+          );
+        }
+        final agendamento = value as AgendamentoRegistro;
 
         return _AgendamentoCard(
           agendamento: agendamento,
@@ -1154,6 +1290,25 @@ class _AgendaPageState extends State<AgendaPage> {
         );
       },
     );
+  }
+
+  static String _formatarHora(DateTime data) =>
+      '${data.hour.toString().padLeft(2, '0')}:'
+      '${data.minute.toString().padLeft(2, '0')}';
+
+  Future<void> _novoAgendamentoNoHorario(DateTime slot) async {
+    final result = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => NovoAgendamentoSheet(
+        dataBase: _dataSelecionada,
+        profissionais: _profissionais,
+        horarioInicial: slot,
+        profissionalInicialId: _profissionalDisponibilidadeId,
+      ),
+    );
+    if (result == true) await _carregarTudo();
   }
 
   String _formatarData(DateTime data) {

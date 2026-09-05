@@ -19,6 +19,8 @@ class NovoAgendamentoSheet extends StatefulWidget {
   final ResumoVendaPacote? pacoteInicial;
   final SessaoPacoteDetalheRegistro? sessaoInicial;
   final AgendamentoRegistro? agendamentoInicial;
+  final DateTime? horarioInicial;
+  final String? profissionalInicialId;
 
   const NovoAgendamentoSheet({
     super.key,
@@ -28,6 +30,8 @@ class NovoAgendamentoSheet extends StatefulWidget {
     this.pacoteInicial,
     this.sessaoInicial,
     this.agendamentoInicial,
+    this.horarioInicial,
+    this.profissionalInicialId,
   });
 
   @override
@@ -91,6 +95,8 @@ class _NovoAgendamentoSheetState extends State<NovoAgendamentoSheet> {
             hour: widget.agendamentoInicial!.inicio.hour,
             minute: widget.agendamentoInicial!.inicio.minute,
           )
+        : widget.horarioInicial != null
+        ? TimeOfDay.fromDateTime(widget.horarioInicial!)
         : const TimeOfDay(hour: 9, minute: 0);
     _clienteSelecionado =
         widget.clienteInicial ??
@@ -243,9 +249,13 @@ class _NovoAgendamentoSheetState extends State<NovoAgendamentoSheet> {
     setState(() {
       _itens.add(
         _ItemServico(
-          profissional: widget.profissionais.isNotEmpty
-              ? widget.profissionais.first
-              : null,
+          profissional:
+              widget.profissionais
+                  .where((item) => item.id == widget.profissionalInicialId)
+                  .firstOrNull ??
+              (widget.profissionais.isNotEmpty
+                  ? widget.profissionais.first
+                  : null),
         ),
       );
       _recalcularHorarios();

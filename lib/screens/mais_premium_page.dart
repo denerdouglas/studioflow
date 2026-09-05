@@ -5,9 +5,8 @@ import '../core/theme/studioflow_theme.dart';
 import '../models/domain/acesso.dart';
 import '../models/domain/business_profile.dart';
 import '../services/session_controller.dart';
-import 'academy_page.dart';
-import '../controllers/academy_controller.dart';
-import '../repositories/academy_repository.dart';
+import 'commercial_campaigns_page.dart';
+import 'global_courses_page.dart';
 import 'aniversarios_page.dart';
 import 'assinaturas_page.dart';
 import 'central_atendimento_page.dart';
@@ -122,13 +121,17 @@ class MaisPremiumPage extends StatelessWidget {
             context: context,
             icon: Icons.school_outlined,
             color: const Color(0xFF15996B),
-            title: 'StudioFlow Acadêmico',
-            subtitle: 'Capacitação e gestão',
-            destination: AcademyPage(
-              controller: AcademyController(
-                academyRepository: AcademyRepository(),
-              ),
-            ),
+            title: 'ROLG Academy & Ofertas',
+            subtitle: 'Cursos, ferramentas e ofertas de parceiros',
+            destination: CommercialCampaignsPage(),
+          ),
+          _buildMenuItem(
+            context: context,
+            icon: Icons.manage_search,
+            color: const Color(0xFF476B9E),
+            title: 'Pesquisar cursos',
+            subtitle: 'Catálogo global ROLG',
+            destination: GlobalCoursesPage(),
           ),
           if (usuario.pode(ModuloPermissao.configuracoes))
             _buildMenuItem(

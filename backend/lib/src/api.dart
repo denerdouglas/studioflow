@@ -19,6 +19,8 @@ import 'store.dart';
 import 'academy.dart';
 import 'public_booking.dart';
 import 'whatsapp_conversation.dart';
+import 'commercial_campaigns.dart';
+import 'global_content.dart';
 
 final class StudioFlowApi {
   final BackendStore store;
@@ -32,6 +34,8 @@ final class StudioFlowApi {
   final CatalogLookupService? catalog;
   final AcademyService academy;
   final SecureRedirectService secureRedirect;
+  final CommercialCampaignService? campaigns;
+  final GlobalContentStore? globalContent;
   final Uuid _uuid;
   final Map<String, List<DateTime>> _publicRateLimits = {};
 
@@ -42,6 +46,8 @@ final class StudioFlowApi {
     required this.adminService,
     required this.academy,
     required this.secureRedirect,
+    this.campaigns,
+    this.globalContent,
     PasswordSecurity? passwords,
     TokenSecurity? tokens,
     PasswordResetNotifier? resetNotifier,
@@ -103,6 +109,30 @@ final class StudioFlowApi {
       ..get('/v1/academy/categories', _academyCategories)
       ..get('/v1/academy/courses', _academySearch)
       ..get('/academy/r/<clickId>', _academyRedirect)
+      ..get('/v1/campaigns', _campaignList)
+      ..get('/v1/campaigns/<id>', _campaignDetail)
+      ..post('/v1/campaigns/<id>/impressions', _campaignImpression)
+      ..post('/v1/campaigns/<id>/clicks', _campaignClick)
+      ..get('/v1/platform-admin/campaigns', _adminCampaignList)
+      ..post('/v1/platform-admin/campaigns', _adminCampaignSave)
+      ..patch('/v1/platform-admin/campaigns/<id>', _adminCampaignUpdate)
+      ..get('/v1/platform-admin/campaign-analytics', _adminCampaignAnalytics)
+      ..get('/v1/global-products/barcode/<barcode>', _globalProductBarcode)
+      ..post('/v1/global-products/suggestions', _globalProductSuggestion)
+      ..get('/v1/global-courses', _globalCourseSearch)
+      ..get('/v1/platform-admin/global-products', _adminGlobalProducts)
+      ..post('/v1/platform-admin/global-products', _adminSaveGlobalProduct)
+      ..get('/v1/platform-admin/product-suggestions', _adminSuggestions)
+      ..post(
+        '/v1/platform-admin/product-suggestions/<id>/approve',
+        _adminApproveSuggestion,
+      )
+      ..post(
+        '/v1/platform-admin/product-suggestions/<id>/reject',
+        _adminRejectSuggestion,
+      )
+      ..post('/v1/platform-admin/global-courses', _adminSaveGlobalCourse)
+      ..get('/v1/platform-admin/global-courses', _adminGlobalCourses)
       ..get('/v1/subscriptions/status', _subscriptionStatus)
       ..post('/v1/scanner/scan', _scannerScan)
       ..get('/v1/public/booking/<slug>', _publicBooking)
@@ -730,11 +760,18 @@ final class StudioFlowApi {
         revoked: false,
       ),
     );
+    final platformAdmin = store is AdminBackendStore
+        ? await (store as AdminBackendStore).findPlatformAdminByUserId(
+            account.userId,
+          )
+        : null;
     final context = AuthContext(
       userId: account.userId,
       businessId: account.businessId,
       role: account.role,
       sessionId: sessionId,
+      actorType: platformAdmin == null ? 'tenant_user' : 'platform_admin',
+      platformRole: platformAdmin?.role,
     );
     await store.audit(
       event: 'auth.login',
@@ -780,11 +817,18 @@ final class StudioFlowApi {
       refreshHash: tokens.hashOpaqueToken(newRefresh),
       expiresAt: expiresAt,
     );
+    final platformAdmin = store is AdminBackendStore
+        ? await (store as AdminBackendStore).findPlatformAdminByUserId(
+            account.userId,
+          )
+        : null;
     final context = AuthContext(
       userId: account.userId,
       businessId: account.businessId,
       role: account.role,
       sessionId: session.id,
+      actorType: platformAdmin == null ? 'tenant_user' : 'platform_admin',
+      platformRole: platformAdmin?.role,
     );
     return _json(200, {
       'accessToken': tokens.createAccessToken(context),
@@ -962,8 +1006,8 @@ final class StudioFlowApi {
         }
       }
     }
-    final catalogService = catalog;
-    if (catalogService != null) {
+    final content = globalContent;
+    if (content != null) {
       for (final result in results.where((item) => item.status == 'applied')) {
         final mutation = operations.firstWhere(
           (item) => item.operationId == result.operationId,
@@ -973,10 +1017,25 @@ final class StudioFlowApi {
           continue;
         }
         try {
-          await catalogService.contribute(
-            businessId: actor.businessId!,
-            userId: actor.userId,
-            product: CatalogProductData.fromJson(mutation.payload),
+          final product = CatalogProductData.fromJson(mutation.payload);
+          final barcode = normalizeBarcode(product.gtin);
+          if (!isValidGlobalBarcode(barcode)) continue;
+          if (await content.pendingSuggestion(actor.businessId!, barcode) !=
+                  null ||
+              await content.productByBarcode(barcode) != null) {
+            continue;
+          }
+          await content.saveSuggestion(
+            ProductSuggestion(
+              id: _uuid.v4(),
+              barcode: barcode,
+              businessId: actor.businessId!,
+              name: product.name,
+              brand: product.brand,
+              category: product.category,
+              status: 'pending',
+              createdAt: DateTime.now().toUtc(),
+            ),
           );
         } on FormatException {
           // A sincronizaÃƒÂ§ÃƒÂ£o do comÃƒÂ©rcio permanece vÃƒÂ¡lida; uma sugestÃƒÂ£o pÃƒÂºblica
@@ -1008,6 +1067,21 @@ final class StudioFlowApi {
 
   Future<Response> _catalogGtin(Request request, String gtin) async {
     final actor = _authenticate(request);
+    final normalized = normalizeBarcode(gtin);
+    if (!isValidGlobalBarcode(normalized)) {
+      return _error(400, 'invalid_gtin', 'Código de barras inválido.');
+    }
+    final master = await globalContent?.productByBarcode(normalized);
+    if (master != null) {
+      final related = await _relatedCampaign(actor, globalProductId: master.id);
+      return _json(200, {
+        'found': true,
+        'source': 'rolg_master',
+        'barcode': normalized,
+        'product': master.toJson(),
+        if (related != null) 'campaign': related.toJson(),
+      });
+    }
     final service = catalog;
     if (service == null) {
       return _error(
@@ -1938,6 +2012,508 @@ final class StudioFlowApi {
         'Erro ao processar redirecionamento.',
       );
     }
+  }
+
+  GlobalContentStore get _globalContent {
+    final content = globalContent;
+    if (content == null) {
+      throw const ApiException(
+        503,
+        'global_content_unavailable',
+        'Catálogo global temporariamente indisponível.',
+      );
+    }
+    return content;
+  }
+
+  Future<CommercialCampaign?> _relatedCampaign(
+    AuthContext actor, {
+    String? globalProductId,
+    String? courseId,
+  }) async {
+    final service = campaigns;
+    if (service == null) return null;
+    final available = await service.available(
+      segment: await _campaignSegment(actor),
+    );
+    return available
+        .where(
+          (item) =>
+              (globalProductId != null &&
+                  item.globalProductId == globalProductId) ||
+              (courseId != null && item.courseId == courseId),
+        )
+        .firstOrNull;
+  }
+
+  Future<Response> _globalProductBarcode(
+    Request request,
+    String barcode,
+  ) async {
+    final actor = _authenticate(request);
+    final normalized = normalizeBarcode(barcode);
+    if (!isValidGlobalBarcode(normalized)) {
+      return _error(400, 'invalid_barcode', 'Código de barras inválido.');
+    }
+    final product = await _globalContent.productByBarcode(normalized);
+    if (product == null) {
+      return _error(404, 'product_not_found', 'Produto não encontrado.');
+    }
+    final related = await _relatedCampaign(actor, globalProductId: product.id);
+    return _json(200, {
+      'product': product.toJson(),
+      if (related != null) 'campaign': related.toJson(),
+    });
+  }
+
+  Future<Response> _globalProductSuggestion(Request request) async {
+    final actor = _authenticate(request);
+    final businessId = actor.businessId;
+    if (businessId == null) {
+      return _error(403, 'forbidden', 'Negócio obrigatório.');
+    }
+    final body = await _body(request);
+    final barcode = normalizeBarcode(_requiredText(body, 'barcode', max: 40));
+    if (!isValidGlobalBarcode(barcode)) {
+      throw const FormatException('Código de barras inválido.');
+    }
+    if (await _globalContent.productByBarcode(barcode) != null) {
+      return _error(409, 'product_exists', 'Produto já existe no catálogo.');
+    }
+    final duplicate = await _globalContent.pendingSuggestion(
+      businessId,
+      barcode,
+    );
+    if (duplicate != null) {
+      return _json(200, {'suggestion': duplicate.toJson(), 'duplicate': true});
+    }
+    final suggestion = ProductSuggestion(
+      id: _uuid.v4(),
+      barcode: barcode,
+      businessId: businessId,
+      name: _requiredText(body, 'name', max: 200),
+      brand: _optionalBodyText(body, 'brand', 160),
+      variant: _optionalBodyText(body, 'variant', 160),
+      category: _optionalBodyText(body, 'category', 100),
+      status: 'pending',
+      createdAt: DateTime.now().toUtc(),
+    );
+    await _globalContent.saveSuggestion(suggestion);
+    return _json(201, {'suggestion': suggestion.toJson()});
+  }
+
+  Future<Response> _globalCourseSearch(Request request) async {
+    final actor = _authenticate(request);
+    final query = (request.url.queryParameters['q'] ?? '').trim();
+    final courses = await _globalContent.searchCourses(query);
+    final result = <Map<String, Object?>>[];
+    for (final course in courses.take(100)) {
+      result.add(
+        course.toJson(
+          campaign: await _relatedCampaign(actor, courseId: course.id),
+        ),
+      );
+    }
+    return _json(200, {'courses': result});
+  }
+
+  Future<Response> _adminGlobalProducts(Request request) async {
+    await _authenticatePlatformAdmin(request);
+    return _json(200, {
+      'products': (await _globalContent.listProducts())
+          .map((item) => item.toJson())
+          .toList(),
+    });
+  }
+
+  Future<Response> _adminSaveGlobalProduct(Request request) async {
+    final actor = await _authenticatePlatformAdmin(request);
+    final body = await _body(request);
+    final id = _optionalIdentifier(body['id']) ?? _uuid.v4();
+    final previous = await _globalContent.productById(id);
+    final product = _globalProductFromBody(
+      body,
+      actor.userId,
+      id: id,
+      previous: previous,
+    );
+    await _globalContent.saveProduct(product);
+    return _json(previous == null ? 201 : 200, {'product': product.toJson()});
+  }
+
+  Future<Response> _adminSuggestions(Request request) async {
+    await _authenticatePlatformAdmin(request);
+    final status = request.url.queryParameters['status'];
+    return _json(200, {
+      'suggestions': (await _globalContent.listSuggestions(
+        status: status,
+      )).map((item) => item.toJson()).toList(),
+    });
+  }
+
+  Future<Response> _adminApproveSuggestion(Request request, String id) =>
+      _reviewSuggestion(request, id, true);
+
+  Future<Response> _adminRejectSuggestion(Request request, String id) =>
+      _reviewSuggestion(request, id, false);
+
+  Future<Response> _reviewSuggestion(
+    Request request,
+    String id,
+    bool approve,
+  ) async {
+    final actor = await _authenticatePlatformAdmin(request);
+    final suggestion = await _globalContent.suggestionById(id);
+    if (suggestion == null || suggestion.status != 'pending') {
+      return _error(
+        404,
+        'suggestion_not_found',
+        'Sugestão pendente não encontrada.',
+      );
+    }
+    if (approve) {
+      final now = DateTime.now().toUtc();
+      final existing = (await _globalContent.listProducts())
+          .where((item) => item.barcode == suggestion.barcode)
+          .firstOrNull;
+      if (existing == null) {
+        await _globalContent.saveProduct(
+          GlobalProduct(
+            id: _uuid.v4(),
+            barcode: suggestion.barcode,
+            brand: suggestion.brand ?? '',
+            name: suggestion.name,
+            variant: suggestion.variant,
+            category: suggestion.category ?? 'Outros',
+            active: true,
+            verified: true,
+            createdBy: actor.userId,
+            createdAt: now,
+            updatedAt: now,
+          ),
+        );
+      }
+    }
+    final reviewed = ProductSuggestion(
+      id: suggestion.id,
+      barcode: suggestion.barcode,
+      businessId: suggestion.businessId,
+      name: suggestion.name,
+      brand: suggestion.brand,
+      variant: suggestion.variant,
+      category: suggestion.category,
+      status: approve ? 'approved' : 'rejected',
+      reviewedBy: actor.userId,
+      reviewedAt: DateTime.now().toUtc(),
+      createdAt: suggestion.createdAt,
+    );
+    await _globalContent.saveSuggestion(reviewed);
+    return _json(200, {'suggestion': reviewed.toJson()});
+  }
+
+  Future<Response> _adminGlobalCourses(Request request) async {
+    await _authenticatePlatformAdmin(request);
+    return _json(200, {
+      'courses': (await _globalContent.listCourses())
+          .map((item) => item.toJson())
+          .toList(),
+    });
+  }
+
+  Future<Response> _adminSaveGlobalCourse(Request request) async {
+    final actor = await _authenticatePlatformAdmin(request);
+    final body = await _body(request);
+    final id = _optionalIdentifier(body['id']) ?? _uuid.v4();
+    final previous = await _globalContent.courseById(id);
+    final now = DateTime.now().toUtc();
+    final course = GlobalCourse(
+      id: id,
+      title: _requiredText(body, 'title', max: 200),
+      provider: _requiredText(body, 'provider', max: 160),
+      description: _requiredText(body, 'description', max: 10000),
+      imageUrl: _validatedOptionalHttps(body, 'imageUrl'),
+      category: _requiredText(body, 'category', max: 100),
+      keywords: _bodyStringList(body, 'keywords'),
+      active: body['active'] as bool? ?? true,
+      createdBy: previous?.createdBy ?? actor.userId,
+      createdAt: previous?.createdAt ?? now,
+      updatedAt: now,
+    );
+    await _globalContent.saveCourse(course);
+    await store.audit(
+      event: 'platform.global_course_saved',
+      userId: actor.userId,
+      success: true,
+      details: {'courseId': course.id},
+    );
+    return _json(previous == null ? 201 : 200, {'course': course.toJson()});
+  }
+
+  GlobalProduct _globalProductFromBody(
+    Map<String, dynamic> body,
+    String actorId, {
+    required String id,
+    GlobalProduct? previous,
+  }) {
+    final now = DateTime.now().toUtc();
+    final barcode = normalizeBarcode(_requiredText(body, 'barcode', max: 40));
+    if (!isValidGlobalBarcode(barcode)) {
+      throw const FormatException('Código de barras inválido.');
+    }
+    return GlobalProduct(
+      id: id,
+      barcode: barcode,
+      brand: _requiredText(body, 'brand', max: 160),
+      name: _requiredText(body, 'name', max: 200),
+      variant: _optionalBodyText(body, 'variant', 160),
+      category: _requiredText(body, 'category', max: 100),
+      description: _optionalBodyText(body, 'description', 10000),
+      imageUrl: _validatedOptionalHttps(body, 'imageUrl'),
+      size: _optionalBodyText(body, 'size', 80),
+      active: body['active'] as bool? ?? true,
+      keywords: _bodyStringList(body, 'keywords'),
+      verified: true,
+      createdBy: previous?.createdBy ?? actorId,
+      createdAt: previous?.createdAt ?? now,
+      updatedAt: now,
+    );
+  }
+
+  static String? _optionalBodyText(
+    Map<String, dynamic> body,
+    String key,
+    int max,
+  ) {
+    final value = body[key];
+    if (value == null) return null;
+    if (value is! String || value.length > max) {
+      throw FormatException('Campo inválido: $key.');
+    }
+    return value.trim().isEmpty ? null : value.trim();
+  }
+
+  static List<String> _bodyStringList(Map<String, dynamic> body, String key) {
+    final value = body[key] ?? const <String>[];
+    if (value is! List || value.any((item) => item is! String)) {
+      throw FormatException('Campo inválido: $key.');
+    }
+    return value
+        .cast<String>()
+        .map((item) => item.trim().toLowerCase())
+        .where((item) => item.isNotEmpty)
+        .toSet()
+        .toList();
+  }
+
+  static String? _validatedOptionalHttps(
+    Map<String, dynamic> body,
+    String key,
+  ) {
+    final value = _optionalBodyText(body, key, 2048);
+    if (value != null && !CommercialCampaignService.isSafeHttps(value)) {
+      throw FormatException('$key deve ser HTTPS válido.');
+    }
+    return value;
+  }
+
+  CommercialCampaignService get _campaigns {
+    final service = campaigns;
+    if (service == null) {
+      throw const ApiException(
+        503,
+        'campaigns_unavailable',
+        'Campanhas temporariamente indisponíveis.',
+      );
+    }
+    return service;
+  }
+
+  Future<String?> _campaignSegment(AuthContext actor) async {
+    if (actor.businessId == null) return null;
+    return (await store.findAccount(actor.userId, actor.businessId!))?.segment;
+  }
+
+  Future<Response> _campaignList(Request request) async {
+    final actor = _authenticate(request);
+    final items = await _campaigns.available(
+      segment: await _campaignSegment(actor),
+    );
+    return _json(200, {
+      'campaigns': items.map((item) => item.toJson()).toList(),
+      'fetchedAt': DateTime.now().toUtc().toIso8601String(),
+    });
+  }
+
+  Future<Response> _campaignDetail(Request request, String id) async {
+    final actor = _authenticate(request);
+    final item = await _campaigns.detail(
+      id,
+      segment: await _campaignSegment(actor),
+    );
+    return item == null
+        ? _error(404, 'campaign_not_found', 'Campanha indisponível.')
+        : _json(200, {'campaign': item.toJson()});
+  }
+
+  Future<Response> _campaignImpression(Request request, String id) =>
+      _campaignEvent(request, id, 'impression');
+
+  Future<Response> _campaignClick(Request request, String id) =>
+      _campaignEvent(request, id, 'click');
+
+  Future<Response> _campaignEvent(
+    Request request,
+    String id,
+    String type,
+  ) async {
+    final actor = _authenticate(request);
+    final item = await _campaigns.detail(
+      id,
+      segment: await _campaignSegment(actor),
+    );
+    if (item == null) {
+      return _error(404, 'campaign_not_found', 'Campanha indisponível.');
+    }
+    await _campaigns.event(actor, id, type);
+    return Response(204);
+  }
+
+  Future<Response> _adminCampaignList(Request request) async {
+    await _authenticatePlatformAdmin(request);
+    final items = await _campaigns.store.listCampaigns();
+    return _json(200, {
+      'campaigns': items.map((item) => item.toJson()).toList(),
+    });
+  }
+
+  Future<Response> _adminCampaignAnalytics(Request request) async {
+    await _authenticatePlatformAdmin(request);
+    return _json(200, {'metrics': await _campaigns.store.campaignMetrics()});
+  }
+
+  Future<Response> _adminCampaignSave(Request request) async {
+    await _authenticatePlatformAdmin(request);
+    final item = _campaignFromBody(await _body(request));
+    await _campaigns.store.saveCampaign(item);
+    return _json(201, {'campaign': item.toJson()});
+  }
+
+  Future<Response> _adminCampaignUpdate(Request request, String id) async {
+    await _authenticatePlatformAdmin(request);
+    final previous = await _campaigns.store.findCampaign(id);
+    if (previous == null) {
+      return _error(404, 'campaign_not_found', 'Campanha não encontrada.');
+    }
+    final item = _campaignFromBody(await _body(request), previous: previous);
+    await _campaigns.store.saveCampaign(item);
+    return _json(200, {'campaign': item.toJson()});
+  }
+
+  CommercialCampaign _campaignFromBody(
+    Map<String, dynamic> body, {
+    CommercialCampaign? previous,
+  }) {
+    T field<T>(String key, T? old) {
+      final value = body.containsKey(key) ? body[key] : old;
+      if (value is! T) throw FormatException('Campo inválido: $key.');
+      return value;
+    }
+
+    String? optionalText(String key, String? old, int max) {
+      final value = body.containsKey(key) ? body[key] : old;
+      if (value == null) return null;
+      if (value is! String || value.length > max) {
+        throw FormatException('Campo inválido: $key.');
+      }
+      return value.trim().isEmpty ? null : value.trim();
+    }
+
+    DateTime? date(String key, DateTime? old) {
+      final value = body.containsKey(key) ? body[key] : old?.toIso8601String();
+      if (value == null) return null;
+      if (value is! String || DateTime.tryParse(value) == null) {
+        throw FormatException('Data inválida: $key.');
+      }
+      return DateTime.parse(value).toUtc();
+    }
+
+    final destination = field<String>(
+      'destinationUrl',
+      previous?.destinationUrl,
+    ).trim();
+    if (!CommercialCampaignService.isSafeHttps(destination)) {
+      throw const FormatException('destinationUrl deve ser HTTPS válido.');
+    }
+    final imageUrl = optionalText('imageUrl', previous?.imageUrl, 2048);
+    if (imageUrl != null && !CommercialCampaignService.isSafeHttps(imageUrl)) {
+      throw const FormatException('imageUrl deve ser HTTPS válido.');
+    }
+    final source = field<String>('sourceType', previous?.sourceType).trim();
+    if (!campaignSourceTypes.contains(source)) {
+      throw const FormatException('sourceType inválido.');
+    }
+    final rawSegments = body.containsKey('segments')
+        ? body['segments']
+        : previous?.segments ?? const <String>[];
+    if (rawSegments is! List || rawSegments.any((item) => item is! String)) {
+      throw const FormatException('segments inválido.');
+    }
+    final now = DateTime.now().toUtc();
+    final startsAt = date('startsAt', previous?.startsAt);
+    final endsAt = date('endsAt', previous?.endsAt);
+    if (startsAt != null && endsAt != null && !endsAt.isAfter(startsAt)) {
+      throw const FormatException('endsAt deve ser posterior a startsAt.');
+    }
+    String requiredText(String key, String? old, int max) {
+      final value = field<String>(key, old).trim();
+      if (value.isEmpty || value.length > max) {
+        throw FormatException('Campo inválido: $key.');
+      }
+      return value;
+    }
+
+    final price = body.containsKey('price')
+        ? body['price'] as int?
+        : previous?.priceCents;
+    final originalPrice = body.containsKey('originalPrice')
+        ? body['originalPrice'] as int?
+        : previous?.originalPriceCents;
+    if ((price != null && price < 0) ||
+        (originalPrice != null && originalPrice < 0)) {
+      throw const FormatException('Preço inválido.');
+    }
+    return CommercialCampaign(
+      id: previous?.id ?? _optionalIdentifier(body['id']) ?? _uuid.v4(),
+      title: requiredText('title', previous?.title, 200),
+      subtitle: optionalText('subtitle', previous?.subtitle, 300),
+      description: requiredText('description', previous?.description, 10000),
+      imageUrl: imageUrl,
+      destinationUrl: destination,
+      category: requiredText('category', previous?.category, 80),
+      sourceType: source,
+      priceCents: price,
+      originalPriceCents: originalPrice,
+      badge: optionalText('badge', previous?.badge, 80),
+      ctaText: requiredText('ctaText', previous?.ctaText, 80),
+      priority: field<int>('priority', previous?.priority ?? 0),
+      active: field<bool>('active', previous?.active ?? false),
+      segments: rawSegments
+          .cast<String>()
+          .map((item) => item.trim().toLowerCase())
+          .where((item) => item.isNotEmpty)
+          .toSet()
+          .toList(),
+      startsAt: startsAt,
+      endsAt: endsAt,
+      createdAt: previous?.createdAt ?? now,
+      updatedAt: now,
+      globalProductId: optionalText(
+        'globalProductId',
+        previous?.globalProductId,
+        128,
+      ),
+      courseId: optionalText('courseId', previous?.courseId, 128),
+    );
   }
 
   Future<Response> _subscriptionStatus(Request request) async {

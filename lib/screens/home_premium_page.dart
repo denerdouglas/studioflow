@@ -13,6 +13,9 @@ import 'ia_local_page.dart';
 import 'modalidades_page.dart';
 import 'notification_center_page.dart';
 import 'caixa_page.dart';
+import '../models/domain/commercial_campaign.dart';
+import '../repositories/commercial_campaign_repository.dart';
+import 'commercial_campaigns_page.dart';
 
 class HomePremiumPage extends StatefulWidget {
   final String nomeResponsavel;
@@ -34,10 +37,14 @@ class _HomePremiumPageState extends State<HomePremiumPage> {
   final DashboardSummaryService _summaryService = DashboardSummaryService();
   final ModalidadesRepository _modalidadesRepository = ModalidadesRepository();
   final WidgetRegistry _registry = WidgetRegistry();
+  final CommercialCampaignRepository _campaignRepository =
+      CommercialCampaignRepository();
   late final DashboardConfiguration _config;
 
   DashboardSummary? _summary;
   List<ModalidadeRegistro> _modalidades = const [];
+  List<CommercialCampaign> _campaigns = const [];
+  final Set<String> _campaignImpressions = {};
   bool _isLoading = true;
   String? _error;
 
@@ -51,6 +58,7 @@ class _HomePremiumPageState extends State<HomePremiumPage> {
     );
     _registerWidgets();
     _loadData();
+    _loadCampaigns();
   }
 
   void _registerWidgets() {
@@ -123,7 +131,6 @@ class _HomePremiumPageState extends State<HomePremiumPage> {
       } catch (e, st) {
         debugPrint('Erro ao carregar modalidades na Home: $e\n$st');
       }
-
       if (!mounted) return;
       setState(() {
         _summary = summary;
@@ -140,6 +147,25 @@ class _HomePremiumPageState extends State<HomePremiumPage> {
     }
   }
 
+  Future<void> _loadCampaigns() async {
+    try {
+      final campaigns = await _campaignRepository.list();
+      if (!mounted) return;
+      setState(() {
+        _campaigns = campaigns
+            .where((item) => item.priority > 0)
+            .take(3)
+            .toList();
+      });
+    } catch (e, st) {
+      debugPrint('Campanhas indisponíveis na Home: $e\n$st');
+    }
+  }
+
+  Future<void> _refresh() async {
+    await Future.wait([_loadData(), _loadCampaigns()]);
+  }
+
   String get _saudacao {
     final hora = DateTime.now().hour;
     if (hora < 12) return 'Bom dia';
@@ -152,7 +178,7 @@ class _HomePremiumPageState extends State<HomePremiumPage> {
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.surface,
       body: RefreshIndicator(
-        onRefresh: _loadData,
+        onRefresh: _refresh,
         color: Theme.of(context).colorScheme.primary,
         child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
@@ -289,13 +315,78 @@ class _HomePremiumPageState extends State<HomePremiumPage> {
   }
 
   Widget _buildContent() {
+    final hasCampaigns = _campaigns.isNotEmpty;
     return SliverPadding(
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
       sliver: SliverList(
         delegate: SliverChildBuilderDelegate((context, index) {
-          final type = _config.layout[index];
+          if (hasCampaigns && index == 0) return _buildCampaignHighlights();
+          final type = _config.layout[index - (hasCampaigns ? 1 : 0)];
           return _registry.buildWidget(context, type);
-        }, childCount: _config.layout.length),
+        }, childCount: _config.layout.length + (hasCampaigns ? 1 : 0)),
+      ),
+    );
+  }
+
+  Widget _buildCampaignHighlights() {
+    for (final item in _campaigns) {
+      if (_campaignImpressions.add(item.id)) {
+        _campaignRepository.impression(item.id).catchError((_) {});
+      }
+    }
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'ROLG Academy & Ofertas',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+              ),
+              TextButton(
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => CommercialCampaignsPage()),
+                ),
+                child: const Text('Ver todas'),
+              ),
+            ],
+          ),
+          SizedBox(
+            height: 112,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: _campaigns.length,
+              separatorBuilder: (_, _) => const SizedBox(width: 10),
+              itemBuilder: (context, index) {
+                final item = _campaigns[index];
+                return SizedBox(
+                  width: 260,
+                  child: Card(
+                    child: ListTile(
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => CommercialCampaignDetailPage(
+                            item: item,
+                            repository: _campaignRepository,
+                          ),
+                        ),
+                      ),
+                      title: Text(item.title, maxLines: 2),
+                      subtitle: Text(item.disclosure),
+                      trailing: const Icon(Icons.arrow_forward),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }

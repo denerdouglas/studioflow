@@ -203,6 +203,42 @@ class BackendApiClient {
     );
   }
 
+  Future<Map<String, dynamic>> campaignList({
+    required Uri endpoint,
+    required String accessToken,
+  }) => _get(endpoint, '/v1/campaigns', const {}, accessToken: accessToken);
+
+  Future<Map<String, dynamic>> campaignDetail({
+    required Uri endpoint,
+    required String accessToken,
+    required String id,
+  }) => _get(endpoint, '/v1/campaigns/$id', const {}, accessToken: accessToken);
+
+  Future<void> campaignEvent({
+    required Uri endpoint,
+    required String accessToken,
+    required String id,
+    required String type,
+  }) async {
+    if (!{'impressions', 'clicks'}.contains(type)) {
+      throw ArgumentError.value(type, 'type');
+    }
+    await _post(
+      endpoint,
+      '/v1/campaigns/$id/$type',
+      const {},
+      accessToken: accessToken,
+    );
+  }
+
+  Future<Map<String, dynamic>> globalCourses({
+    required Uri endpoint,
+    required String accessToken,
+    String query = '',
+  }) => _get(endpoint, '/v1/global-courses', {
+    'q': query,
+  }, accessToken: accessToken);
+
   Future<Map<String, dynamic>> _post(
     Uri endpoint,
     String path,

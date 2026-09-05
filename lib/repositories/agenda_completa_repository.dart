@@ -261,10 +261,28 @@ class AgendaCompletaRepository {
     required String profissionalId,
     required DateTime data,
     required int duracaoMinutos,
+    String? servicoId,
     int intervaloMinutos = 15,
     DatabaseExecutor? txn,
   }) async {
     final db = txn ?? await _databaseProvider();
+    if (servicoId != null) {
+      final vinculos = await db.rawQuery(
+        '''SELECT
+          (SELECT COUNT(*) FROM profissional_servicos
+            WHERE business_id = ? AND servico_id = ?
+              AND COALESCE(ativo, 1) = 1) AS total,
+          (SELECT COUNT(*) FROM profissional_servicos
+            WHERE business_id = ? AND profissional_id = ?
+              AND servico_id = ? AND COALESCE(ativo, 1) = 1) AS permitido''',
+        [_comercioId, servicoId, _comercioId, profissionalId, servicoId],
+      );
+      final row = vinculos.single;
+      if ((row['total'] as num).toInt() > 0 &&
+          (row['permitido'] as num).toInt() == 0) {
+        return [];
+      }
+    }
     final horarios = await db.query(
       'horarios_profissionais',
       where:

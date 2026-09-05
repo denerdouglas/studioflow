@@ -13,6 +13,8 @@ Future<void> main() async {
   final academyStore = AcademyPostgresStore(store);
   final academy = AcademyService(academyStore);
   final secureRedirect = SecureRedirectService(academyStore);
+  final campaignStore = CommercialCampaignPostgresStore(store.pool);
+  final globalContentStore = GlobalContentPostgresStore(store.pool);
   final automations = PostgresMessageAutomationStore.fromUrl(
     config.databaseUrl,
   );
@@ -60,6 +62,8 @@ Future<void> main() async {
     adminService: adminService,
     academy: academy,
     secureRedirect: secureRedirect,
+    campaigns: CommercialCampaignService(campaignStore),
+    globalContent: globalContentStore,
     automations: automations,
     catalog: catalog,
     config: config,

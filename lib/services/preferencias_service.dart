@@ -11,6 +11,17 @@ class PreferenciasService {
   static const String _chaveTipoNegocio = 'tipo_negocio';
   static const String _chaveTema = 'tema_negocio';
 
+  static String _agendaLivresKey(String businessId) =>
+      'agenda_mostrar_horarios_livres_$businessId';
+
+  static Future<bool> mostrarHorariosLivres(String businessId) async =>
+      await _preferencias.getBool(_agendaLivresKey(businessId)) ?? false;
+
+  static Future<void> salvarMostrarHorariosLivres(
+    String businessId,
+    bool value,
+  ) => _preferencias.setBool(_agendaLivresKey(businessId), value);
+
   static Future<void> salvarCadastro({
     required String nomeResponsavel,
     required String nomeNegocio,

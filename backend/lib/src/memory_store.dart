@@ -27,6 +27,15 @@ final class MemoryBackendStore
   final List<Map<String, Object?>> _marketplaceDemands = [];
   final Map<String, MarketplacePartnerDomain> _marketplaceDomains = {};
   final Map<String, MarketplaceClick> _marketplaceClicks = {};
+  final Map<String, PlatformAdmin> _platformAdmins = {};
+
+  void seedPlatformAdmin(PlatformAdmin admin) {
+    _platformAdmins[admin.userId] = admin;
+  }
+
+  void revokePlatformAdmin(String userId) {
+    _platformAdmins.remove(userId);
+  }
 
   String _accountKey(String userId, String businessId) =>
       '$businessId::$userId';
@@ -315,7 +324,8 @@ final class MemoryBackendStore
   }
 
   @override
-  Future<PlatformAdmin?> findPlatformAdminByUserId(String userId) async => null;
+  Future<PlatformAdmin?> findPlatformAdminByUserId(String userId) async =>
+      _platformAdmins[userId];
 
   @override
   Future<List<MarketplacePartner>> listActivePartners() async =>

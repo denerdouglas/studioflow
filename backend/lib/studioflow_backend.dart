@@ -16,3 +16,8 @@ export 'src/academy.dart';
 export 'src/academy_postgres_store.dart';
 export 'src/public_booking.dart';
 export 'src/whatsapp_conversation.dart';
+export 'src/commercial_campaigns.dart';
+export 'src/commercial_campaigns_memory_store.dart';
+export 'src/commercial_campaigns_postgres_store.dart';
+export 'src/global_content.dart';
+export 'src/global_content_postgres_store.dart';
