@@ -7,7 +7,8 @@ import '../models/domain/acesso.dart';
 import '../models/domain/atendimento.dart';
 import '../services/session_controller.dart';
 import '../services/whatsapp_queue_service.dart';
-import 'agenda_repository.dart' show ConflitoAgendaException;
+import 'agenda_repository.dart'
+    show AgendamentoRegistro, ConflitoAgendaException;
 import 'pacotes_repository.dart';
 
 class DiagnosticoExclusaoAgendamento {
@@ -397,6 +398,104 @@ class AgendaCompletaRepository {
         statusNovo: 'agendado',
         detalhes:
             '${atual['inicio']} → ${novoInicio.toIso8601String()}${motivo.isEmpty ? '' : ' • $motivo'}',
+      );
+    });
+  }
+
+  /// Persiste a edição inteira do agendamento em uma única transação.
+  ///
+  /// O formulário de edição altera serviço, profissional, preço e duração em
+  /// conjunto. Manter esta operação no repositório evita salvar apenas o novo
+  /// horário e deixar o serviço anterior no registro.
+  Future<void> atualizarCompleto(
+    AgendamentoRegistro agendamento, {
+    String motivo = 'Edição de agendamento',
+  }) async {
+    _exigirGerencia();
+    final db = await _databaseProvider();
+    await db.transaction((txn) async {
+      final rows = await txn.query(
+        'agendamentos',
+        where: 'id = ? AND comercio_id = ? AND excluido = 0',
+        whereArgs: [agendamento.id, _comercioId],
+        limit: 1,
+      );
+      if (rows.isEmpty) throw StateError('Agendamento não encontrado.');
+      final anterior = rows.first;
+
+      final conflitos = await txn.query(
+        'agendamentos',
+        columns: ['id'],
+        where:
+            "comercio_id = ? AND profissional_id = ? AND id != ? AND status != 'cancelado' AND excluido = 0 AND inicio < ? AND fim > ?",
+        whereArgs: [
+          _comercioId,
+          agendamento.profissionalId,
+          agendamento.id,
+          agendamento.fim.toIso8601String(),
+          agendamento.inicio.toIso8601String(),
+        ],
+        limit: 1,
+      );
+      if (conflitos.isNotEmpty) {
+        throw const ConflitoAgendaException(
+          'O novo horário está ocupado.',
+          <DateTime>[],
+        );
+      }
+
+      final agora = DateTime.now().toUtc().toIso8601String();
+      final alterados = await txn.update(
+        'agendamentos',
+        {...agendamento.paraMapa(), 'confirmado': 0, 'atualizado_em': agora},
+        where: 'id = ? AND comercio_id = ? AND excluido = 0',
+        whereArgs: [agendamento.id, _comercioId],
+      );
+      if (alterados != 1) throw StateError('Agendamento não encontrado.');
+
+      await txn.update(
+        'notificacoes',
+        {'status': 'cancelada'},
+        where: "comercio_id = ? AND referencia_id = ? AND status = 'pendente'",
+        whereArgs: [_comercioId, agendamento.id],
+      );
+      await txn.update(
+        'whatsapp_fila',
+        {'status': 'cancelado', 'updated_at': agora},
+        where:
+            "business_id = ? AND agendamento_id = ? AND status NOT IN ('enviado','entregue','lido','cancelado')",
+        whereArgs: [_comercioId, agendamento.id],
+      );
+
+      final clientes = await txn.query(
+        'clientes',
+        columns: ['whatsapp'],
+        where: 'id = ? AND comercio_id = ?',
+        whereArgs: [agendamento.clienteId, _comercioId],
+        limit: 1,
+      );
+      final whatsapp = clientes.isEmpty
+          ? null
+          : clientes.first['whatsapp'] as String?;
+      if (whatsapp != null && whatsapp.trim().isNotEmpty) {
+        await WhatsappQueueService().enfileirar(
+          txn: txn,
+          comercioId: _comercioId,
+          destinatario: whatsapp,
+          template: 'agendamento_alterado',
+          payload: agendamento.paraMapa(),
+          agendamentoId: agendamento.id,
+        );
+      }
+
+      await _historico(
+        txn,
+        agendamentoId: agendamento.id,
+        acao: 'edicao',
+        statusAnterior: anterior['status'] as String?,
+        statusNovo: agendamento.status,
+        detalhes:
+            '${anterior['servico_id']} → ${agendamento.servicoId} • ${anterior['inicio']} → ${agendamento.inicio.toIso8601String()} • $motivo',
       );
     });
   }

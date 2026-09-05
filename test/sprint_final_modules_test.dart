@@ -147,9 +147,10 @@ void main() {
       () => repo.venderPeca(piece['id'] as String, clienteId: 'client-1'),
       throwsStateError,
     );
+    final agora = DateTime.now().toUtc();
     expect(
       (await repo.historicoMensal(
-        DateTime.utc(2026, 8),
+        DateTime.utc(agora.year, agora.month),
       )).where((event) => event['tipo'] == 'venda'),
       hasLength(1),
     );

@@ -1,4 +1,3 @@
-import '../services/notification_service.dart';
 import 'dart:convert';
 import 'package:sqflite/sqflite.dart';
 
@@ -12,6 +11,7 @@ import '../domain/services/agenda_conflict_checker.dart';
 import 'agenda_completa_repository.dart';
 import 'pacotes_repository.dart';
 import 'recebimento_servico_writer.dart';
+import 'notification_center_repository.dart';
 
 class ConclusaoPagamentoAtendimento {
   final String situacao;
@@ -177,19 +177,24 @@ class AgendamentoRegistro {
     int? ordemNoGrupo,
     DateTime? inicio,
     DateTime? fim,
+    String? profissionalId,
+    String? profissionalNome,
+    String? servicoId,
+    String? servicoNome,
+    double? valorServico,
   }) {
     return AgendamentoRegistro(
       id: id ?? this.id,
       clienteId: clienteId,
       clienteNome: clienteNome,
-      profissionalId: profissionalId,
-      profissionalNome: profissionalNome,
-      servicoId: servicoId,
-      servicoNome: servicoNome,
+      profissionalId: profissionalId ?? this.profissionalId,
+      profissionalNome: profissionalNome ?? this.profissionalNome,
+      servicoId: servicoId ?? this.servicoId,
+      servicoNome: servicoNome ?? this.servicoNome,
       inicio: inicio ?? this.inicio,
       fim: fim ?? this.fim,
       status: status ?? this.status,
-      valorServico: valorServico,
+      valorServico: valorServico ?? this.valorServico,
       desconto: desconto ?? this.desconto,
       valorRecebido: valorRecebido ?? this.valorRecebido,
       confirmado: confirmado ?? this.confirmado,
@@ -476,30 +481,35 @@ class AgendaRepository {
   Future<void> _agendarNotificacoesLocais(
     AgendamentoRegistro agendamento,
   ) async {
-    final now = DateTime.now();
     final duasHorasAntes = agendamento.inicio.subtract(
       const Duration(hours: 2),
     );
-    final idNotificacao = NotificationService().generateId(agendamento.id);
+    final notifications = NotificationCenterRepository(
+      databaseProvider: () => _database,
+      businessId: _comercioId,
+    );
 
     if (agendamento.status == 'cancelado' ||
         agendamento.status == 'concluido' ||
         agendamento.status == 'falta') {
-      await NotificationService().cancelNotification(idNotificacao);
+      await notifications.cancelEntity('appointment', agendamento.id);
       return;
     }
 
-    if (duasHorasAntes.isAfter(now)) {
-      await NotificationService().scheduleNotification(
-        id: idNotificacao,
-        title: 'Próximo atendimento',
-        body: ' às :',
-        scheduledDate: duasHorasAntes,
-        channelId: 'studioflow_agenda',
-        channelName: 'Agenda',
-        channelDescription: 'Lembretes de agendamentos',
-      );
-    }
+    await notifications.cancelEntity('appointment', agendamento.id);
+    await notifications.schedule(
+      key: 'appointment:${agendamento.id}:two_hours',
+      type: 'agenda_2h',
+      category: 'agenda',
+      entity: 'appointment',
+      entityId: agendamento.id,
+      title: '${agendamento.clienteNome} em 2 horas',
+      body:
+          '${agendamento.servicoNome} às ${agendamento.inicio.hour.toString().padLeft(2, '0')}:${agendamento.inicio.minute.toString().padLeft(2, '0')}',
+      date: duasHorasAntes,
+      route: '/agenda/${agendamento.id}',
+      priority: 'alta',
+    );
   }
 
   Future<void> _enfileirarWhatsapp(

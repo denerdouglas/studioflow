@@ -296,9 +296,14 @@ class BackendSyncService {
     final tables = await _syncTables(db);
     final now = DateTime.now().toUtc().toIso8601String();
     for (final table in tables) {
+      final tableColumns = await db.rawQuery('PRAGMA table_info($table)');
+      final columnNames = tableColumns.map((column) => column['name']).toSet();
+      final tenantColumn = columnNames.contains('comercio_id')
+          ? 'comercio_id'
+          : 'business_id';
       final rows = await db.query(
         table,
-        where: 'comercio_id = ?',
+        where: '$tenantColumn = ?',
         whereArgs: [comercioId],
       );
       final existingIds = <String>{};
@@ -761,13 +766,18 @@ class BackendSyncService {
   }) async {
     final columns = await db.rawQuery('PRAGMA table_info($entity)');
     final allowed = columns.map((column) => column['name'] as String).toSet();
-    if (!allowed.containsAll(const {'id', 'comercio_id'})) {
+    final tenantColumn = allowed.contains('comercio_id')
+        ? 'comercio_id'
+        : allowed.contains('business_id')
+        ? 'business_id'
+        : null;
+    if (!allowed.contains('id') || tenantColumn == null) {
       throw StateError('Tabela sem isolamento multiempresa.');
     }
     if (deleted) {
       await db.delete(
         entity,
-        where: 'id = ? AND comercio_id = ?',
+        where: 'id = ? AND $tenantColumn = ?',
         whereArgs: [entityId, comercioId],
       );
       await db.delete(
@@ -781,12 +791,12 @@ class BackendSyncService {
       for (final entry in payload.entries)
         if (allowed.contains(entry.key)) entry.key: entry.value,
       'id': entityId,
-      'comercio_id': comercioId,
+      tenantColumn: comercioId,
     };
     final updated = await db.update(
       entity,
       safe,
-      where: 'id = ? AND comercio_id = ?',
+      where: 'id = ? AND $tenantColumn = ?',
       whereArgs: [entityId, comercioId],
     );
     if (updated == 0) await db.insert(entity, safe);
@@ -814,7 +824,8 @@ class BackendSyncService {
       }
       final columns = await db.rawQuery('PRAGMA table_info($name)');
       final names = columns.map((column) => column['name']).toSet();
-      if (names.contains('id') && names.contains('comercio_id')) {
+      if (names.contains('id') &&
+          (names.contains('comercio_id') || names.contains('business_id'))) {
         result.add(name);
       }
     }

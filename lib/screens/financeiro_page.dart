@@ -3,9 +3,11 @@ import 'package:flutter/material.dart';
 import '../repositories/financeiro_repository.dart';
 import 'gestao_financeira_page.dart';
 import 'assistente_gestao_page.dart';
+import 'accounts_payable_page.dart';
 
 class FinanceiroPage extends StatefulWidget {
-  const FinanceiroPage({super.key});
+  final String? movementId;
+  const FinanceiroPage({super.key, this.movementId});
 
   @override
   State<FinanceiroPage> createState() => _FinanceiroPageState();
@@ -40,6 +42,7 @@ class _FinanceiroPageState extends State<FinanceiroPage> {
   String _filtroTipo = 'todos';
   String _filtroStatus = 'todos';
   String? _erro;
+  bool _openedInitialMovement = false;
 
   DateTime? _dataInicial;
   DateTime? _dataFinal;
@@ -80,6 +83,17 @@ class _FinanceiroPageState extends State<FinanceiroPage> {
         _carregando = false;
         _erro = null;
       });
+      if (!_openedInitialMovement && widget.movementId != null) {
+        _openedInitialMovement = true;
+        final selected = _movimentacoes
+            .where((item) => item.id == widget.movementId)
+            .firstOrNull;
+        if (selected != null && mounted) {
+          WidgetsBinding.instance.addPostFrameCallback(
+            (_) => _abrirOpcoes(selected),
+          );
+        }
+      }
     } catch (_) {
       if (!mounted) {
         return;
@@ -329,6 +343,14 @@ class _FinanceiroPageState extends State<FinanceiroPage> {
           style: TextStyle(fontWeight: FontWeight.bold, color: _textoEscuro),
         ),
         actions: [
+          IconButton(
+            tooltip: 'Contas a pagar',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const AccountsPayablePage()),
+            ),
+            icon: Icon(Icons.receipt_long_outlined, color: _corPrincipal),
+          ),
           IconButton(
             tooltip: 'Centros de resultado',
             onPressed: () => Navigator.push(

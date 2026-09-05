@@ -1,9 +1,9 @@
-import '../services/notification_service.dart';
 import 'package:sqflite/sqflite.dart';
 
 import '../database/database_service.dart';
 import '../models/domain/acesso.dart';
 import '../services/session_controller.dart';
+import 'notification_center_repository.dart';
 
 class MovimentacaoFinanceiraRegistro {
   final String id;
@@ -204,36 +204,43 @@ class ResumoCategoriaFinanceira {
 }
 
 class FinanceiroRepository {
-  Future<void> _agendarNotificacoesFinanceiras(MovimentacaoFinanceiraRegistro mov) async {
-    final now = DateTime.now();
-    final idNotificacao = NotificationService().generateId(mov.id);
+  Future<void> _agendarNotificacoesFinanceiras(
+    MovimentacaoFinanceiraRegistro mov,
+  ) async {
+    final notifications = NotificationCenterRepository(
+      databaseProvider: () => _databaseService.database,
+      businessId: _comercioId,
+    );
 
     if (mov.status != 'pendente') {
-      await NotificationService().cancelNotification(idNotificacao);
+      await notifications.cancelEntity('financial_movement', mov.id);
       return;
     }
 
     final dataVencimento = mov.data;
-    final scheduledDate = DateTime(dataVencimento.year, dataVencimento.month, dataVencimento.day, 8, 0);
-
-    if (scheduledDate.isAfter(now)) {
-      final isReceita = mov.tipo == 'entrada';
-      final title = isReceita ? 'Conta a receber vencendo' : 'Pagamento pendente';
-      final valor = mov.valor.toStringAsFixed(2);
-      final body = 'R\$ $valor vence hoje.';
-
-      await NotificationService().scheduleNotification(
-        id: idNotificacao,
-        title: title,
-        body: body,
-        scheduledDate: scheduledDate,
-        channelId: 'studioflow_financeiro',
-        channelName: 'Financeiro',
-        channelDescription: 'Lembretes de vencimentos',
-      );
-    } else {
-      await NotificationService().cancelNotification(idNotificacao);
-    }
+    final scheduledDate = DateTime(
+      dataVencimento.year,
+      dataVencimento.month,
+      dataVencimento.day,
+      8,
+    );
+    await notifications.cancelEntity('financial_movement', mov.id);
+    await notifications.schedule(
+      key: 'financial:${mov.id}:due',
+      type: mov.tipo == 'entrada'
+          ? 'financeiro_recebimento_vencendo'
+          : 'financeiro_pagamento_pendente',
+      category: 'financeiro',
+      entity: 'financial_movement',
+      entityId: mov.id,
+      title: mov.tipo == 'entrada'
+          ? 'Conta a receber vencendo'
+          : 'Pagamento pendente',
+      body: '${mov.descricao} — R\$ ${mov.valor.toStringAsFixed(2)}',
+      date: scheduledDate,
+      route: '/financeiro/${mov.id}',
+      priority: 'alta',
+    );
   }
 
   final DatabaseService _databaseService;
@@ -377,7 +384,10 @@ class FinanceiroRepository {
       whereArgs: [id, _comercioId],
     );
 
-    await NotificationService().cancelNotification(NotificationService().generateId(id));
+    await NotificationCenterRepository(
+      databaseProvider: () => _databaseService.database,
+      businessId: _comercioId,
+    ).cancelEntity('financial_movement', id);
   }
 
   Future<double> totalEntradas() async {

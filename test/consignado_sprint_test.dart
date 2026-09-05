@@ -161,7 +161,10 @@ void main() {
       pecas.first['id'] as String,
       clienteId: null,
     ); // Null = sem cliente
-    final historico = await repo.historicoMensal(DateTime.utc(2026, 8));
+    final agora = DateTime.now().toUtc();
+    final historico = await repo.historicoMensal(
+      DateTime.utc(agora.year, agora.month),
+    );
     expect(historico.first['cliente_nome'], isNull);
   });
 

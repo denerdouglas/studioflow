@@ -21,8 +21,15 @@ import 'novo_agendamento_sheet.dart';
 
 class AgendaPage extends StatefulWidget {
   final ClienteRegistro? clienteInicial;
+  final String? agendamentoInicialId;
+  final DateTime? dataInicial;
 
-  const AgendaPage({super.key, this.clienteInicial});
+  const AgendaPage({
+    super.key,
+    this.clienteInicial,
+    this.agendamentoInicialId,
+    this.dataInicial,
+  });
 
   @override
   State<AgendaPage> createState() => _AgendaPageState();
@@ -58,11 +65,13 @@ class _AgendaPageState extends State<AgendaPage> {
 
   bool _carregando = true;
   bool _abriuFormularioInicial = false;
+  bool _abriuAgendamentoInicial = false;
   String? _erro;
 
   @override
   void initState() {
     super.initState();
+    _dataSelecionada = widget.dataInicial ?? DateTime.now();
     _carregarTudo();
   }
 
@@ -122,6 +131,17 @@ class _AgendaPageState extends State<AgendaPage> {
             _novoAgendamento(clienteInicial: widget.clienteInicial);
           }
         });
+      }
+      if (widget.agendamentoInicialId != null && !_abriuAgendamentoInicial) {
+        _abriuAgendamentoInicial = true;
+        final matching = _agendamentos
+            .where((item) => item.id == widget.agendamentoInicialId)
+            .firstOrNull;
+        if (matching != null) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) _abrirOpcoesAgendamento(matching);
+          });
+        }
       }
     } catch (erro) {
       if (!mounted) {
@@ -871,7 +891,9 @@ class _AgendaPageState extends State<AgendaPage> {
 
   @override
   Widget build(BuildContext context) {
-    if (SessionController.instance.usuario?.moduloServicosAtivo != true) return const Scaffold(body: Center(child: Text('Mdulo inativo')));
+    if (SessionController.instance.usuario?.moduloServicosAtivo != true) {
+      return const Scaffold(body: Center(child: Text('Mdulo inativo')));
+    }
     return Scaffold(
       backgroundColor: _corFundo,
       body: SafeArea(
@@ -1178,7 +1200,9 @@ class _AgendamentoCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (SessionController.instance.usuario?.moduloServicosAtivo != true) return const Scaffold(body: Center(child: Text('Mdulo inativo')));
+    if (SessionController.instance.usuario?.moduloServicosAtivo != true) {
+      return const Scaffold(body: Center(child: Text('Mdulo inativo')));
+    }
     final corPrincipal = Theme.of(context).colorScheme.primary;
 
     return Padding(
@@ -1359,7 +1383,9 @@ class _StatusAgendamento extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (SessionController.instance.usuario?.moduloServicosAtivo != true) return const Scaffold(body: Center(child: Text('Mdulo inativo')));
+    if (SessionController.instance.usuario?.moduloServicosAtivo != true) {
+      return const Scaffold(body: Center(child: Text('Mdulo inativo')));
+    }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
       decoration: BoxDecoration(
@@ -1386,7 +1412,9 @@ class OpcoesAgendamentoSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (SessionController.instance.usuario?.moduloServicosAtivo != true) return const Scaffold(body: Center(child: Text('Mdulo inativo')));
+    if (SessionController.instance.usuario?.moduloServicosAtivo != true) {
+      return const Scaffold(body: Center(child: Text('Mdulo inativo')));
+    }
     return ConstrainedBox(
       constraints: BoxConstraints(
         maxHeight: MediaQuery.sizeOf(context).height * 0.9,
@@ -1579,7 +1607,9 @@ class _OpcaoAgendamento extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (SessionController.instance.usuario?.moduloServicosAtivo != true) return const Scaffold(body: Center(child: Text('Mdulo inativo')));
+    if (SessionController.instance.usuario?.moduloServicosAtivo != true) {
+      return const Scaffold(body: Center(child: Text('Mdulo inativo')));
+    }
     return ListTile(
       contentPadding: EdgeInsets.zero,
       leading: Container(
@@ -1879,7 +1909,9 @@ class _ConcluirAgendamentoDialogState extends State<ConcluirAgendamentoDialog> {
 
   @override
   Widget build(BuildContext context) {
-    if (SessionController.instance.usuario?.moduloServicosAtivo != true) return const Scaffold(body: Center(child: Text('Mdulo inativo')));
+    if (SessionController.instance.usuario?.moduloServicosAtivo != true) {
+      return const Scaffold(body: Center(child: Text('Mdulo inativo')));
+    }
     return AlertDialog(
       title: Text(widget.titulo),
       content: Column(

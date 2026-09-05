@@ -9,10 +9,12 @@ import 'package:test/test.dart';
 void main() {
   const secret = 'meta-app-secret-test';
   late MemoryMessageAutomationStore automations;
+  late MemoryBackendStore backendStore;
   late Handler handler;
 
   setUp(() async {
     automations = MemoryMessageAutomationStore();
+    backendStore = MemoryBackendStore();
     final config = BackendConfig.fromEnvironment({
       'DATABASE_URL': 'postgresql://unused/test',
       'JWT_SECRET':
@@ -22,9 +24,9 @@ void main() {
       'META_APP_SECRET': secret,
     });
     handler = StudioFlowApi(
-      store: MemoryBackendStore(),
-      marketplace: MarketplaceService(MemoryBackendStore()),
-      adminService: MarketplaceAdminService(MemoryBackendStore()),
+      store: backendStore,
+      marketplace: MarketplaceService(backendStore),
+      adminService: MarketplaceAdminService(backendStore),
       automations: automations,
       config: config,
       academy: AcademyService(AcademyMemoryStore()),
@@ -110,5 +112,99 @@ void main() {
       ),
     );
     expect(response.statusCode, 401);
+  });
+
+  test('SIM confirma uma vez somente quando associação é inequívoca', () async {
+    automations.sources.add(
+      const AutomationSourceRecord(
+        businessId: 'business-1',
+        entity: 'clientes',
+        entityId: 'client-1',
+        payload: {'whatsapp': '551188887777'},
+      ),
+    );
+    await backendStore.applyMutations(
+      actor: const AuthContext(
+        userId: 'owner-1',
+        businessId: 'business-1',
+        role: 'dono',
+        sessionId: 'session-1',
+      ),
+      mutations: const [
+        SyncMutation(
+          operationId: 'create-appointment',
+          entity: 'agendamentos',
+          entityId: 'appointment-1',
+          operation: 'criar',
+          localVersion: 0,
+          payload: {'id': 'appointment-1', 'confirmado': 0},
+        ),
+      ],
+    );
+    await automations.enqueue(
+      OutboundMessage(
+        id: 'confirmation-1',
+        businessId: 'business-1',
+        kind: 'appointment_day_before',
+        dedupeKey: 'appointment:appointment-1:day_before',
+        channel: 'whatsapp',
+        destination: '551188887777',
+        body: 'Confirme',
+        scheduledAt: DateTime.now().toUtc(),
+        status: 'sent',
+        attempts: 1,
+        appointmentId: 'appointment-1',
+        clientId: 'client-1',
+      ),
+    );
+
+    Future<void> send(String id, String text) async {
+      final body = jsonEncode({
+        'entry': [
+          {
+            'changes': [
+              {
+                'value': {
+                  'messages': [
+                    {
+                      'id': id,
+                      'from': '551188887777',
+                      'text': {'body': text},
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      });
+      final signature = Hmac(
+        sha256,
+        utf8.encode(secret),
+      ).convert(utf8.encode(body));
+      final response = await handler(
+        Request(
+          'POST',
+          Uri.parse('http://localhost/v1/webhooks/whatsapp'),
+          headers: {'x-hub-signature-256': 'sha256=$signature'},
+          body: body,
+        ),
+      );
+      expect(response.statusCode, 204);
+    }
+
+    await send('wamid.confirm-1', 'Sim');
+    await send('wamid.confirm-1-duplicate', 'CONFIRMO');
+    final changes = await backendStore.pullChanges(
+      businessId: 'business-1',
+      afterCursor: 0,
+      limit: 20,
+    );
+    final appointmentChanges = changes
+        .where((item) => item.entityId == 'appointment-1')
+        .toList();
+    expect(appointmentChanges, hasLength(2));
+    expect(appointmentChanges.last.payload['confirmado'], 1);
+    expect(appointmentChanges.last.payload['confirmado_via'], 'whatsapp');
   });
 }

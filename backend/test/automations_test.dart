@@ -57,6 +57,33 @@ void main() {
     expect(sender.sent, hasLength(4));
   });
 
+  test('16h usa o offset do negócio e não um UTC fixo', () async {
+    final store = MemoryMessageAutomationStore();
+    _seedBusiness(store, 'salao-a');
+    final business = store.sources.firstWhere(
+      (item) => item.entity == 'comercios',
+    );
+    store.sources.remove(business);
+    store.sources.add(
+      AutomationSourceRecord(
+        businessId: business.businessId,
+        entity: business.entity,
+        entityId: business.entityId,
+        payload: {...business.payload, 'timezone_offset_minutes': -240},
+      ),
+    );
+    final engine = MessageAutomationEngine(
+      store: store,
+      sender: _FakeSender(),
+      publicBaseUrl: Uri.parse('https://studioflow.test'),
+    );
+    await engine.schedule(DateTime.utc(2026, 7, 29, 3));
+    final confirmation = (await store.history(
+      'salao-a',
+    )).singleWhere((message) => message.kind == 'appointment_day_before');
+    expect(confirmation.scheduledAt, DateTime.utc(2026, 7, 29, 20));
+  });
+
   test('falha registra tentativa e agenda retentativa', () async {
     final store = MemoryMessageAutomationStore();
     _seedBusiness(store, 'salao-a');
@@ -191,6 +218,34 @@ void main() {
       expect(await engine.schedule(DateTime.utc(2026, 7, 29, 3)), 0);
     },
   );
+
+  test('preferência desativa somente a categoria escolhida', () async {
+    final store = MemoryMessageAutomationStore();
+    _seedBusiness(store, 'salao-a');
+    store.sources.add(
+      const AutomationSourceRecord(
+        businessId: 'salao-a',
+        entity: 'notification_preferences',
+        entityId: 'appointment_day_before:whatsapp',
+        payload: {
+          'category': 'appointment_day_before',
+          'channel': 'whatsapp',
+          'enabled': false,
+        },
+      ),
+    );
+    final engine = MessageAutomationEngine(
+      store: store,
+      sender: _FakeSender(),
+      publicBaseUrl: Uri.parse('https://studioflow.test'),
+    );
+
+    await engine.schedule(DateTime.utc(2026, 7, 29, 3));
+
+    final kinds = (await store.history('salao-a')).map((item) => item.kind);
+    expect(kinds, isNot(contains('appointment_day_before')));
+    expect(kinds, contains('appointment_two_hours'));
+  });
 }
 
 void _seedBusiness(MemoryMessageAutomationStore store, String businessId) {

@@ -17,6 +17,7 @@ import 'modalidades_page.dart';
 import 'pagamentos_sprint4_page.dart';
 import 'equipe_page.dart';
 import 'minhas_unidades_page.dart';
+import 'notification_preferences_page.dart';
 
 class ConfiguracoesPage extends StatefulWidget {
   const ConfiguracoesPage({super.key});
@@ -259,6 +260,20 @@ class _ConfiguracoesPageState extends State<ConfiguracoesPage> {
           : ListView(
               padding: const EdgeInsets.all(20),
               children: [
+                Card(
+                  child: ListTile(
+                    leading: const Icon(Icons.notifications_outlined),
+                    title: const Text('Notificações'),
+                    subtitle: const Text('Celular e automações do WhatsApp'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => Navigator.push(
+                      context,
+                      AppRoutes.material(
+                        builder: (_) => const NotificationPreferencesPage(),
+                      ),
+                    ),
+                  ),
+                ),
                 if (exibeServicos)
                   Card(
                     child: ListTile(

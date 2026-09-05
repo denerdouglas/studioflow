@@ -392,17 +392,7 @@ class _NovoAgendamentoSheetState extends State<NovoAgendamentoSheet> {
           ordemNoGrupo: widget.agendamentoInicial!.ordemNoGrupo,
           observacoes: _observacoesController.text.trim(),
         );
-        await _agendaCompletaRepository.reagendar(
-          agendamentoId: ag.id,
-          novoInicio: ag.inicio,
-          novoFim: ag.fim,
-          motivo: 'Edição de agendamento',
-        );
-        await AgendaCompletaRepository().registrarStatus(
-          agendamentoId: ag.id,
-          status: 'agendado',
-          detalhes: 'Agendamento editado.',
-        );
+        await _agendaCompletaRepository.atualizarCompleto(ag);
       } else {
         final grupoId = agora.microsecondsSinceEpoch.toString();
 

@@ -189,6 +189,93 @@ void main() {
       'cancelled',
     );
   });
+
+  test('contas a pagar e preferências são autenticadas e isoladas', () async {
+    final first = await _register(handler, 'Studio Financeiro A');
+    final second = await _register(handler, 'Studio Financeiro B');
+    final tokenA = first.json['accessToken'] as String;
+    final tokenB = second.json['accessToken'] as String;
+    final created = await _call(handler, 'POST', '/v1/accounts-payable', {
+      'id': 'rent-a',
+      'description': 'Aluguel',
+      'category': 'Estrutura',
+      'amount': 1350,
+      'type': 'fixa',
+      'due_date': '2026-10-10',
+      'recurrence': 'mensal',
+      'business_id': (second.json['account'] as Map)['businessId'],
+    }, token: tokenA);
+    expect(created.status, 201);
+    expect(
+      (await _call(
+        handler,
+        'GET',
+        '/v1/accounts-payable',
+        null,
+        token: tokenA,
+      ).then((value) => value.json['accounts'] as List)),
+      hasLength(1),
+    );
+    final denied = await _call(
+      handler,
+      'GET',
+      '/v1/accounts-payable/rent-a',
+      null,
+      token: tokenB,
+    );
+    expect(denied.status, 404);
+    final paid = await _call(
+      handler,
+      'POST',
+      '/v1/accounts-payable/rent-a/pay',
+      {'payment_method': 'Pix'},
+      token: tokenA,
+    );
+    expect(paid.status, 200);
+    expect(paid.json['nextOccurrenceId'], isNotNull);
+    final afterPayment = await _call(
+      handler,
+      'GET',
+      '/v1/accounts-payable',
+      null,
+      token: tokenA,
+    );
+    final accounts = (afterPayment.json['accounts'] as List).cast<Map>();
+    expect(accounts, hasLength(2));
+    expect(
+      accounts.singleWhere((item) => item['status'] == 'paga')['due_date'],
+      startsWith('2026-10-10'),
+    );
+    expect(
+      accounts.singleWhere((item) => item['status'] == 'pendente')['due_date'],
+      startsWith('2026-11-10'),
+    );
+
+    expect(
+      (await _call(handler, 'PUT', '/v1/notification-preferences', {
+        'category': 'agenda',
+        'channel': 'whatsapp',
+        'enabled': false,
+      }, token: tokenA)).status,
+      200,
+    );
+    final preferences = await _call(
+      handler,
+      'GET',
+      '/v1/notification-preferences',
+      null,
+      token: tokenA,
+    );
+    expect(preferences.json['preferences'], hasLength(1));
+    final otherPreferences = await _call(
+      handler,
+      'GET',
+      '/v1/notification-preferences',
+      null,
+      token: tokenB,
+    );
+    expect(otherPreferences.json['preferences'], isEmpty);
+  });
 }
 
 Future<_ApiResponse> _register(Handler handler, String businessName) {

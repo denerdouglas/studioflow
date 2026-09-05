@@ -825,6 +825,18 @@ final class MessageAutomationEngine {
     final professionals = byEntity['profissionais'] ?? const {};
     final services = byEntity['servicos'] ?? const {};
     final appointments = byEntity['agendamentos'] ?? const {};
+    final preferences = byEntity['notification_preferences'] ?? const {};
+    bool enabled(String category, String channel) {
+      final preference = preferences.values.where(
+        (item) =>
+            item['category']?.toString() == category &&
+            item['channel']?.toString() == channel,
+      );
+      if (preference.isEmpty) return true;
+      final value = preference.first['enabled'];
+      return value == true || value == 1 || value?.toString() == 'true';
+    }
+
     final templates = <String, String>{};
     for (final model in (byEntity['modelos_mensagens'] ?? const {}).values) {
       if (model['ativo'] != 0) {
@@ -833,7 +845,13 @@ final class MessageAutomationEngine {
       }
     }
     var created = 0;
-    final localNow = nowUtc.subtract(const Duration(hours: 3));
+    // Source records carry wall-clock appointment values. The offset belongs
+    // to the business; defaulting to São Paulo preserves legacy accounts.
+    final timezoneOffsetMinutes =
+        int.tryParse(business['timezone_offset_minutes']?.toString() ?? '') ??
+        -180;
+    final timezoneOffset = Duration(minutes: timezoneOffsetMinutes);
+    final localNow = nowUtc.add(timezoneOffset);
     for (final entry in appointments.entries) {
       final appointment = entry.value;
       final status = appointment['status']?.toString() ?? '';
@@ -890,36 +908,40 @@ final class MessageAutomationEngine {
         localStart.day - 1,
         16,
       );
-      created += await _enqueue(
-        businessId: businessId,
-        kind: 'appointment_day_before',
-        dedupeKey: 'appointment:${entry.key}:day_before',
-        destination: destination,
-        body: _render(
-          templates['lembrete_dia_anterior'] ?? _defaultDayBeforeTemplate,
-          variables,
-        ),
-        scheduledAt: previousDayLocal.add(const Duration(hours: 3)),
-        appointmentId: entry.key,
-        clientId: appointment['cliente_id']?.toString(),
-        metadata: variables,
-      );
-      created += await _enqueue(
-        businessId: businessId,
-        kind: 'appointment_two_hours',
-        dedupeKey: 'appointment:${entry.key}:two_hours',
-        destination: destination,
-        body: _render(
-          templates['lembrete_duas_horas'] ?? _defaultTwoHoursTemplate,
-          variables,
-        ),
-        scheduledAt: localStart
-            .add(const Duration(hours: 3))
-            .subtract(const Duration(hours: 2)),
-        appointmentId: entry.key,
-        clientId: appointment['cliente_id']?.toString(),
-        metadata: variables,
-      );
+      if (enabled('appointment_day_before', 'whatsapp')) {
+        created += await _enqueue(
+          businessId: businessId,
+          kind: 'appointment_day_before',
+          dedupeKey: 'appointment:${entry.key}:day_before',
+          destination: destination,
+          body: _render(
+            templates['lembrete_dia_anterior'] ?? _defaultDayBeforeTemplate,
+            variables,
+          ),
+          scheduledAt: previousDayLocal.subtract(timezoneOffset),
+          appointmentId: entry.key,
+          clientId: appointment['cliente_id']?.toString(),
+          metadata: variables,
+        );
+      }
+      if (enabled('appointment_two_hours', 'whatsapp')) {
+        created += await _enqueue(
+          businessId: businessId,
+          kind: 'appointment_two_hours',
+          dedupeKey: 'appointment:${entry.key}:two_hours',
+          destination: destination,
+          body: _render(
+            templates['lembrete_duas_horas'] ?? _defaultTwoHoursTemplate,
+            variables,
+          ),
+          scheduledAt: localStart
+              .subtract(timezoneOffset)
+              .subtract(const Duration(hours: 2)),
+          appointmentId: entry.key,
+          clientId: appointment['cliente_id']?.toString(),
+          metadata: variables,
+        );
+      }
     }
 
     for (final entry in clients.entries) {
@@ -969,7 +991,7 @@ final class MessageAutomationEngine {
             localNow.month,
             localNow.day,
             8,
-          ).add(const Duration(hours: 3)),
+          ).subtract(timezoneOffset),
           clientId: entry.key,
           metadata: variables,
         );
@@ -989,7 +1011,7 @@ final class MessageAutomationEngine {
             localNow.month,
             localNow.day,
             9,
-          ).add(const Duration(hours: 3)),
+          ).subtract(timezoneOffset),
           clientId: entry.key,
           metadata: variables,
         );

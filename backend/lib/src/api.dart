@@ -18,6 +18,7 @@ import 'security.dart';
 import 'store.dart';
 import 'academy.dart';
 import 'public_booking.dart';
+import 'whatsapp_conversation.dart';
 
 final class StudioFlowApi {
   final BackendStore store;
@@ -85,6 +86,14 @@ final class StudioFlowApi {
       ..get('/v1/platform-admin/affiliate-clicks', _adminAffiliateClicks)
       ..get('/v1/platform-admin/affiliate-demands', _adminAffiliateDemands)
       ..get('/v1/messages/history', _messageHistory)
+      ..get('/v1/accounts-payable', _accountsPayableList)
+      ..post('/v1/accounts-payable', _accountsPayableCreate)
+      ..get('/v1/accounts-payable/<id>', _accountsPayableGet)
+      ..patch('/v1/accounts-payable/<id>', _accountsPayableUpdate)
+      ..post('/v1/accounts-payable/<id>/pay', _accountsPayablePay)
+      ..post('/v1/accounts-payable/<id>/cancel', _accountsPayableCancel)
+      ..get('/v1/notification-preferences', _notificationPreferencesList)
+      ..put('/v1/notification-preferences', _notificationPreferencesUpdate)
       ..get('/v1/catalog/gtin/<gtin>', _catalogGtin)
       ..get('/products/barcode/<barcode>', _catalogGtin)
       ..post('/v1/webhooks/messages', _messageWebhook)
@@ -1279,6 +1288,288 @@ final class StudioFlowApi {
     return _json(200, {'messages': messages.map((m) => m.toJson()).toList()});
   }
 
+  Future<List<SyncChange>> _entityRecords(
+    String businessId,
+    String entity,
+  ) async {
+    final result = <SyncChange>[];
+    var cursor = 0;
+    while (true) {
+      final page = await store.pullChanges(
+        businessId: businessId,
+        afterCursor: cursor,
+        limit: 500,
+      );
+      result.addAll(page.where((item) => item.entity == entity));
+      if (page.length < 500) break;
+      cursor = page.last.cursor;
+    }
+    final latest = <String, SyncChange>{};
+    for (final item in result) {
+      latest[item.entityId] = item;
+    }
+    return latest.values.where((item) => !item.deleted).toList();
+  }
+
+  Future<SyncResult> _saveEntity({
+    required AuthContext actor,
+    required String entity,
+    required String entityId,
+    required String operation,
+    required int version,
+    required Map<String, Object?> payload,
+  }) async {
+    final result = await store.applyMutations(
+      actor: actor,
+      mutations: [
+        SyncMutation(
+          operationId: '${entity}_${entityId}_${_uuid.v4()}',
+          entity: entity,
+          entityId: entityId,
+          operation: operation,
+          localVersion: version,
+          payload: {...payload, 'id': entityId},
+        ),
+      ],
+    );
+    return result.single;
+  }
+
+  Future<Response> _accountsPayableList(Request request) async {
+    final actor = _authenticate(request);
+    final records = await _entityRecords(actor.businessId!, 'accounts_payable');
+    return _json(200, {
+      'accounts': records.map((item) => item.payload).toList(),
+    });
+  }
+
+  Future<Response> _accountsPayableGet(Request request, String id) async {
+    final actor = _authenticate(request);
+    final records = await _entityRecords(actor.businessId!, 'accounts_payable');
+    final matches = records.where((item) => item.entityId == id);
+    if (matches.isEmpty) {
+      return _error(404, 'account_not_found', 'Conta não encontrada.');
+    }
+    return _json(200, {'account': matches.single.payload});
+  }
+
+  Map<String, Object?> _validatedAccountPayload(
+    Map<String, Object?> body, {
+    Map<String, Object?>? previous,
+  }) {
+    final merged = {...?previous, ...body}..remove('business_id');
+    final description = _requiredText(merged, 'description', max: 240);
+    final amount = (merged['amount'] as num?)?.toDouble();
+    final type = _requiredText(merged, 'type', max: 16);
+    final status = merged['status']?.toString() ?? 'pendente';
+    final due = DateTime.tryParse(merged['due_date']?.toString() ?? '');
+    if (amount == null ||
+        amount <= 0 ||
+        !const {'fixa', 'variavel'}.contains(type) ||
+        !const {'pendente', 'paga', 'vencida', 'cancelada'}.contains(status) ||
+        due == null) {
+      throw const FormatException('Dados da conta inválidos.');
+    }
+    return {
+      ...merged,
+      'description': description,
+      'amount': amount,
+      'type': type,
+      'status': status,
+      'due_date': due.toIso8601String(),
+    };
+  }
+
+  Future<Response> _accountsPayableCreate(Request request) async {
+    final actor = _authenticate(request);
+    final body = Map<String, Object?>.from(await _body(request));
+    final id = body['id']?.toString().trim();
+    final entityId = id == null || id.isEmpty ? _uuid.v4() : id;
+    final now = DateTime.now().toUtc().toIso8601String();
+    final payload = _validatedAccountPayload({
+      ...body,
+      'created_at': now,
+      'updated_at': now,
+    });
+    final saved = await _saveEntity(
+      actor: actor,
+      entity: 'accounts_payable',
+      entityId: entityId,
+      operation: 'criar',
+      version: 0,
+      payload: payload,
+    );
+    return _json(saved.status == 'applied' ? 201 : 409, saved.toJson());
+  }
+
+  Future<Response> _accountsPayableUpdate(Request request, String id) async {
+    final actor = _authenticate(request);
+    final records = await _entityRecords(actor.businessId!, 'accounts_payable');
+    final matches = records.where((item) => item.entityId == id);
+    if (matches.isEmpty) {
+      return _error(404, 'account_not_found', 'Conta não encontrada.');
+    }
+    final current = matches.single;
+    final payload = _validatedAccountPayload(
+      Map<String, Object?>.from(await _body(request)),
+      previous: current.payload,
+    );
+    payload['updated_at'] = DateTime.now().toUtc().toIso8601String();
+    final saved = await _saveEntity(
+      actor: actor,
+      entity: 'accounts_payable',
+      entityId: id,
+      operation: 'atualizar',
+      version: current.serverVersion,
+      payload: payload,
+    );
+    return _json(saved.status == 'applied' ? 200 : 409, saved.toJson());
+  }
+
+  Future<Response> _accountsPayablePay(Request request, String id) async {
+    final actor = _authenticate(request);
+    final records = await _entityRecords(actor.businessId!, 'accounts_payable');
+    final matches = records.where((item) => item.entityId == id);
+    if (matches.isEmpty) {
+      return _error(404, 'account_not_found', 'Conta não encontrada.');
+    }
+    final current = matches.single;
+    final body = Map<String, Object?>.from(await _body(request));
+    final now = DateTime.now().toUtc();
+    final paidPayload = _validatedAccountPayload({
+      ...body,
+      'status': 'paga',
+      'paid_at': now.toIso8601String(),
+      'updated_at': now.toIso8601String(),
+    }, previous: current.payload);
+    final paid = await _saveEntity(
+      actor: actor,
+      entity: 'accounts_payable',
+      entityId: id,
+      operation: 'atualizar',
+      version: current.serverVersion,
+      payload: paidPayload,
+    );
+    String? nextId;
+    final recurrence = paidPayload['recurrence']?.toString() ?? 'nenhuma';
+    final due = DateTime.parse(paidPayload['due_date']!.toString());
+    final nextDue = switch (recurrence) {
+      'semanal' => due.add(const Duration(days: 7)),
+      'quinzenal' => due.add(const Duration(days: 15)),
+      'mensal' => _sameDayNextMonth(due),
+      'anual' => _sameDayNextYear(due),
+      _ => null,
+    };
+    if (paid.status == 'applied' &&
+        paidPayload['type'] == 'fixa' &&
+        nextDue != null) {
+      final seriesId = paidPayload['series_id']?.toString() ?? id;
+      final occurrenceKey =
+          '$seriesId:${nextDue.year}-${nextDue.month.toString().padLeft(2, '0')}-${nextDue.day.toString().padLeft(2, '0')}';
+      final existing = records.where(
+        (item) => item.payload['occurrence_key'] == occurrenceKey,
+      );
+      if (existing.isEmpty) {
+        nextId = _uuid.v4();
+        await _saveEntity(
+          actor: actor,
+          entity: 'accounts_payable',
+          entityId: nextId,
+          operation: 'criar',
+          version: 0,
+          payload: {
+            ...paidPayload,
+            'status': 'pendente',
+            'due_date': nextDue.toIso8601String(),
+            'paid_at': null,
+            'payment_method': null,
+            'series_id': seriesId,
+            'occurrence_key': occurrenceKey,
+            'created_at': now.toIso8601String(),
+            'updated_at': now.toIso8601String(),
+          },
+        );
+      }
+    }
+    return _json(paid.status == 'applied' ? 200 : 409, {
+      ...paid.toJson(),
+      'nextOccurrenceId': ?nextId,
+    });
+  }
+
+  static DateTime _sameDayNextMonth(DateTime date) {
+    final first = DateTime.utc(date.year, date.month + 1);
+    final lastDay = DateTime.utc(first.year, first.month + 1, 0).day;
+    return DateTime.utc(
+      first.year,
+      first.month,
+      date.day.clamp(1, lastDay),
+      date.hour,
+      date.minute,
+      date.second,
+    );
+  }
+
+  static DateTime _sameDayNextYear(DateTime date) {
+    final lastDay = DateTime.utc(date.year + 1, date.month + 1, 0).day;
+    return DateTime.utc(
+      date.year + 1,
+      date.month,
+      date.day.clamp(1, lastDay),
+      date.hour,
+      date.minute,
+      date.second,
+    );
+  }
+
+  Future<Response> _accountsPayableCancel(Request request, String id) async {
+    return _accountsPayableUpdate(
+      request.change(body: jsonEncode({'status': 'cancelada'})),
+      id,
+    );
+  }
+
+  Future<Response> _notificationPreferencesList(Request request) async {
+    final actor = _authenticate(request);
+    final records = await _entityRecords(
+      actor.businessId!,
+      'notification_preferences',
+    );
+    return _json(200, {
+      'preferences': records.map((item) => item.payload).toList(),
+    });
+  }
+
+  Future<Response> _notificationPreferencesUpdate(Request request) async {
+    final actor = _authenticate(request);
+    final body = Map<String, Object?>.from(await _body(request));
+    final category = _requiredText(body, 'category', max: 80);
+    final channel = _requiredText(body, 'channel', max: 40);
+    if (body['enabled'] is! bool) {
+      throw const FormatException('enabled inválido.');
+    }
+    final id = '$category:$channel';
+    final records = await _entityRecords(
+      actor.businessId!,
+      'notification_preferences',
+    );
+    final current = records.where((item) => item.entityId == id).firstOrNull;
+    final result = await _saveEntity(
+      actor: actor,
+      entity: 'notification_preferences',
+      entityId: id,
+      operation: current == null ? 'criar' : 'atualizar',
+      version: current?.serverVersion ?? 0,
+      payload: {
+        'category': category,
+        'channel': channel,
+        'enabled': body['enabled'],
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      },
+    );
+    return _json(result.status == 'applied' ? 200 : 409, result.toJson());
+  }
+
   Response _whatsappVerify(Request request) {
     final query = request.url.queryParameters;
     final valid =
@@ -1327,6 +1618,7 @@ final class StudioFlowApi {
       for (final change in changes.whereType<Map>()) {
         final value = change['value'];
         if (value is! Map) continue;
+        await _processIncomingWhatsApp(value);
         final statuses = value['statuses'];
         if (statuses is! List) continue;
         for (final rawStatus in statuses.whereType<Map>()) {
@@ -1350,6 +1642,119 @@ final class StudioFlowApi {
       }
     }
     return Response(204);
+  }
+
+  Future<void> _processIncomingWhatsApp(Map value) async {
+    final automation = automations;
+    final incoming = value['messages'];
+    if (automation == null || incoming is! List) return;
+    final sources = await automation.sourceRecords();
+    final metadata = value['metadata'] as Map?;
+    final receiver =
+        (metadata?['phone_number_id'] ?? metadata?['display_phone_number'])
+            ?.toString();
+    final conversation = WhatsAppConversationEngine(
+      store: store,
+      booking: _bookingStore,
+      messages: automation,
+      uuid: _uuid,
+    );
+    for (final rawMessage in incoming.whereType<Map>()) {
+      final messageId = rawMessage['id']?.toString();
+      final from = rawMessage['from']?.toString().replaceAll(RegExp(r'\D'), '');
+      final text = (rawMessage['text'] as Map?)?['body']?.toString().trim();
+      if (messageId == null || from == null || text == null) continue;
+      final handled = await conversation.process(
+        WhatsAppInbound(
+          messageId: messageId,
+          from: from,
+          receiver: receiver,
+          text: text,
+          receivedAt: DateTime.now().toUtc(),
+        ),
+      );
+      if (handled) continue;
+      final normalized = text.toUpperCase();
+      if (!const {'SIM', 'CONFIRMO', 'OK'}.contains(normalized)) continue;
+
+      final clients = sources.where((record) {
+        if (record.entity != 'clientes') return false;
+        final phone = (record.payload['whatsapp'] ?? record.payload['telefone'])
+            ?.toString()
+            .replaceAll(RegExp(r'\D'), '');
+        return phone == from;
+      }).toList();
+      final candidates = <OutboundMessage>[];
+      for (final client in clients) {
+        final history = await automation.history(client.businessId, limit: 200);
+        candidates.addAll(
+          history.where(
+            (item) =>
+                item.kind == 'appointment_day_before' &&
+                item.clientId == client.entityId &&
+                item.appointmentId != null &&
+                !const {'cancelled', 'error'}.contains(item.status),
+          ),
+        );
+      }
+      final appointments = {
+        for (final item in candidates) item.appointmentId!: item,
+      };
+      if (appointments.length != 1) {
+        await store.audit(
+          event: 'whatsapp.confirmation_ambiguous',
+          success: false,
+          details: {
+            'messageId': messageId,
+            'candidateCount': appointments.length,
+          },
+        );
+        continue;
+      }
+      final candidate = appointments.values.single;
+      final changes = await _entityRecords(
+        candidate.businessId,
+        'agendamentos',
+      );
+      final current = changes
+          .where((item) => item.entityId == candidate.appointmentId)
+          .firstOrNull;
+      if (current == null ||
+          current.payload['confirmado'] == true ||
+          current.payload['confirmado'] == 1) {
+        continue;
+      }
+      await _saveEntity(
+        actor: AuthContext(
+          userId: 'whatsapp:$from',
+          businessId: candidate.businessId,
+          role: 'automation',
+          sessionId: messageId,
+          actorType: 'whatsapp_webhook',
+        ),
+        entity: 'agendamentos',
+        entityId: candidate.appointmentId!,
+        operation: 'atualizar',
+        version: current.serverVersion,
+        payload: {
+          ...current.payload,
+          'confirmado': 1,
+          'confirmado_em': DateTime.now().toUtc().toIso8601String(),
+          'confirmado_via': 'whatsapp',
+          'whatsapp_message_id': messageId,
+        },
+      );
+      await store.audit(
+        event: 'whatsapp.appointment_confirmed',
+        businessId: candidate.businessId,
+        userId: 'whatsapp:$from',
+        success: true,
+        details: {
+          'messageId': messageId,
+          'appointmentId': candidate.appointmentId,
+        },
+      );
+    }
   }
 
   static bool _constantEquals(String a, String b) {

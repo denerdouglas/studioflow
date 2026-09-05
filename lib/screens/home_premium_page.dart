@@ -11,7 +11,7 @@ import '../registry/widget_registry.dart';
 import '../registry/dashboard_configuration.dart';
 import 'ia_local_page.dart';
 import 'modalidades_page.dart';
-import 'configuracoes_page.dart';
+import 'notification_center_page.dart';
 import 'caixa_page.dart';
 
 class HomePremiumPage extends StatefulWidget {
@@ -244,16 +244,9 @@ class _HomePremiumPageState extends State<HomePremiumPage> {
         IconButton(
           tooltip: 'Notificações',
           onPressed: () {
-            final usuario = SessionController.instance.usuario!;
-            if (!usuario.pode(ModuloPermissao.configuracoes)) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Acesso não permitido.')),
-              );
-              return;
-            }
             Navigator.push(
               context,
-              MaterialPageRoute(builder: (_) => const ConfiguracoesPage()),
+              MaterialPageRoute(builder: (_) => const NotificationCenterPage()),
             );
           },
           icon: Icon(

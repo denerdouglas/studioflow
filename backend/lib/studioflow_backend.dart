@@ -15,3 +15,4 @@ export 'src/admin.dart';
 export 'src/academy.dart';
 export 'src/academy_postgres_store.dart';
 export 'src/public_booking.dart';
+export 'src/whatsapp_conversation.dart';
