@@ -150,7 +150,7 @@ final class GlobalCourse {
 }
 
 abstract interface class GlobalContentStore {
-  Future<List<GlobalProduct>> listProducts();
+  Future<List<GlobalProduct>> listProducts({String query = ''});
   Future<GlobalProduct?> productByBarcode(String barcode);
   Future<GlobalProduct?> productById(String id);
   Future<void> saveProduct(GlobalProduct product);
@@ -173,7 +173,21 @@ final class GlobalContentMemoryStore implements GlobalContentStore {
   final Map<String, GlobalCourse> courses = {};
 
   @override
-  Future<List<GlobalProduct>> listProducts() async => products.values.toList();
+  Future<List<GlobalProduct>> listProducts({String query = ''}) async {
+    final normalized = query.trim().toLowerCase();
+    return products.values.where((item) {
+      final haystack = [
+        item.name,
+        item.brand,
+        item.category,
+        item.description ?? '',
+        item.variant ?? '',
+        item.size ?? '',
+        ...item.keywords,
+      ].join(' ').toLowerCase();
+      return normalized.isEmpty || haystack.contains(normalized);
+    }).toList();
+  }
 
   @override
   Future<GlobalProduct?> productByBarcode(String barcode) async => products

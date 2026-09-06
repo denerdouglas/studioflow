@@ -303,10 +303,13 @@ void main() {
         updatedAt: now,
       ),
     );
-    expect((await content.searchCourses('solda')).map((e) => e.id), [
-      'welding',
-    ]);
-    expect((await content.searchCourses('TIG')).map((e) => e.id), ['welding']);
+    for (final query in ['curso', 'parceiro', 'capacitação', 'solda', 'TIG']) {
+      expect(
+        (await content.searchCourses(query)).map((item) => item.id),
+        ['welding'],
+        reason: 'query=$query',
+      );
+    }
   });
 
   test('curso e produto continuam válidos sem campanha', () async {
@@ -328,6 +331,42 @@ void main() {
       (await content.searchCourses('excel')).single.toJson()['campaign'],
       isNull,
     );
+  });
+
+  test('produto global pesquisa campos escalares e search_keywords', () async {
+    final now = DateTime.now().toUtc();
+    await content.saveProduct(
+      GlobalProduct(
+        id: 'product-search',
+        barcode: '7894900011517',
+        brand: 'Impala',
+        name: 'Esmalte Cremoso',
+        variant: 'Rosa antigo',
+        category: 'Unhas',
+        description: 'Acabamento brilhante',
+        keywords: const ['manicure', 'verniz'],
+        active: true,
+        verified: true,
+        createdBy: 'admin',
+        createdAt: now,
+        updatedAt: now,
+      ),
+    );
+
+    for (final query in [
+      'esmalte',
+      'impala',
+      'unhas',
+      'brilhante',
+      'rosa',
+      'verniz',
+    ]) {
+      expect(
+        (await content.listProducts(query: query)).map((item) => item.id),
+        ['product-search'],
+        reason: 'query=$query',
+      );
+    }
   });
 
   test('curso e produto expõem somente campanha ativa relacionada', () async {

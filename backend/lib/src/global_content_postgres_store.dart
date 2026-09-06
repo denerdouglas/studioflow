@@ -30,11 +30,28 @@ final class GlobalContentPostgresStore implements GlobalContentStore {
   static const _productColumns = '''id,barcode,brand,name,variant,category,
     description,image_url,size,active,search_keywords,verified,created_by,
     created_at,updated_at''';
+  static const _productSearchVector = '''to_tsvector('simple'::regconfig,
+    brand || ' ' || name || ' ' || COALESCE(variant,'') || ' ' ||
+    category || ' ' || COALESCE(description,'') || ' ' || COALESCE(size,''))''';
 
   @override
-  Future<List<GlobalProduct>> listProducts() async => (await pool.execute(
-    'SELECT $_productColumns FROM global_products ORDER BY updated_at DESC',
-  )).map(_product).toList();
+  Future<List<GlobalProduct>> listProducts({String query = ''}) async {
+    final normalized = query.trim().toLowerCase();
+    if (normalized.isEmpty) {
+      return (await pool.execute(
+        'SELECT $_productColumns FROM global_products ORDER BY updated_at DESC',
+      )).map(_product).toList();
+    }
+    final rows = await pool.execute(
+      Sql.named('''SELECT $_productColumns FROM global_products
+        WHERE $_productSearchVector @@ plainto_tsquery('simple'::regconfig,@query)
+          OR search_keywords && @keywords
+        ORDER BY CASE WHEN lower(name)=@query THEN 0 ELSE 1 END,
+          updated_at DESC'''),
+      parameters: {'query': normalized, 'keywords': _searchTerms(normalized)},
+    );
+    return rows.map(_product).toList();
+  }
 
   @override
   Future<GlobalProduct?> productByBarcode(String barcode) async {
@@ -188,6 +205,13 @@ final class GlobalContentPostgresStore implements GlobalContentStore {
 
   static const _courseColumns =
       'id,title,provider,description,image_url,category,search_keywords,active,created_by,created_at,updated_at';
+  static const _courseSearchVector = '''to_tsvector('simple'::regconfig,
+    title || ' ' || provider || ' ' || description || ' ' || category)''';
+
+  static List<String> _searchTerms(String query) => {
+    query,
+    ...query.split(RegExp(r'\s+')),
+  }.where((term) => term.isNotEmpty).toList();
 
   @override
   Future<GlobalCourse?> courseById(String id) async {
@@ -205,16 +229,20 @@ final class GlobalContentPostgresStore implements GlobalContentStore {
 
   @override
   Future<List<GlobalCourse>> searchCourses(String query) async {
-    final term = '%${query.trim()}%';
+    final normalized = query.trim().toLowerCase();
+    if (normalized.isEmpty) {
+      return (await pool.execute(
+        'SELECT $_courseColumns FROM global_courses WHERE active=true ORDER BY updated_at DESC',
+      )).map(_course).toList();
+    }
     final rows = await pool.execute(
-      Sql.named(
-        '''SELECT $_courseColumns FROM global_courses
-        WHERE active=true AND (@empty OR title ILIKE @term OR provider ILIKE @term
-          OR description ILIKE @term OR category ILIKE @term
-          OR array_to_string(search_keywords,' ') ILIKE @term)
-        ORDER BY CASE WHEN title ILIKE @term THEN 0 ELSE 1 END, updated_at DESC''',
-      ),
-      parameters: {'empty': query.trim().isEmpty, 'term': term},
+      Sql.named('''SELECT $_courseColumns FROM global_courses
+        WHERE active=true AND
+          ($_courseSearchVector @@ plainto_tsquery('simple'::regconfig,@query)
+            OR search_keywords && @keywords)
+        ORDER BY CASE WHEN lower(title)=@query THEN 0 ELSE 1 END,
+          updated_at DESC'''),
+      parameters: {'query': normalized, 'keywords': _searchTerms(normalized)},
     );
     return rows.map(_course).toList();
   }

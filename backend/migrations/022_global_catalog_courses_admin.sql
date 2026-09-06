@@ -57,17 +57,21 @@ ALTER TABLE commercial_campaigns
   ADD COLUMN course_id TEXT REFERENCES global_courses(id);
 
 CREATE INDEX idx_global_products_search ON global_products
-  USING GIN (to_tsvector('simple', brand || ' ' || name || ' ' ||
-    COALESCE(variant,'') || ' ' || category || ' ' ||
-    array_to_string(search_keywords,' ')));
+  USING GIN (to_tsvector('simple'::regconfig,
+    brand || ' ' || name || ' ' || COALESCE(variant,'') || ' ' ||
+    category || ' ' || COALESCE(description,'') || ' ' || COALESCE(size,'')));
+CREATE INDEX idx_global_products_search_keywords ON global_products
+  USING GIN (search_keywords);
 CREATE INDEX idx_global_product_suggestions_status
   ON global_product_suggestions(status, created_at);
 CREATE UNIQUE INDEX uq_global_product_suggestions_pending
   ON global_product_suggestions(business_id, barcode)
   WHERE status = 'pending';
 CREATE INDEX idx_global_courses_search ON global_courses
-  USING GIN (to_tsvector('simple', title || ' ' || provider || ' ' ||
-    description || ' ' || category || ' ' || array_to_string(search_keywords,' ')));
+  USING GIN (to_tsvector('simple'::regconfig,
+    title || ' ' || provider || ' ' || description || ' ' || category));
+CREATE INDEX idx_global_courses_search_keywords ON global_courses
+  USING GIN (search_keywords);
 CREATE INDEX idx_campaign_global_product ON commercial_campaigns(global_product_id);
 CREATE INDEX idx_campaign_course ON commercial_campaigns(course_id);
 

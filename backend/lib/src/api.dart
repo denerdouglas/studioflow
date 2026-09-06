@@ -2119,10 +2119,11 @@ final class StudioFlowApi {
 
   Future<Response> _adminGlobalProducts(Request request) async {
     await _authenticatePlatformAdmin(request);
+    final query = (request.url.queryParameters['q'] ?? '').trim();
     return _json(200, {
-      'products': (await _globalContent.listProducts())
-          .map((item) => item.toJson())
-          .toList(),
+      'products': (await _globalContent.listProducts(
+        query: query,
+      )).map((item) => item.toJson()).toList(),
     });
   }
 
